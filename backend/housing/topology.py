@@ -46,10 +46,10 @@ FLOWS = [
 DISTURBANCES = [
     {"id": "d_income", "label": "Income", "signal": "I(Incomeactual)", "unit": "€/year", "target": "firms", "element": "Incomeactual"},
     {"id": "d_covid", "label": "Covid shock", "signal": "V(n046,n042)", "unit": "Incentive", "target": "firms", "element": "V§Shock_covid"},
-    {"id": "d_crisis", "label": "Financial crisis shock (firms)", "signal": "V(n042,0)", "unit": "Incentive", "target": "firms", "element": "V§Shock_financialcrisis"},
+    {"id": "d_crisis", "label": "Financial crisis shock", "signal": "V(n042,0)", "unit": "Incentive", "target": "firms", "element": "V§Shock_financialcrisis"},
     {"id": "d_mortgages", "label": "Mortgage lending", "signal": "I(Mortgages)", "unit": "€/year", "target": "bank", "element": "I§Mortgages"},
     {"id": "d_interest", "label": "Mortgage interest rate", "signal": "I(Interest_rates)", "unit": "Per 2 months", "target": "bank", "element": "Interest_Rates"},
-    {"id": "d_loans", "label": "Financial crisis shock (lending)", "signal": "I(I8)", "unit": "€/year", "target": "bank", "element": "I8"},
+    {"id": "d_loans", "label": "Financial crisis shock (loans to firms)", "signal": "I(I8)", "unit": "€/year", "target": "bank", "element": "I8"},
 ]
 OUTPUTS = [
     {"id": "y_price", "label": "House price", "signal": "I(Construction_cost)", "unit": "Model units", "element": "V§Construction_cost"},

@@ -6,8 +6,8 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = []; page.on('pageerror', e => errors.push(String(e)));
 await page.goto('http://127.0.0.1:8001/');
-const log = { welcome: await page.getByRole('button', { name: 'Start the guided tour' }).isVisible({ timeout: 60000 }).catch(() => false), steps: [] };
-await page.getByRole('button', { name: 'Start the guided tour' }).click();
+const log = { welcome: await page.getByRole('button', { name: 'Take the full guided tour' }).first().isVisible({ timeout: 60000 }).catch(() => false), steps: [] };
+await page.getByRole('button', { name: 'Take the full guided tour' }).first().click();
 const head = () => page.locator('.coach-head b').textContent({ timeout: 120000 });
 await page.locator('.guide-bar').waitFor({ timeout: 120000 }); const N = await page.locator('.guide-bar .tour-steps button').count();
 for (let step = 1; step <= N; step++) {

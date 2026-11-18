@@ -5,7 +5,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = []; page.on('pageerror', e => errors.push(String(e)));
 await page.goto('http://127.0.0.1:8001/');
-await page.getByRole('button', { name: 'Start the guided tour' }).click();
+await page.getByRole('button', { name: 'Take the full guided tour' }).first().click();
 await page.getByRole('button', { name: 'Guide step 2:' }).click(); await page.waitForTimeout(7000);
 for (let i = 0; i < 4; i++) { await page.locator('.coach').getByRole('button', { name: 'Show me' }).click(); await page.waitForTimeout(3500); } await page.waitForTimeout(1500);
 const r = { head: await page.locator('.coach-head b').textContent(), ring: await page.locator('.coach-ring').boundingBox(), rail: await page.locator('.react-flow__edge[data-id="rental_services"] .rail-hit').first().boundingBox(), n: await page.locator('.react-flow__edge[data-id="rental_services"] .rail-hit').count() };

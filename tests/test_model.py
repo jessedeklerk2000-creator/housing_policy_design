@@ -176,3 +176,37 @@ def test_equilibrium_start_on_reference():
     assert abs(eq["price0"] - 120) < 1e-3 and not eq["clipped"]
     line = next(x for x in build(s, u_start=eq["u_start"]) if x.startswith("B§PID 0 N031 "))
     assert line.startswith(f"B§PID 0 N031 I=if(time<=0,{eq['u_start']:.8g},limit(")
+
+
+def _pwl(line):
+    import re
+    n = [float(x) for x in re.search(r"PWL\(([^)]*)\)", line)[1].split()]
+    return n[0::2], n[1::2]
+
+
+def test_crisis_mortgage_cut_is_off_by_default_and_adds_the_w():
+    # Financial crisis in the bank's mortgage lending (18 Nov 2026): 0 leaves the netlist as before; 15 adds the W.
+    from housing import scenario as sc
+    W = dict(bank=True, crisis_w=True, crisis_w_start_yr=2007.8, crisis_w_fall_yr=0.8, crisis_w_scale=1, crisis_w_on_yr=0.8, crisis_w_recovery_yr=0.8, crisis_start_yr=2011.1)
+    a, b = build(Scenario(**W)), build(Scenario(**W, crisis_mortgage_cut=15))
+    assert changed(a, b) and all(x.startswith("I§Mortgages ") for x, _ in changed(a, b))
+    (ta, va), (tb, vb) = _pwl(next(x for x in a if x.startswith("I§Mortgages "))), _pwl(next(x for x in b if x.startswith("I§Mortgages ")))
+    yr = lambda y: (y - sc.YEAR_AT_RAW_ZERO) * sc.SECONDS_PER_YEAR
+    for y, cut in [(2005, 0), (2008.9, 15), (2010.3, 0), (2013, 15), (2020, 0)]:   # both dips at full depth, before, between, after
+        assert abs(np.interp(yr(y), tb, vb) - (np.interp(yr(y), ta, va) - cut)) < 1e-3, y
+    assert build(Scenario(**{**W, "bank": False}, crisis_mortgage_cut=15)) == build(Scenario(**{**W, "bank": False}))
+
+
+def test_flat_interest_holds_the_first_value():
+    t, v = _pwl(next(x for x in build(Scenario(interest_path="flat", interest_scale=0.5)) if x.startswith("Interest_Rates ")))
+    t0, v0 = _pwl(next(x for x in nl.read_model() if x.startswith("Interest_Rates ")))
+    assert len(set(v)) == 1 and abs(v[0] - 0.5 * v0[0]) < 1e-9
+
+
+def test_financial_crisis_alone_drops_the_price_about_21_percent():
+    # The guided tour's crisis-only setup (Guide.tsx, CRISIS): bank on, everything else held still.
+    s = Scenario(bank=True, mortgage_scale=0, interest_path="flat", crisis_mortgage_cut=15, crisis_scale=2, crisis_w=True, crisis_w_start_yr=2007.8,
+                 crisis_w_fall_yr=0.8, crisis_w_scale=1, crisis_w_on_yr=0.8, crisis_w_recovery_yr=0.8, crisis_start_yr=2011.1, covid_scale=0,
+                 income_path="stable", income_growth_pct=0, subsidy_scale=0, rental_subsidy=False, feedback=False)
+    p = np.array(run(s)["series"]["price"])
+    assert 20 < 100 * (90.64 - p.min()) / 90.64 < 23

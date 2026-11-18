@@ -5,7 +5,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = []; page.on('pageerror', e => errors.push(String(e).slice(0, 500)));
 await page.goto('http://127.0.0.1:8001/');
-await page.getByRole('button', { name: 'Start the guided tour' }).click();
+await page.getByRole('button', { name: 'Take the full guided tour' }).first().click();
 await page.getByRole('button', { name: /Guide step \d+: Close the loop/ }).click(); await page.waitForTimeout(8000);
 const log = [];
 for (let i = 0; i < 3; i++) { const h = await page.locator('.coach-head b').textContent(); await page.locator('.coach').getByRole('button', { name: 'Show me' }).click(); await page.waitForTimeout(i === 2 ? 20000 : 4000); log.push(`${h} -> cards ${await page.locator('.pin-card').count()}`); await page.screenshot({ path: `${out}/guide7_${i + 1}.png` }); }

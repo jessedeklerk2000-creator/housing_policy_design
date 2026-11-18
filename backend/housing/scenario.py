@@ -49,6 +49,9 @@ class Scenario(BaseModel):
     # With the rental-share loop on, the money that loop moves still flows (it has its own source).
     rental_subsidy: bool = True
     interest_scale: float = Field(1.0, ge=0.25, le=3)
+    # 'flat': the interest rate held at its 1996 value for the whole run (guided tour, the financial crisis on its own;
+    # Jesse, 18 Nov 2026). 'historical': the netlist path.
+    interest_path: Literal["historical", "flat"] = "historical"
     interest_shift_yr: float = Field(0.0, ge=-5, le=5)   # move the interest-rate path in time (years)
     # Share of the new-loan rate in each step of the effective rate (netlist: 0.1 = 90% old, 10% new).
     interest_new_share: float = Field(0.1, ge=0.02, le=1.0)
@@ -94,6 +97,12 @@ class Scenario(BaseModel):
     # Time for the first dip to reach full depth (11 Nov 2026; 1 = as before). A slow fall excites the market's own
     # cycle less, so the price does not bounce back as hard after the 2009 dip (Jesse's suggestion).
     crisis_w_fall_yr: float = Field(1.0, ge=0.2, le=6)
+    # Financial crisis in the bank's mortgage lending (Jesse, 18 Nov 2026): with the bank on and the W-shaped crisis,
+    # new mortgage lending drops by this many model units in the same W as the lending shock to firms (I8): the
+    # extra dip at crisis_w_start_yr (x crisis_w_scale) and the main dip at crisis_start_yr (0.5 yr down, 5 yr low,
+    # 1.7 yr back). Added to the mortgage path. 0 = off (as before). 15 gives a 21% price drop without a rule in the
+    # tour's crisis-only setup (Claude's choice, to match the CPB's 21% for 2008-2013; not a fit).
+    crisis_mortgage_cut: float = Field(0.0, ge=0, le=40)
     covid_scale: float = Field(1.0, ge=0, le=2)
     covid_on_yr: float = Field(2.5, ge=0.1, le=5)     # Covid shock fully on (netlist 15 s = 2.5 yr)
     covid_fall_yr: float = Field(50 / 6, ge=0.1, le=10)  # and its fade-out (netlist 50 s = 8.3 yr)
@@ -220,6 +229,8 @@ def build(s: Scenario, b4: Literal["linear", "nonlinear", "original"] = "linear"
     nl.set_interest_blend(lines, s.interest_new_share)
     nl.scale_source(lines, "Interest_Rates ", s.interest_scale)
     nl.shift_pwl(lines, "Interest_Rates ", s.interest_shift_yr * SECONDS_PER_YEAR)
+    if s.interest_path == "flat":
+        nl.hold_pwl(lines, "Interest_Rates ")
     if s.income_path == "stable":
         nl.set_income_path(lines, s.income_growth_pct)
     nl.scale_source(lines, "Incomeactual ", s.income_scale)
@@ -233,6 +244,8 @@ def build(s: Scenario, b4: Literal["linear", "nonlinear", "original"] = "linear"
         nl.set_crisis_pwl(lines, w_pulses(s, crisis_delay, w_delay, -50 * s.crisis_scale, (10, 20, 35)))
         if s.bank:
             nl.set_loans_pwl(lines, w_pulses(s, crisis_delay, w_delay, -20.0, (3.0, 10.0, 30.0)))
+            if s.crisis_mortgage_cut > 0:
+                nl.add_pwl_pulses(lines, "I§Mortgages ", w_pulses(s, crisis_delay, w_delay, -s.crisis_mortgage_cut, (3.0, 10.0, 30.0)))
     else:
         nl.set_crisis_start(lines, crisis_delay)
         nl.set_pulse_amplitude(lines, "V§Shock_financialcrisis ", "PULSE(00 -50", s.crisis_scale)

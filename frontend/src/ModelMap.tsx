@@ -176,13 +176,18 @@ type ProbeActions = { addSens: () => void; hasSens: boolean; pinned: (p: Probe) 
 const probeKey = (p: Probe) => `${p.flow}:${p.q}`;
 const probeOf = (id: string): Probe => { const [flow, q] = id.split(':'); return { flow, q: q as Probe['q'] }; };
 // Loop signals that open a card when clicked: what they read, their colour, their step output and what 'dock' opens.
-const LOOP_SIGNALS: Record<string, { label: string; title: string; signal: string; unit: string; color: string; step?: { kind: 'signal' | 'flow'; id: string }; dock: Selection }> = {
+const LOOP_SIGNALS: Record<string, { label: string; title: string; signal: string; unit: string; color: string; pair?: { signal: string; label: string; color: string }; step?: { kind: 'signal' | 'flow'; id: string }; dock: Selection }> = {
   y_yoy: { label: 'Year-on-year', title: 'Output · year-on-year price change', signal: 'yoy', unit: '% a year', color: '#3f9a1f', dock: { kind: 'signal', id: 'y_yoy' } },
   y_reference: { label: 'Target r', title: 'Reference r · House price target', signal: 'I(Reference)', unit: 'Model units', color: '#2b6599', step: { kind: 'signal', id: 'y_reference' }, dock: { kind: 'signal', id: 'y_reference' } },
   y_error: { label: 'Gap e', title: 'Gap e · target minus price', signal: 'I(Error)', unit: 'Model units', color: '#1f2a26', step: { kind: 'signal', id: 'y_error' }, dock: { kind: 'signal', id: 'y_error' } },
   x1: { label: 'Construction payments', title: 'State x₁ · Construction payments', signal: 'I(Construction_cost)', unit: 'Model units', color: COLOR.money, step: { kind: 'signal', id: 'y_price' }, dock: { kind: 'signal', id: 'y_price' } },
   x2: { label: 'New construction', title: 'State x₂ · New construction', signal: 'I(Construction)', unit: '#/year', color: '#c98a1b', step: { kind: 'flow', id: 'houses' }, dock: { kind: 'flow', id: 'houses' } },
   y_price: { label: 'House price', title: 'Output y · House price', signal: 'I(Construction_cost)', unit: 'Model units', color: '#3f9a1f', step: { kind: 'signal', id: 'y_price' }, dock: { kind: 'signal', id: 'y_price' } },
+  // second output of the MIMO loop (guided tour, housing ladder)
+  // housing ladder: what renters and owners pay per m² (rent ÷ rental services, imputed rent ÷ owner-occupied services;
+  // these are the netlist outputs Net_housing_rent1 and Net_housing1), two lines on one card
+  y_rent_cost: { label: 'Rent vs owner cost', title: 'Cost per m²: rent vs owner', signal: 'I(Net_housing_rent1)', unit: '€/m² a year', color: '#b9770e', pair: { signal: 'I(Net_housing1)', label: 'owner', color: '#1f6fc4' }, dock: { kind: 'signal', id: 'y_price' } },
+  y_share: { label: 'Rental share', title: 'Output y₂ · Rental share of housing services', signal: 'rental_share', unit: '%', color: '#b9770e', dock: { kind: 'signal', id: 'y_reference' } },
 };
 function probeInfo(map: MapData, p: Probe) {
   const loop = p.q === 's' ? LOOP_SIGNALS[p.flow] : undefined;
@@ -198,10 +203,10 @@ function probeInfo(map: MapData, p: Probe) {
   return { f, signal, title: `${f.label} · ${p.q === 'f' ? 'flow f' : 'effort e'}`, unit: p.q === 'f' ? f.unit : 'Model units (node voltage)', color: p.q === 'f' ? COLOR[f.kind] : '#6b4fa0',
     step: { kind: p.q === 'f' ? 'flow' : 'effort', id: f.id } as const };
 }
-function MiniPlot({ y, at, color, w = 240, h = 92, k = 1, label, ghost, ghostColor = '#2F6FB5', ghost2, ghost2Color = '#7cc96a' }: { y: number[]; at?: number; color: string; w?: number; h?: number; k?: number; label?: string; ghost?: number[]; ghostColor?: string; ghost2?: number[]; ghost2Color?: string }) {
+function MiniPlot({ y, at, color, w = 240, h = 92, k = 1, label, ghost, ghostColor = '#2F6FB5', ghost2, ghost2Color = '#7cc96a', second, secondColor = '#1f6fc4' }: { y: number[]; at?: number; color: string; w?: number; h?: number; k?: number; label?: string; ghost?: number[]; ghostColor?: string; ghost2?: number[]; second?: number[]; secondColor?: string; ghost2Color?: string }) {
   // White space above and below the line (10% of the range plus room for the max/min labels), so a step that jumps
   // straight to its final value does not run along the top edge.
-  const all = [...y, ...(ghost ?? []), ...(ghost2 ?? [])], lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * .1, top = 18 * k, bot = 16 * k;
+  const all = [...y, ...(ghost ?? []), ...(ghost2 ?? []), ...(second ?? [])], lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * .1, top = 18 * k, bot = 16 * k;
   const sx = (i: number) => 4 + i / (y.length - 1) * (w - 8), sy = (v: number) => h - bot - (hi > lo ? (v - lo + pad) / (hi - lo + 2 * pad) : .5) * (h - top - bot);
   // With a time marker: the line up to that time is dark, the rest faint, and a dot with the year rides on it (Play).
   const pts = (a: number, b: number) => y.slice(a, b).map((v, i) => `${sx(a + i)},${sy(v)}`).join(' ');
@@ -210,6 +215,9 @@ function MiniPlot({ y, at, color, w = 240, h = 92, k = 1, label, ghost, ghostCol
     {lo < 0 && hi > 0 && <line x1={0} x2={w} y1={sy(0)} y2={sy(0)} stroke="#d5dbd8"/>}
     {ghost2 && <polyline fill="none" stroke={ghost2Color} strokeWidth={3.6 * k} strokeDasharray={`${0.5 * k} ${5 * k}`} strokeLinecap="round" strokeLinejoin="round" points={ghost2.map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>}
     {ghost && <polyline fill="none" stroke={ghostColor} strokeWidth={2 * k} strokeDasharray={`${6 * k} ${4 * k}`} strokeLinejoin="round" points={ghost.map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>}
+    {second && <><polyline fill="none" stroke={secondColor} strokeOpacity={at !== undefined ? .22 : 1} strokeWidth={2.2 * k} strokeLinejoin="round" points={second.map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>
+      {at !== undefined && <><polyline fill="none" stroke={secondColor} strokeWidth={2.4 * k} strokeLinejoin="round" points={second.slice(0, at + 1).map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>
+        <circle cx={sx(at)} cy={sy(second[at])} r={3.6 * k} fill={secondColor} stroke="#fff" strokeWidth={1.2 * k}/></>}</>}
     <polyline fill="none" stroke={color} strokeOpacity={at !== undefined ? .22 : 1} strokeWidth={2.2 * k} strokeLinejoin="round" points={pts(0, y.length)}/>
     {at !== undefined && <><polyline fill="none" stroke={color} strokeWidth={2.4 * k} strokeLinejoin="round" points={pts(0, at + 1)}/>
       <line x1={sx(at)} x2={sx(at)} y1={2} y2={h - 2} stroke="#8a9692" strokeDasharray="3 3"/><circle cx={sx(at)} cy={sy(y[at])} r={3.6 * k} fill={color} stroke="#fff" strokeWidth={1.2 * k}/>
@@ -242,7 +250,7 @@ export type StepData = { input: string; inputId?: string; reject?: boolean; resp
 // can be done on the canvas. Drawn in screen pixels at the block's place, so they stay readable at any zoom.
 // Shown only once their block is clicked (opened or selected), or when the guided tour points at them (Jesse, 11 Nov 2026).
 type ChipCtx = { update: (patch: Partial<Scenario>) => void; stepping: boolean; stepInput: string; setStepInput: (id: string) => void; showCtrl: boolean; showMarket: boolean };
-const subsidyName = (s: Scenario) => s.subsidy_scale === 0 ? 'none' : s.subsidy_path === 'step' ? 'one step' : s.subsidy_path === 'staircase' ? 'phase-out' : s.subsidy_scale === 10 ? 'CPB history' : s.subsidy_scale === 1 ? 'historical' : `historical × ${s.subsidy_scale}`;
+const subsidyName = (s: Scenario) => s.subsidy_scale === 0 ? 'none' : s.subsidy_path === 'step' ? 'one step' : s.subsidy_path === 'staircase' ? 'phase-out' : s.subsidy_scale === 10 ? 'compare with CPB' : s.subsidy_scale === 1 ? 'historical' : `historical × ${s.subsidy_scale}`;
 const incomeName = (s: Scenario) => s.income_path === 'historical' ? 'historical' : s.income_growth_pct === 0 ? 'constant' : `grows ${+s.income_growth_pct.toFixed(2)}% a year`;
 function CanvasChips({ nodes, scenario: s, chips, map }: { nodes: Node[]; scenario: Scenario; chips: ChipCtx; map: MapData }) {
   const [tx, ty, k] = useStore(st => st.transform);
@@ -269,10 +277,14 @@ function CanvasChips({ nodes, scenario: s, chips, map }: { nodes: Node[]; scenar
         {opt('One step', s.subsidy_path === 'step' && s.subsidy_scale > 0, set(ONE_STEP), 'from 0 to 20 in 2005')}
         {opt('Phase-out', stair, set(PHASE(stair ? s.phase_steps : 20)), '30 removed 2005–2015, in equal steps', true)}
         {opt('Historical', s.subsidy_path === 'historical' && s.subsidy_scale === 1, set({ subsidy_path: 'historical', subsidy_scale: 1 }), 'the netlist path')}
-        {opt('CPB history', s.subsidy_path === 'historical' && s.subsidy_scale === 10, set(CPB_PEAKS), 'historical × 10, income fitted to the CPB peaks; bank and shocks off')}
+        {opt('Compare with CPB', s.subsidy_path === 'historical' && s.subsidy_scale === 10, set(CPB_PEAKS), 'historical × 10, income fitted to the CPB peaks; bank and shocks off')}
       </>, ctrlY, stair && <label className="chip chip-slider" data-opt="steps" onClick={e => e.stopPropagation()}>Steps <output>{s.phase_steps}</output><input type="range" min={1} max={20} step={1} value={s.phase_steps} aria-label="Number of phase-out steps" onChange={e => chips.update({ phase_steps: Number(e.target.value) })}/></label>) : <div className="chip-wrap" data-guide="chip-controller"><div className="chip seg" role="group" aria-label="Rule"><span>Rule</span>
         {(['zn', 'hinf'] as const).map(c => <button key={c} data-opt={c} className={s.controller === c ? 'on' : ''} aria-pressed={s.controller === c} onClick={e => { e.stopPropagation(); chips.update({ controller: c }); }}>{c === 'zn' ? 'Ziegler–Nichols' : 'H∞'}</button>)}
         {s.controller !== 'zn' && s.controller !== 'hinf' && <em>custom</em>}</div></div>}
+      {s.feedback && <div className="chip-wrap" data-guide="chip-share"><div className="chip seg" role="group" aria-label="Second goal: rental share"><span>Rental share</span>
+        <button data-opt="off" className={!s.share_control ? 'on' : ''} aria-pressed={!s.share_control} onClick={e => { e.stopPropagation(); chips.update({ share_control: false }); }}>Free</button>
+        <button data-opt="on" className={s.share_control ? 'on' : ''} aria-pressed={s.share_control} title="Add a second PID controller: it holds the rental share at its target by moving money between the owner-occupied and the rental subsidy (MIMO: two inputs, two outputs)" onClick={e => { e.stopPropagation(); chips.update({ share_control: true }); }}>+ PID</button></div>
+        {s.share_control && <label className="chip chip-slider" data-opt="target" onClick={e => e.stopPropagation()}>Target <output>{s.share_target_pct.toFixed(1)}%</output><input type="range" min={15} max={25} step={0.5} value={s.share_target_pct} aria-label="Rental-share target" onChange={e => chips.update({ share_target_pct: Number(e.target.value) })}/></label>}</div>}
     </div>}
     {sys && <div className="chip-row" style={{ ...scr(sys.x, sys.y + sys.h), transform: 'translate(0, 10px)' }}>
       {menu('income', 'Income', incomeName(s), <>
@@ -412,6 +424,8 @@ function PinLayer({ map, probes, result, at, fallback, steps, lines = {} }: { ma
             const infl = result!.scenario.inflation_pct ?? 0, gy = cmp && cmp.result.series.yoy ? cmp.result.series.yoy.map(v => v + infl) : undefined, gz = c2 && c2.result.series.yoy ? c2.result.series.yoy.map(v => v + infl) : undefined;
             return <><YoyBody at={at} color={color} k={f} w={pw} h={ph} year={result!.year} model={y.map(v => v + infl)} cbs={probes.cbs} lag={probes.lag} cpb={probes.cpb} ghost={gy} ghost2={gz}/><small>{result!.year[at].toFixed(1)}: <b>{fmt(y[at] + infl)}</b>{gy ? <span className="ghost-note" style={{ color: '#8a9692' }}> · {cmp!.label}: {fmt(gy[at])}</span> : null}{gz ? <span className="ghost-note" style={{ color }}> · Ziegler–Nichols PID (dotted): {fmt(gz[at])}</span> : null}{probes.cbs ? <span className="ghost-note" style={{ color: '#8a9692' }}> · grey bars: CBS</span> : null}</small></>;
           }
+          const pair = p.q === 's' ? LOOP_SIGNALS[p.flow]?.pair : undefined, y2 = pair ? readTrace(result!, pair.signal) : undefined;
+          if (pair && y2) return <><MiniPlot y={y} at={at} color={color} w={pw} h={ph} k={f} label={result!.year[at].toFixed(1)} second={y2} secondColor={color === MUTED ? MUTED : pair.color}/><small>{result!.year[at].toFixed(1)}: <b style={{ color }}>rent {fmt(y[at])}</b> · <b style={{ color: color === MUTED ? MUTED : pair.color }}>{pair.label} {fmt(y2[at])}</b> · renters pay {fmt(Math.abs(y[at] / y2[at] - 1) * 100)}% {y[at] >= y2[at] ? 'more' : 'less'}</small></>;
           return <><MiniPlot y={y} at={at} color={color} w={pw} h={ph} k={f} label={result!.year[at].toFixed(1)} ghost={g} ghostColor={cmp?.color} ghost2={g2} ghost2Color={color}/><small>{result!.year[at].toFixed(1)}: <b>{fmt(y[at])}</b>{g ? <span className="ghost-note" style={{ color: cmp!.color }}> · {cmp!.label}: {fmt(g[at])}</span> : null}{g2 ? <span className="ghost-note" style={{ color }}> · Ziegler–Nichols PID (dotted): {fmt(g2[at])}</span> : null}</small></>;
         })() : <small className="muted">Run the simulation to see this signal.</small>}</div>;
   })}</div>;
@@ -901,7 +915,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
         const info = probeInfo(map, p), start = railStart[p.flow], W = big?.w ?? PIN_W, H = big?.h ?? PIN_H;
         // big cards: inputs and inner flows from the left under Parliament, the outputs (price, year-on-year) from the
         // right under CBS, so each plot sits near the line it shows
-        const isOut = (q: Probe) => q.flow === 'y_price' || q.flow === 'y_yoy', outs = probes.pins.filter(isOut), ins = probes.pins.filter(q => !isOut(q));
+        const isOut = (q: Probe) => q.flow === 'y_price' || q.flow === 'y_yoy' || q.flow === 'y_share' || q.flow === 'y_rent_cost', outs = probes.pins.filter(isOut), ins = probes.pins.filter(q => !isOut(q));
         const right = sensor.x + sensor.w + 170 * lab;
         // near the line it shows: a shock above the market beside its arrow, a subsidy above the Tax Authority,
         // the outputs under CBS on the right, anything else in the row under the loop

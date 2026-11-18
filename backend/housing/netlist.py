@@ -276,6 +276,28 @@ def set_crisis_pwl(lines: list[str], pulses: list[tuple[float, float, float, flo
 LOANS_PULSE = "PULSE(30 10 70 0 10 30 10000)"  # lending to firms: 30, down to 10 from 70 s (LTspice: zero rise = 10% of on = 3 s)
 
 
+def add_pwl_pulses(lines: list[str], prefix: str, pulses: list[tuple[float, float, float, float, float]]) -> None:
+    """Add trapezoids (delay, amp, rise, fall, on), in simulation seconds, to a PWL source: the corners of the path
+    and of the trapezoids are kept and the values summed (the path held at its ends, as SPICE does)."""
+    i = _index(lines, prefix)
+    match = re.search(r"PWL\(([^)]*)\)", lines[i])
+    n = [float(x) for x in match[1].split()]
+    t0, v0 = n[0::2], n[1::2]
+    corners = set(t0)
+    for delay, _, rise, fall, on in pulses:
+        corners |= {delay, delay + rise, delay + rise + on, delay + rise + on + fall}
+    pts = " ".join(f"{t:.6g} {float(np.interp(t, t0, v0)) + sum(_trapezoid(t, *p) for p in pulses):.6g}" for t in sorted(corners))
+    lines[i] = lines[i][:match.start(1)] + pts + lines[i][match.end(1):]
+
+
+def hold_pwl(lines: list[str], prefix: str) -> None:
+    """Hold a PWL source at its first value for the whole run."""
+    i = _index(lines, prefix)
+    match = re.search(r"PWL\(([^)]*)\)", lines[i])
+    v = match[1].split()[1]
+    lines[i] = lines[i][:match.start(1)] + f"0 {v} 1 {v}" + lines[i][match.end(1):]
+
+
 def set_loans_pwl(lines: list[str], pulses: list[tuple[float, float, float, float, float]], base: float = 30.0) -> None:
     """Lending shock (I8) as base plus the sum of trapezoids (delay, amp, rise, fall, on) in simulation seconds,
     written as one PWL on the same source. Used for the W-shaped crisis on the lending side."""

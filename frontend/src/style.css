@@ -460,3 +460,39 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .block-icon { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; color:rgba(255,255,255,.9); }
 .block-icon svg { width:46%; height:46%; max-width:64px; max-height:64px; stroke-width:1.6; filter:drop-shadow(0 1px 1px rgba(0,0,0,.25)); }
 .map-node.controller .block-icon { color:rgba(20,70,90,.7); filter:none; }
+/* Problem-first welcome card and the two problem figures (17 Nov 2026) */
+.modal.welcome.problems { max-width:860px; width:min(860px,100%); max-height:90vh; }
+.modal.welcome.problems h2 { font-size:22px; margin:2px 0 14px; }
+.eyebrow { margin:0; font-size:12px; font-weight:650; letter-spacing:.04em; text-transform:uppercase; color:var(--green); }
+.problem-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; }
+.problem-card { display:flex; flex-direction:column; gap:6px; padding:14px 16px; border:1px solid var(--line); border-radius:10px; background:var(--bg); }
+.problem-card.underwater { border-top:3px solid var(--blue); } .problem-card.ladder { border-top:3px solid var(--warn); }
+.problem-card h3 { margin:0; font-size:17px; } .problem-card p { margin:0; font-size:14px; line-height:1.45; }
+.problem-card ul { margin:2px 0; padding-left:18px; font-size:13.5px; line-height:1.45; } .problem-card li { margin:2px 0; }
+.problem-card a { color:var(--blue); } .problem-card .how { color:#3c4a45; } .problem-card > button { align-self:flex-start; margin-top:auto; }
+.problem-fig { width:100%; max-height:120px; display:block; } .problem-fig.small { max-height:86px; margin:4px 0 0; }
+.problem-fig .fig-label { font-size:10px; fill:var(--muted); font-family:inherit; } .problem-fig .fig-label.water { fill:#174f8c; }
+.method-strip { display:flex; flex-wrap:wrap; gap:8px; list-style:none; padding:0; margin:14px 0 6px; }
+.method-strip li { flex:1 1 200px; } .method-strip button.link { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); text-align:left; font-size:13.5px; color:var(--ink); }
+.method-strip button.link:hover { border-color:var(--green); } .method-strip span { display:grid; place-items:center; flex:none; width:22px; height:22px; border-radius:50%; background:var(--green); color:#fff; font-size:12px; font-weight:650; }
+.problem-tag { display:inline-block; margin-left:8px; padding:1px 8px; border-radius:99px; font-size:11.5px; font-weight:650; vertical-align:2px; }
+.problem-tag.underwater { background:var(--blue-soft); color:#174f8c; } .problem-tag.ladder { background:#fbf2df; color:var(--warn); }
+.small { font-size:13px; }
+/* Guided-tour chapters (17 Nov 2026): problems | modelling | solving (underwater, ladder), each in its own colour */
+.chapters { display:flex; align-items:flex-end; gap:6px; flex-wrap:wrap; }
+.chapter { display:flex; flex-direction:column; gap:3px; padding:3px 7px 5px; border-radius:8px; border:1px solid transparent; }
+.chapter.current { background:var(--ch-soft); border-color:var(--ch); }
+.chapter-label { font-size:11px; font-weight:650; letter-spacing:.02em; color:var(--ch); white-space:nowrap; } .chapter-label em { font-style:normal; font-weight:500; opacity:.8; }
+.chapter .tour-steps button { border-color:var(--ch); color:var(--ch); }
+.chapter .tour-steps button.done { background:var(--ch-soft); } .chapter .tour-steps button.on { background:var(--ch); border-color:var(--ch); color:#fff; }
+.coach-chapter { margin-left:8px; font-size:12px; font-weight:650; }
+
+/* Welcome: the full guided tour as the main call to action (17 Nov 2026) */
+.tour-cta { display:flex; align-items:center; flex-wrap:wrap; gap:6px 14px; padding:12px 14px; margin:0 0 14px; border:1px solid var(--green); border-radius:10px; background:#ebf5e5; }
+.tour-cta p { margin:0; flex:1 1 260px; font-size:14px; color:#3c4a45; }
+.tour-cta button.big { font-size:16px; padding:10px 18px; }
+.tour-cta button.link, .problem-card button.link.jump { background:none; border:none; padding:0; color:var(--muted); font-size:13px; text-decoration:underline; cursor:pointer; }
+.problem-card button.link.jump { color:var(--blue); text-decoration:none; } .problem-card.ladder button.link.jump { color:var(--warn); }
+.problem-card button.link.jump:hover { text-decoration:underline; }
+.jump-label { margin:14px 0 0; }
+.jump-label + .method-strip { margin-top:6px; }

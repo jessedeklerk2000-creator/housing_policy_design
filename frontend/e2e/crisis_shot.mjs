@@ -1,0 +1,22 @@
+// The underwater chapter on the crisis alone (17 Nov 2026): open loop, the government's reaction (ZN), H∞; the chapter bar.
+import { chromium } from 'playwright-core';
+const out = process.argv[2] ?? 'e2e/shots';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
+await page.goto('http://127.0.0.1:8001/');
+await page.getByRole('button', { name: 'Take the full guided tour' }).first().click(); await page.waitForSelector('.coach'); await page.waitForTimeout(2500);
+await page.locator('.guide-bar').screenshot({ path: `${out}/bar.png` });
+const show = async () => { await page.locator('.coach').getByRole('button', { name: /Show me|Continue/ }).click(); };
+const waitPlay = async () => { await page.waitForFunction(() => !document.querySelector('.map-canvas.playing'), null, { timeout: 120000 }); await page.waitForTimeout(2500); };
+const notes = async () => page.locator('.pin-card small').allTextContents();
+await page.getByRole('button', { name: /Guide step 8:/ }).click(); await page.waitForTimeout(8000);
+await show(); await page.waitForTimeout(800); await show(); await page.waitForTimeout(4000); await waitPlay();
+await page.screenshot({ path: `${out}/crisis_open.png` }); const n1 = await notes();
+await page.getByRole('button', { name: /Guide step 9:/ }).click(); await page.waitForTimeout(8000);
+await show(); await page.waitForTimeout(1500); await show(); await page.waitForTimeout(4000); await waitPlay();
+await show(); await page.waitForTimeout(2500);
+await page.screenshot({ path: `${out}/crisis_zn.png` }); const n2 = await notes();
+await page.getByRole('button', { name: /Guide step 11:/ }).click(); await page.waitForTimeout(8000);
+await show(); await page.waitForTimeout(1500); await show(); await page.waitForTimeout(4000); await waitPlay();
+await page.screenshot({ path: `${out}/crisis_hinf.png` }); const n3 = await notes();
+console.log(JSON.stringify({ n1, n2, n3, errors })); process.exit(0);

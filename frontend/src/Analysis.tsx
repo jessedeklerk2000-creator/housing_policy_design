@@ -171,7 +171,7 @@ function LogSlider({ label, value, lo, hi, onChange }: { label: string; value: n
 }
 function Light({ ok, label, value }: { ok: boolean; label: string; value: string }) { return <div className={'light ' + (ok ? 'ok' : 'bad')}><span aria-hidden="true"/>{label}<b>{value}</b></div>; }
 
-const SHOCK_CHOICES = [['d_crisis', 'Financial crisis shock (firms)'], ['d_covid', 'Covid shock'], ['d_income', 'Income'], ['d_mortgages', 'Mortgage lending'], ['d_interest', 'Mortgage interest rate']] as const;
+const SHOCK_CHOICES = [['d_crisis', 'Financial crisis shock'], ['d_covid', 'Covid shock'], ['d_income', 'Income'], ['d_mortgages', 'Mortgage lending'], ['d_interest', 'Mortgage interest rate']] as const;
 
 export function PoleDesign({ design, setDesign, useInSimulation }: { design: Design; setDesign: (d: Design) => void; useInSimulation: () => void }) {
   const [ov, setOv] = useState<Overview>(); const [err, setErr] = useState('');

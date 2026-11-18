@@ -117,6 +117,10 @@ export default function App() {
   useEffect(() => {
     if (!catalogue || resumed.current) return; resumed.current = true;
     let at: number | null = null; try { const v = sessionStorage.getItem('hpl.guide'); at = v === null ? null : Number(v); } catch { /* storage blocked */ }
+    // Link from the landing page (17 Nov 2026): ?tour=N opens the guided tour at step N (1-based, as in the bar). The
+    // parameter is then removed from the address, so a reload resumes the current step instead.
+    const q = new URLSearchParams(window.location.search).get('tour');
+    if (q !== null && /^\d+$/.test(q)) { at = Number(q) - 1; const u = new URL(window.location.href); u.searchParams.delete('tour'); window.history.replaceState(null, '', u); }
     if (at !== null && at >= 0 && at < GUIDE.length) { setWelcome(false); void goGuide(at); }
   }, [catalogue]); // eslint-disable-line react-hooks/exhaustive-deps
   const goGuide = (i: number) => guard(async () => {
@@ -127,7 +131,7 @@ export default function App() {
     setS(next);
     const zn = catalogue.presets.zn;
     const [r, open, znR] = await Promise.all([api<Result>('/runs', next), g.compareOpen ? api<Result>('/runs', { ...next, feedback: false }) : Promise.resolve(null),
-      g.zn && zn ? api<Result>('/runs', { ...next, controller: 'zn', kp: zn.kp, ki: zn.ki, kd: zn.kd, derivative_filter: zn.filtered }) : Promise.resolve(null)]);
+      g.zn && zn ? api<Result>('/runs', { ...next, feedback: true, controller: 'zn', kp: zn.kp, ki: zn.ki, kd: zn.kd, derivative_filter: zn.filtered }) : Promise.resolve(null)]);
     setPinned(open); setZnRun(znR); setResult(r); setS(r.scenario);
     setGuide(old => ({ step: i, sub: 0, n: (old?.n ?? 0) + 1 }));
   });
@@ -232,6 +236,7 @@ export default function App() {
         </Group>
         <Group title="Interest rate" summary={`× ${num(s.interest_scale)}, shift ${num(s.interest_shift_yr, 1)} yr`} dirty={dirty(['interest_scale', 'interest_new_share', 'interest_shift_yr'])}><div className="sliders">
           <Slider label="Interest rates" value={s.interest_scale} min={.25} max={3} step={.01} format={times} onChange={v => update({ interest_scale: v })}/>
+          <label className="check"><input type="checkbox" checked={s.interest_path === 'flat'} onChange={e => update({ interest_path: e.target.checked ? 'flat' : 'historical' })}/> <span>Hold the interest rate at its 1996 value</span></label>
           <Slider label="Interest rate: share of the new-loan rate" hint="Each step of the effective rate mixes the old rate with the rate on new loans. 0.10 is the netlist (90% old, 10% new); 1.00 uses only the new-loan rate." value={s.interest_new_share} min={.02} max={1} step={.01} format={v => num(v)} onChange={v => update({ interest_new_share: v })}/>
           <Slider label="Interest-rate path, time shift" value={s.interest_shift_yr} min={-4} max={4} step={.1} format={yrs} onChange={v => update({ interest_shift_yr: v })}/>
         </div></Group>
@@ -247,10 +252,11 @@ export default function App() {
           <Slider label="Mortgage-lending path, time shift" value={s.mortgage_shift_yr} min={-4} max={4} step={.1} format={yrs} onChange={v => update({ mortgage_shift_yr: v })}/>
         </div></Group>
         <Group title="Financial crisis" summary={`× ${num(s.crisis_scale)} from ${s.crisis_start_yr.toFixed(1)}${s.crisis_w ? ', W-shaped' : ''}`} dirty={dirty(['crisis_scale', 'crisis_start_yr', 'crisis_w', 'crisis_w_start_yr', 'crisis_w_scale', 'crisis_w_on_yr', 'crisis_w_recovery_yr', 'crisis_w_fall_yr', 'crisis_w_floor'])}><div className="sliders">
-          <Slider label="Financial crisis shock (firms)" value={s.crisis_scale} min={0} max={2} step={.05} format={times} onChange={v => update({ crisis_scale: v })}/>
+          <Slider label="Financial crisis shock (firms)" hint="With the bank on and the W-shaped crisis, the same shock also cuts the bank's lending (below)." value={s.crisis_scale} min={0} max={2} step={.05} format={times} onChange={v => update({ crisis_scale: v })}/>
           <Slider label="Financial crisis shock (firms): starts in" hint="Netlist: 2011.46." value={s.crisis_start_yr} min={2000} max={2020} step={.1} format={v => num(v, 1)} onChange={v => update({ crisis_start_yr: v })}/>
           <label className="check"><input type="checkbox" checked={s.crisis_w} onChange={e => update({ crisis_w: e.target.checked })}/> <span><strong>W-shaped crisis</strong><br/><small className="muted">Both crisis shocks (firms and lending) get an earlier dip: 1-year fall, a time at full depth, 1-year recovery, depth relative to each shock's own main dip. The lending shock's main dip (30 → 10, five years) then starts with the firms crisis, so both W's line up. Claude's addition.</small></span></label>
           {s.crisis_w && <>
+            <Slider label="Financial crisis shock: cut in mortgage lending" hint="Bank on only. Model units, in the same W, added to the mortgage path. 15: a 21% price drop on its own (guided tour). 0: off." value={s.crisis_mortgage_cut} min={0} max={40} step={1} format={v => num(v, 0)} onChange={v => update({ crisis_mortgage_cut: v })}/>
             <Slider label="First dip: starts in" value={s.crisis_w_start_yr} min={2000} max={2020} step={.1} format={v => num(v, 1)} onChange={v => update({ crisis_w_start_yr: v })}/>
             <Slider label="First dip: depth" value={s.crisis_w_scale} min={0} max={2} step={.05} format={times} onChange={v => update({ crisis_w_scale: v })}/>
             <Slider label="First dip: time at full depth" value={s.crisis_w_on_yr} min={0} max={5} step={.1} format={v => `${num(v, 1)} yr`} onChange={v => update({ crisis_w_on_yr: v })}/>
@@ -346,7 +352,7 @@ export default function App() {
       {/* One canvas: scenario and policy in the left dock, analyses on the canvas and in the right dock, results below. */}
       {tour && <TourBar step={tour.step} go={goTour} exit={() => setTour(null)} busy={busy}/>}
       {guide && <GuideBar step={guide.step} go={goGuide} exit={() => setGuide(null)} busy={busy}/>}
-      <div><ModelMap forceChips={(() => { const t = guide ? GUIDE[guide.step].subs.map(x => x.target ?? '').join(' ') : ''; return { ctrl: /chip-(subsidy|controller)/.test(t), market: /chip-(income|shocks|bank)/.test(t) }; })()} guideCmd={gcmd} onSnap={setSnap} tour={guide && g ? { n: 1000 + guide.n, guide: true, pins: g.pins, cbs: g.cbs, compare: !!(g.compare || g.compareOpen), compareLabel: g.compareOpen ? 'no rule, historical subsidies (grey dashed)' : 'previous run (grey dashed)', rejectSize: g.rejectSize, robust: g.zn, robustOnly: g.robustOnly } : tour ? { n: tour.n, pins: TOUR[tour.step].pins, ident: TOUR[tour.step].ident, tuning: TOUR[tour.step].tuning, compare: TOUR[tour.step].compare, cbs: TOUR[tour.step].cbs, expand: TOUR[tour.step].expand, formulas: TOUR[tour.step].formulas, reject: TOUR[tour.step].reject, robust: TOUR[tour.step].robust } : undefined} scenario={s} result={result} pinned={pinned} shockShow={slideW ? shockRun : null} zn={guide ? (g?.zn ? znRun : null) : tour && TOUR[tour.step].robust ? znRun : null} busy={busy} run={guide ? guideRun : simulate} stale={stale} setFeedback={feedback => update({ feedback })} update={update} design={design} setDesign={setDesign} cbs={cbs} lag={lag ?? cbs?.lag_months ?? 0} cpb={cpbShown}
+      <div><ModelMap forceChips={(() => { const t = guide ? GUIDE[guide.step].subs.map(x => x.target ?? '').join(' ') : ''; return { ctrl: /chip-(subsidy|controller|share)/.test(t), market: /chip-(income|shocks|bank)/.test(t) }; })()} guideCmd={gcmd} onSnap={setSnap} tour={guide && g ? { n: 1000 + guide.n, guide: true, pins: g.pins, cbs: g.cbs, compare: !!(g.compare || g.compareOpen), compareLabel: g.compareOpen ? (g.setup.subsidy_scale === 0 ? 'no rule, no subsidy (grey dashed)' : 'no rule, historical subsidies (grey dashed)') : 'previous run (grey dashed)', rejectSize: g.rejectSize, robust: g.zn, robustOnly: g.robustOnly } : tour ? { n: tour.n, pins: TOUR[tour.step].pins, ident: TOUR[tour.step].ident, tuning: TOUR[tour.step].tuning, compare: TOUR[tour.step].compare, cbs: TOUR[tour.step].cbs, expand: TOUR[tour.step].expand, formulas: TOUR[tour.step].formulas, reject: TOUR[tour.step].reject, robust: TOUR[tour.step].robust } : undefined} scenario={s} result={result} pinned={pinned} shockShow={slideW ? shockRun : null} zn={guide ? (g?.zn ? znRun : null) : tour && TOUR[tour.step].robust ? znRun : null} busy={busy} run={guide ? guideRun : simulate} stale={stale} setFeedback={feedback => update({ feedback })} update={update} design={design} setDesign={setDesign} cbs={cbs} lag={lag ?? cbs?.lag_months ?? 0} cpb={cpbShown}
         left={<><div className="left-head"><div><p className="eyebrow">Disturbances d</p><h3>Economic scenario</h3></div><button className="ghost small" title="Back to the start values: every slider, switch, controller and model parameter" onClick={() => update({ ...catalogue.defaults, name: s.name })}><RotateCcw size={14}/> Reset all</button></div><p className="muted small">Scales of the historical inputs; 1.00 is the netlist path. Click a group to open it. A dot marks a group that differs from the start values. Run again to see the effect.</p>{scenarioControls}<hr/><p className="eyebrow">Reference r and controller</p><h3>Policy</h3>{policyControls}<button className="primary" disabled={busy} onClick={simulate}><Play size={15}/> Run simulation</button></>}/></div>
 
 
@@ -383,7 +389,7 @@ export default function App() {
     <footer className="action-bar" data-no-shot><div className="row"><span className="muted small">One canvas: scenario and policy left, analyses on the canvas and right, results below.</span></div>
       <div className="row"><button className="ghost" disabled={busy} onClick={save}><Save size={15}/> Save</button>{result && <button className="ghost" onClick={exportRun}><Download size={15}/> Export</button>}<button className="secondary" disabled={busy} onClick={both}><GitCompare size={15}/> Run open and closed</button><button className="primary" disabled={busy} onClick={simulate}>{busy ? <LoaderCircle className="spin" size={15}/> : <Play size={15}/>} Run simulation</button></div></footer>
     {guide && <Coach step={guide.step} sub={guide.sub} busy={busy} onShow={guideShow} onContinue={() => setGuide(x => x && ({ ...x, sub: x.sub + 1 }))} onNext={() => goGuide(guide.step + 1)} onExit={() => setGuide(null)}/>}
-    {welcome && !guide && !tour && <Welcome start={() => { seen(); void goGuide(0); }} close={seen}/>}
+    {welcome && !guide && !tour && <Welcome start={i => { seen(); void goGuide(i); }} close={seen}/>}
     {library && <div className="backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Saved scenarios"><div className="policy-head"><h2>Saved scenarios</h2><button className="ghost" aria-label="Close" onClick={() => setLibrary(false)}><X size={16}/></button></div>
       <label className="name">Name for the next save<input value={s.name} maxLength={80} onChange={e => update({ name: e.target.value })}/></label>
       {!saved.length && <p className="muted">Nothing saved yet.</p>}{saved.map(r => <div className="saved" key={r.id}><div><strong>{r.name}</strong><small>{new Date(r.created_at).toLocaleString('en-GB')} · {r.feedback ? 'Closed loop' : 'Open loop'} · {r.has_result ? 'with results' : 'inputs only'}</small></div><button className="ghost" onClick={() => load(r.id)}>Open</button></div>)}</section></div>}

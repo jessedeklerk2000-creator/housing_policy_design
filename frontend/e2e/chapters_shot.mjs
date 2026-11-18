@@ -1,0 +1,24 @@
+// Chapters in the guided-tour bar and the two ladder steps (17 Nov 2026).
+import { chromium } from 'playwright-core';
+const out = process.argv[2] ?? 'e2e/shots';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
+await page.goto('http://127.0.0.1:8001/');
+await page.getByRole('button', { name: 'Take the full guided tour' }).first().click(); await page.waitForSelector('.coach'); await page.waitForTimeout(2500);
+await page.locator('.guide-bar').screenshot({ path: `${out}/bar.png` });
+const show = async () => { await page.locator('.coach').getByRole('button', { name: /Show me|Continue/ }).click(); };
+const waitPlay = async () => { await page.waitForFunction(() => !document.querySelector('.map-canvas.playing'), null, { timeout: 120000 }); await page.waitForTimeout(2500); };
+await page.getByRole('button', { name: /Guide step 12:/ }).click(); await page.waitForTimeout(8000);
+await show(); await page.waitForTimeout(800); await show(); await page.waitForTimeout(4000); await waitPlay();
+await page.screenshot({ path: `${out}/ladder_problem.png` });
+const t1 = await page.locator('.pin-card[data-pin="y_rent_cost:s"] small').last().textContent();
+await page.getByRole('button', { name: /Guide step 13:/ }).click(); await page.waitForTimeout(8000);
+await page.screenshot({ path: `${out}/mimo_1.png` }); await show(); await page.waitForTimeout(800);
+await page.screenshot({ path: `${out}/mimo_2.png` }); await show(); await page.waitForTimeout(800);
+await page.screenshot({ path: `${out}/mimo_3.png` });
+await show(); await page.waitForTimeout(1500); await show(); await page.waitForTimeout(4000); await waitPlay();
+await show(); await page.waitForTimeout(1500); await show(); await page.waitForTimeout(4000); await waitPlay();
+await page.screenshot({ path: `${out}/ladder_solution.png` });
+const t2 = await page.locator('.pin-card[data-pin="y_rent_cost:s"] small').last().textContent();
+const coach = await page.locator('.coach-head').textContent();
+console.log(JSON.stringify({ t1, t2, coach, errors })); process.exit(0);

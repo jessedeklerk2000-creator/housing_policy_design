@@ -6,7 +6,7 @@ const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errors = []; page.on('pageerror', e => errors.push(String(e)));
 let runs = 0; page.on('request', r => { if (r.url().includes('/api/runs') && r.method() === 'POST') runs++; });
 await page.goto('http://127.0.0.1:8001/');
-await page.getByRole('button', { name: 'Start the guided tour' }).click();
+await page.getByRole('button', { name: 'Take the full guided tour' }).first().click();
 await page.getByRole('button', { name: /Guide step \d+: Phase out/ }).click(); await page.waitForTimeout(7000);
 const log = [], head = () => page.locator('.coach-head b').textContent();
 for (let i = 0; i < 4; i++) {
