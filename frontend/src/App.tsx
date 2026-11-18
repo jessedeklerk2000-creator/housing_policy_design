@@ -107,8 +107,10 @@ export default function App() {
   // change made on the canvas runs at once. Sub-steps move on when the canvas reports that the click has happened.
   const [guide, setGuide] = useState<{ step: number; sub: number; n: number } | null>(null);
   const [snap, setSnap] = useState<Snap | null>(null), [runs, setRuns] = useState(0), [gcmd, setGcmd] = useState<GuideCmd>({ n: 0 });
-  const [welcome, setWelcome] = useState(() => { try { return localStorage.getItem('hpl.welcome') !== 'seen'; } catch { return true; } });
-  const seen = () => { setWelcome(false); try { localStorage.setItem('hpl.welcome', 'seen'); } catch { /* storage blocked */ } };
+  // Welcome on every new visit (Jesse, 18 Nov 2026): "seen" is kept per tab (sessionStorage), so a new tab or a new
+  // browser session shows it again, but a reload does not (until 18 Nov it was kept for good in localStorage).
+  const [welcome, setWelcome] = useState(() => { try { return sessionStorage.getItem('hpl.welcome') !== 'seen'; } catch { return true; } });
+  const seen = () => { setWelcome(false); try { sessionStorage.setItem('hpl.welcome', 'seen'); } catch { /* storage blocked */ } };
   useEffect(() => { if (result) setRuns(r => r + 1); }, [result]);
   // The tour survives a page reload (e.g. the tab picking up a new build): its step is kept for this tab and resumed.
   const resumed = useRef(false);
