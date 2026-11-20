@@ -496,3 +496,41 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .problem-card button.link.jump:hover { text-decoration:underline; }
 .jump-label { margin:14px 0 0; }
 .jump-label + .method-strip { margin-top:6px; }
+
+/* Bank and mortgage panel (Bank.tsx, 20 Nov 2026) */
+.tag-exp { display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; background:#fbf2df; color:var(--warn); font-size:11.5px; font-weight:600; vertical-align:2px; }
+.bank { margin-top:14px; } .bank .notice { margin:0 0 12px; }
+.bank-story { max-width:860px; font-size:14.5px; line-height:1.5; } .bank-story p { margin:8px 0 4px; } .bank-story ul { margin:0 0 6px; padding-left:20px; } .bank-story li { margin:3px 0; }
+.bank-loop { display:block; width:100%; max-width:760px; height:auto; margin:14px 0 6px; }
+.bank-head { display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin:14px 0 6px; } .bank-toggles { display:flex; gap:16px; flex-wrap:wrap; font-size:13.5px; } .bank-toggles label { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.bank-legend { display:flex; flex-wrap:wrap; gap:6px 18px; font-size:12.5px; color:var(--muted); margin:6px 0 0; } .bank-legend span { display:inline-flex; align-items:center; gap:6px; }
+.bank-sentence { font-weight:600; margin:14px 0 4px; max-width:860px; }
+.bank-knobs-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:22px; } .bank-knobs-head h3 { margin:0; font-size:16px; }
+.bank-how { margin-top:18px; } .bank-how ul { padding-left:20px; font-size:13.5px; line-height:1.5; }
+.bank-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 24px; margin-top:8px; } @media (max-width:760px) { .bank-grid { grid-template-columns:1fr; } }
+/* Bank controls mode (Bank.tsx, 20 Nov 2026) */
+.mode-switch { margin-left:18px; } .topbar { gap:12px; }
+.bank-mode { display:flex; flex-direction:column; gap:12px; }
+.bank-top { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; } .bank-top h2 { margin:0 0 4px; font-size:22px; } .bank-top .muted { max-width:640px; }
+.bank-controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .bank-cmp { display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--muted); } .bank-cmp select { padding:5px 8px; border:1px solid var(--line); border-radius:7px; background:var(--panel); }
+.bank-year { font-variant-numeric:tabular-nums; font-size:13.5px; color:var(--muted); min-width:110px; } .bank-year b { color:#c5352a; }
+.bank-stage { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:14px; align-items:start; } .bank-stage .panel { margin:0; }
+@media (max-width:1100px) { .bank-stage { grid-template-columns:1fr; } }
+.bank-canvas-panel { padding:12px; } .bk-canvas { display:block; width:100%; height:auto; font-family:Inter, system-ui, sans-serif; }
+.bank-scrub { width:100%; accent-color:var(--green); margin-top:6px; }
+.bk-block { cursor:pointer; outline:none; } .bk-block:hover rect:first-child, .bk-block:focus-visible rect:first-child { stroke-width:2.2; } .bk-block.sel rect:first-child { stroke:#1f6fc4; stroke-width:2.6; }
+.bk-block.dim { opacity:.55; } .bk-head { font-size:12.5px; font-weight:700; fill:#fff; paint-order:stroke; stroke:rgba(0,0,0,.25); stroke-width:2px; }
+.bk-icon { color:#2b3632; opacity:.75; } .bk-val { font-size:12.5px; fill:#1f2a26; font-variant-numeric:tabular-nums; } .bk-lab { font-size:11px; } .bk-foot { font-size:11.5px; fill:#5c6b65; }
+.bk-wire.live { stroke-dasharray:4 6; animation:bk-flow .6s linear infinite; } @keyframes bk-flow { to { stroke-dashoffset:-10; } }
+@media (prefers-reduced-motion:reduce) { .bk-wire.live { animation:none; } }
+.bank-inspector h3 { margin:2px 0 6px; } .bank-inspector h4 { margin:14px 0 4px; font-size:14px; } .bank-inspector .slider { margin-top:12px; } .bank-inspector .muted.small { line-height:1.45; }
+.bk-toggle { display:flex; align-items:center; gap:7px; margin:10px 0 4px; font-weight:550; cursor:pointer; }
+.bk-step { display:flex; align-items:center; gap:6px; margin:5px 0; } .bk-step > span { width:28px; font-weight:600; } .bk-step output { min-width:56px; text-align:center; } .bk-step button { padding:3px 7px; }
+.bk-table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px; } .bk-table td { padding:4px 2px; border-bottom:1px solid var(--line); } .bk-table td:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+.bank-grid3 { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 20px; margin-top:6px; } @media (max-width:1100px) { .bank-grid3 { grid-template-columns:repeat(2,minmax(0,1fr)); } } @media (max-width:700px) { .bank-grid3 { grid-template-columns:1fr; } }
+.bk-open { display:flex; flex-direction:column; gap:8px; } .bk-crumb { display:flex; align-items:center; gap:12px; flex-wrap:wrap; } .bk-crumb b { font-size:16px; } .bk-crumb .bank-year { margin-left:auto; }
+.bk-bb { display:block; width:100%; height:auto; max-height:640px; border:1px solid var(--line); border-radius:8px; background:#f6efe2; }
+.bk-board { display:flex; flex-direction:column; gap:8px; } .bk-board-svg { width:100%; max-height:640px; border:1px solid var(--line); border-radius:8px; background:#f6efe2; overflow:hidden; } .bk-board-svg > svg { width:100%; height:100%; }
+.bk-el { font-size:20px; font-weight:650; fill:#1f2a26; } .bk-elv { font-size:18px; fill:#1d7a99; font-variant-numeric:tabular-nums; } .bk-row { font-size:24px; font-weight:700; fill:#1f2a26; } .bk-taken { color:#a8321f; }
+.bk-port { font-size:20px; font-weight:600; fill:#1f2a26; } .bk-row { font-size:20px !important; }
+.bk-board-svg { max-height:none; padding:60px 80px; box-sizing:border-box; } .bk-board-svg > svg { overflow:visible; }

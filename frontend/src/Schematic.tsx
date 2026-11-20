@@ -13,14 +13,16 @@ export function stateOf(e: Element, s: Scenario): string {
   return e.state;
 }
 const LABEL_OFFSET: Record<string, [number, number]> = {
+  'B§Mortgage_rate_ALM': [-60, -62],  // bank view (Bank.tsx): above the source, clear of L9 and the u₁ arrow
   'I§Rental_subsidies1': [-24, 56], 'I§Owner_occupied_subsidies': [-24, 56], 'B§PID': [-24, 56], 'L§Supply_owner_occupied': [-142, 0], 'C3': [-14, 62], 'C2': [-14, 62], 'R20': [-74, 0], 'L§Supply_rent': [-132, 0], 'B§Housing_services': [-30, 205], 'Interest_Rates': [-176, 0], 'V§Shock_covid': [0, -6], 'V§Shock_financialcrisis': [0, -6], 'L§F_Consumption': [18, -6], 'C7': [0, 0],
 };
 const DISPLAY: Record<string, string> = {
+  'B§Mortgage_rate_ALM': 'Mortgage rate (ALM)', 'B§Deposit_flow': 'Inflow', 'B§Net_interest': 'NII', 'C§Deposits': 'Deposits', 'C§Equity': 'Equity', 'B§Loans_funding': 'Loan-to-deposit',  // bank view
   'L§Supply_owner_occupied': 'Supply owner', 'L§Supply_rent': 'Supply rent', 'L§Gross_imputed_rent': 'Gross imp.', 'V§Maintenance_costs': 'Maintenance', 'L§Demand_owner_occupied': 'Demand owner', 'I§Owner_occupied_subsidies': 'Owner subsidies', 'I§Rental_subsidies1': 'Rental subsidies', 'B§PID': 'PID output', 'B§PID_I_Robust': 'PID I', 'V§Shock_financialcrisis': 'Crisis shock', 'V§Shock_covid': 'Covid shock', 'L§Supply_consumption': 'Supply goods', 'L§Demand_consumption': 'Demand goods', 'I§Mortgages': 'Mortgages', 'B§Mortgage_interest': 'Mortgage interest', 'Interest_Rates': 'Interest rates', 'Incomeactual': 'Income (historical)', 'V§Construction_cost': 'Construction cost',
 };
 const short = (e: Element) => DISPLAY[e.name] ?? e.name.split('§').pop()!.replace(/_/g, ' ');
 
-function Glyph({ type, length }: { type: string; length: number }) {
+export function Glyph({ type, length }: { type: string; length: number }) {
   const mid = length / 2, half = Math.min(26, length / 2 - 6);
   const leads = (gap: number) => <path d={`M0 0H${mid - gap}M${mid + gap} 0H${length}`}/>;
   if (type === 'res') { const n = 6, s = (2 * half) / n; return <path d={`M0 0H${mid - half}` + Array.from({ length: n }, (_, i) => `L${mid - half + s * (i + .5)} ${i % 2 ? 11 : -11}`).join('') + `L${mid + half} 0H${length}`}/>; }
@@ -57,7 +59,7 @@ function PortMark({ x, y, w, h, flow, selected, pick, ret }: { x: number; y: num
   </g>;
 }
 
-const BREADBOARD = <defs><pattern id="breadboard" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1.6" fill="#c9bb9c"/></pattern></defs>;
+export const BREADBOARD = <defs><pattern id="breadboard" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1.6" fill="#c9bb9c"/></pattern></defs>;
 
 /** Dashed arrow from where a disturbance enters the block (same spacing as the canvas arrows in ModelMap) to the
  * source element it drives. Left entry: across, then down/up to the element; top entry: down, then across. */
@@ -159,13 +161,13 @@ export const CONTROLLER_SIZE: [number, number] = [1100, 480];
 export type GainKey = 'kp' | 'ki' | 'kd' | 'skp' | 'ski' | 'skd';
 type Part = 'P' | 'I' | 'D';
 // ---- op-amp breadboard of one PID part (normalised component values: Claude's choice, the model itself is a behavioural source)
-const W = (pts: number[][], k: string) => <path key={k} className="bb-wire" d={pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join('')}/>;
-const res = (x: number, y: number, len: number, label: string, value: string, k: string) => { const z = Array.from({ length: 7 }, (_, i) => `L${x + 20 + i * (len - 40) / 6 - (len - 40) / 12} ${y + (i % 2 ? -12 : 12)}`).join(''); return <g key={k}><path className="bb-part" d={`M${x} ${y}L${x + 20 - (len - 40) / 12} ${y}${z}L${x + len - 20} ${y}L${x + len} ${y}`}/><text className="bb-label" x={x + len / 2} y={y - 22}>{label}</text><text className="bb-value" x={x + len / 2} y={y + 36}>{value}</text></g>; };
-const cap = (x: number, y: number, len: number, label: string, value: string, k: string) => <g key={k}><path className="bb-part" d={`M${x} ${y}L${x + len / 2 - 8} ${y}M${x + len / 2 - 8} ${y - 22}L${x + len / 2 - 8} ${y + 22}M${x + len / 2 + 8} ${y - 22}L${x + len / 2 + 8} ${y + 22}M${x + len / 2 + 8} ${y}L${x + len} ${y}`}/><text className="bb-label" x={x + len / 2} y={y - 30}>{label}</text><text className="bb-value" x={x + len / 2} y={y + 44}>{value}</text></g>;
-const gnd = (x: number, y: number, k: string) => <path key={k} className="bb-part" d={`M${x} ${y}L${x} ${y + 16}M${x - 16} ${y + 16}L${x + 16} ${y + 16}M${x - 10} ${y + 23}L${x + 10} ${y + 23}M${x - 4} ${y + 30}L${x + 4} ${y + 30}`}/>;
-const opamp = (x: number, y: number, k: string) => <g key={k}><path className="bb-amp" d={`M${x} ${y - 60}L${x} ${y + 60}L${x + 110} ${y}Z`}/><text className="bb-pin" x={x + 10} y={y - 22}>−</text><text className="bb-pin" x={x + 10} y={y + 38}>+</text></g>;
+export const W = (pts: number[][], k: string) => <path key={k} className="bb-wire" d={pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join('')}/>;
+export const res = (x: number, y: number, len: number, label: string, value: string, k: string) => { const z = Array.from({ length: 7 }, (_, i) => `L${x + 20 + i * (len - 40) / 6 - (len - 40) / 12} ${y + (i % 2 ? -12 : 12)}`).join(''); return <g key={k}><path className="bb-part" d={`M${x} ${y}L${x + 20 - (len - 40) / 12} ${y}${z}L${x + len - 20} ${y}L${x + len} ${y}`}/><text className="bb-label" x={x + len / 2} y={y - 22}>{label}</text><text className="bb-value" x={x + len / 2} y={y + 36}>{value}</text></g>; };
+export const cap = (x: number, y: number, len: number, label: string, value: string, k: string) => <g key={k}><path className="bb-part" d={`M${x} ${y}L${x + len / 2 - 8} ${y}M${x + len / 2 - 8} ${y - 22}L${x + len / 2 - 8} ${y + 22}M${x + len / 2 + 8} ${y - 22}L${x + len / 2 + 8} ${y + 22}M${x + len / 2 + 8} ${y}L${x + len} ${y}`}/><text className="bb-label" x={x + len / 2} y={y - 30}>{label}</text><text className="bb-value" x={x + len / 2} y={y + 44}>{value}</text></g>;
+export const gnd = (x: number, y: number, k: string) => <path key={k} className="bb-part" d={`M${x} ${y}L${x} ${y + 16}M${x - 16} ${y + 16}L${x + 16} ${y + 16}M${x - 10} ${y + 23}L${x + 10} ${y + 23}M${x - 4} ${y + 30}L${x + 4} ${y + 30}`}/>;
+export const opamp = (x: number, y: number, k: string) => <g key={k}><path className="bb-amp" d={`M${x} ${y - 60}L${x} ${y + 60}L${x + 110} ${y}Z`}/><text className="bb-pin" x={x + 10} y={y - 22}>−</text><text className="bb-pin" x={x + 10} y={y + 38}>+</text></g>;
 /** Inverting stage at (x, y): input part, feedback part, op-amp, + input grounded; output at x + 330. */
-function stage(x: number, y: number, input: React.ReactNode, feedback: React.ReactNode, k: string) {
+export function stage(x: number, y: number, input: React.ReactNode, feedback: React.ReactNode, k: string) {
   return <g key={k}>{input}{W([[x + 150, y], [x + 190, y], [x + 190, y - 30], [x + 200, y - 30]], `${k}a`)}{W([[x + 190, y], [x + 190, y - 110], [x + 210, y - 110]], `${k}fb1`)}{feedback}
     {W([[x + 310, y - 110], [x + 330, y - 110], [x + 330, y], [x + 310, y]], `${k}fb2`)}{opamp(x + 200, y, `${k}amp`)}{W([[x + 200, y + 30], [x + 180, y + 30], [x + 180, y + 50]], `${k}g`)}{gnd(x + 180, y + 50, `${k}gnd`)}<circle className="bb-dot" cx={x + 190} cy={y} r={5}/><circle className="bb-dot" cx={x + 330} cy={y} r={5}/></g>;
 }

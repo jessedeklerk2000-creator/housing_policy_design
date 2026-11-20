@@ -11,7 +11,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from functools import lru_cache
+import math
 from typing import Literal
 from .topology import model_map
 from . import analysis
@@ -144,9 +146,39 @@ class TuneRequest(BaseModel):
     min_cycle_yr: float | None = Field(None, ge=0.2, le=30)
 
 
+# Bank controls (experimental, 20 Nov 2026): the ALM desk as controller of a separate bank + housing netlist
+# (housing/bank_netlist.py). Only the model choices in bank_netlist.RANGES can be changed, clamped to their ranges.
+class BankRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    overrides: dict[str, float] = Field(default_factory=dict)
+    alm_on: bool = True
+    housing_feedback: bool = True
+    full: bool = False  # also the run in the housing-run format, for the model canvas
+
+    @field_validator("overrides")
+    @classmethod
+    def _whitelist(cls, v: dict[str, float]) -> dict[str, float]:
+        from .bank_netlist import clamp
+        return clamp(v)
+
+
+def bank_run(r: BankRequest) -> dict:
+    from .bank_netlist import cached
+    return cached(tuple(sorted(r.overrides.items())), r.alm_on, r.housing_feedback, r.full)
+
+
+def _warm_bank():  # the three default scenarios A, B, C (about 1 s together)
+    from .bank_netlist import cached
+    for alm, fb in ((False, True), (True, False), (True, True)):
+        try:
+            cached((), alm, fb, alm and fb)
+        except Exception:  # a failed warm-up must not stop the server; the request will show the error
+            pass
+
 def create_app(database: Path | None = None) -> FastAPI:
     app = FastAPI(title="Housing policy lab", version=MODEL_VERSION)
     app.add_middleware(GZipMiddleware, minimum_size=2000)
+    threading.Thread(target=_warm_bank, daemon=True).start()
     store = Store(database or Path(os.environ.get("HOUSING_DB", ROOT / "data" / "housing.sqlite3")))
 
     @app.get("/api/catalogue")
@@ -240,6 +272,11 @@ def create_app(database: Path | None = None) -> FastAPI:
     def analysis_tune(r: TuneRequest):
         K, violation = analysis.tune(r.settling_yr, r.overshoot_pct, r.with_S, r.filtered, r.min_cycle_yr)
         return {"K": K, "violation": violation, "met": violation <= 0}
+
+    @app.post("/api/bank/simulate")
+    def bank_simulate(r: BankRequest):
+        with SLOTS:
+            return bank_run(r)
 
     @app.post("/api/scenarios", status_code=201)
     def save(request: SaveRequest):

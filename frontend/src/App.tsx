@@ -7,6 +7,7 @@ import { ModelMap } from './ModelMap';
 import { CPB_PEAKS, FITTED_CBS, TOUR, TourBar, W_SLIDE } from './Tour';
 import { Coach, GUIDE, GuideBar, Welcome, clickTarget, type GState, type GuideCmd, type Snap } from './Guide';
 import { Robustness, type Design } from './Analysis';
+import { BankMode } from './Bank';
 import type { Catalogue, ControllerKey, Kpis, Result, SavedRow, Scenario } from './types';
 
 const GREEN = '#3f9a1f', BLUE = '#1f6fc4', GREY = '#8a9692', INK = '#1f2a26', AMBER = '#b9770e';
@@ -37,7 +38,10 @@ function Kpi({ label, value, unit, other, note }: { label: string; value: number
 export default function App() {
   const [catalogue, setCatalogue] = useState<Catalogue>();
   const [s, setS] = useState<Scenario>();
-  const [robust, setRobust] = useState(false);
+  const [robust, setRobust] = useState(false); // Mode (20 Nov 2026): 'gov' = the government steers (the main canvas), 'bank' = the bank's ALM desk steers
+  // (Bank.tsx, experimental). Kept in the URL as ?mode=bank so a demo link opens it directly.
+  const [mode, setModeState] = useState<'gov' | 'bank'>(() => new URLSearchParams(window.location.search).get('mode') === 'bank' ? 'bank' : 'gov');
+  const setMode = (m: 'gov' | 'bank') => { setModeState(m); const q = new URLSearchParams(window.location.search); if (m === 'bank') q.set('mode', 'bank'); else q.delete('mode'); window.history.replaceState(null, '', window.location.pathname + (q.toString() ? '?' + q : '') + window.location.hash); };
   type FitResult = { inputs: Partial<Scenario>; before: { rmse: number; corr: number; inflation_pct: number }; after: { rmse: number; corr: number; inflation_pct: number; model_std: number; data_std: number }; note: string };
   const [fitting, setFitting] = useState(false), [fitRes, setFitRes] = useState<FitResult | null>(null), [fixInfl, setFixInfl] = useState<number | null>(null);
   const fitToCbs = async () => {
@@ -344,7 +348,9 @@ export default function App() {
   }
   return <>
     <header className="topbar"><div className="brand"><span className="mark">H</span>Housing Policy Lab</div>
-      <div className="top-actions"><button className={guide ? "secondary" : "primary"} data-no-shot title="Where to click, one step at a time" disabled={busy} onClick={() => guide ? setGuide(null) : (seen(), goGuide(0))}>{guide ? "Leave guided tour" : "Guided tour"}</button><button className={tour ? "secondary" : "ghost"} data-no-shot title="The same story without the hand-holding: one click per step, for presenting" disabled={busy} onClick={() => tour ? setTour(null) : (setGuide(null), goTour(0))}>{tour ? "Leave presenter tour" : "Presenter tour"}</button><span className={'mode ' + (s.feedback ? 'closed' : 'open')}>{s.feedback ? 'Feedback on' : 'Feedback off'}</span><button className="ghost" data-no-shot title="Save the whole page as a high-resolution PNG (3x)" disabled={shooting} onClick={screenshot}>{shooting ? <LoaderCircle className="spin" size={16}/> : <Camera size={16}/>} Screenshot page</button><button className="ghost" onClick={() => setLibrary(true)}><FolderOpen size={16}/> Saved <b>{saved.length}</b></button></div></header>
+      <div className="segmented small mode-switch" role="group" aria-label="Who controls" data-no-shot><button className={mode === 'gov' ? 'active' : ''} aria-pressed={mode === 'gov'} onClick={() => setMode('gov')}>Government controls</button><button className={mode === 'bank' ? 'active' : ''} aria-pressed={mode === 'bank'} onClick={() => { setGuide(null); setTour(null); setMode('bank'); }}>Bank controls</button></div>
+      {mode === 'gov' && <div className="top-actions"><button className={guide ? "secondary" : "primary"} data-no-shot title="Where to click, one step at a time" disabled={busy} onClick={() => guide ? setGuide(null) : (seen(), goGuide(0))}>{guide ? "Leave guided tour" : "Guided tour"}</button><button className={tour ? "secondary" : "ghost"} data-no-shot title="The same story without the hand-holding: one click per step, for presenting" disabled={busy} onClick={() => tour ? setTour(null) : (setGuide(null), goTour(0))}>{tour ? "Leave presenter tour" : "Presenter tour"}</button><span className={'mode ' + (s.feedback ? 'closed' : 'open')}>{s.feedback ? 'Feedback on' : 'Feedback off'}</span><button className="ghost" data-no-shot title="Save the whole page as a high-resolution PNG (3x)" disabled={shooting} onClick={screenshot}>{shooting ? <LoaderCircle className="spin" size={16}/> : <Camera size={16}/>} Screenshot page</button><button className="ghost" onClick={() => setLibrary(true)}><FolderOpen size={16}/> Saved <b>{saved.length}</b></button></div>}</header>
+    {mode === 'bank' ? <main className="workspace wide"><BankMode/></main> : <>
     <main className="workspace wide">
       {error && <div role="alert" className="notice bad">{error}<button aria-label="Dismiss" onClick={() => setError('')}><X size={15}/></button></div>}
       {notice && <div role="status" className="notice good">{notice}</div>}
@@ -392,6 +398,7 @@ export default function App() {
       <div className="row"><button className="ghost" disabled={busy} onClick={save}><Save size={15}/> Save</button>{result && <button className="ghost" onClick={exportRun}><Download size={15}/> Export</button>}<button className="secondary" disabled={busy} onClick={both}><GitCompare size={15}/> Run open and closed</button><button className="primary" disabled={busy} onClick={simulate}>{busy ? <LoaderCircle className="spin" size={15}/> : <Play size={15}/>} Run simulation</button></div></footer>
     {guide && <Coach step={guide.step} sub={guide.sub} busy={busy} onShow={guideShow} onContinue={() => setGuide(x => x && ({ ...x, sub: x.sub + 1 }))} onNext={() => goGuide(guide.step + 1)} onExit={() => setGuide(null)}/>}
     {welcome && !guide && !tour && <Welcome start={i => { seen(); void goGuide(i); }} close={seen}/>}
+    </>}
     {library && <div className="backdrop"><section className="modal" role="dialog" aria-modal="true" aria-label="Saved scenarios"><div className="policy-head"><h2>Saved scenarios</h2><button className="ghost" aria-label="Close" onClick={() => setLibrary(false)}><X size={16}/></button></div>
       <label className="name">Name for the next save<input value={s.name} maxLength={80} onChange={e => update({ name: e.target.value })}/></label>
       {!saved.length && <p className="muted">Nothing saved yet.</p>}{saved.map(r => <div className="saved" key={r.id}><div><strong>{r.name}</strong><small>{new Date(r.created_at).toLocaleString('en-GB')} · {r.feedback ? 'Closed loop' : 'Open loop'} · {r.has_result ? 'with results' : 'inputs only'}</small></div><button className="ghost" onClick={() => load(r.id)}>Open</button></div>)}</section></div>}
