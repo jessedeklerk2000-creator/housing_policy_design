@@ -17,18 +17,18 @@ import type { MapData, Result, Scenario, Selection } from './types';
 type Series = (number | null)[];
 interface BankRun {
   ok: boolean; breakdown_year: number | null; t_years: number[]; crisis_years: [number, number] | null; year0: number; result: Result | null;
-  price_index: Series; underwater_pct: Series; book_ltv_pct: Series; mortgage_book: Series; tier1_pct: Series; ltf_pct: Series;
+  price_index: Series; underwater_pct: Series; book_ltv_pct: Series; mortgage_book: Series; tier1_pct: Series; ltf_pct: Series; nsfr_pct: Series; firm_loans: Series; firm_new_loans: Series; subsidy_hist: Series;
   mortgage_rate_pct: Series; savings_rate_pct: Series; ftp_pct: Series; spread_pct: Series; wholesale_funding: Series;
   deposits: Series; equity: Series; new_lending: Series; firm_lending: Series; savings_interest: Series; subsidy: Series; crisis: Series; covid: Series;
-  targets: { tier1_pct: number; ltf_pct: number }; start: { underwater_pct: number; book_ltv_pct: number; mortgage_rate_pct: number; savings_rate_pct: number };
-  summary: { min_price_pct: number; max_price_after_crisis_pct: number; max_underwater_pct: number; min_tier1_pct: number; mortgage_rate_range_pct: [number, number] } | null;
+  targets: { tier1_pct: number; ltf_pct: number; nsfr_pct: number }; start: { underwater_pct: number; book_ltv_pct: number; mortgage_rate_pct: number; savings_rate_pct: number };
+  summary: { min_price_pct: number; max_price_after_crisis_pct: number; max_underwater_pct: number; min_tier1_pct: number; min_nsfr_pct: number; mortgage_rate_range_pct: [number, number] } | null;
 }
 
 // Defaults = bank_netlist.BANK_DEFAULTS (demo choices). Ranges = bank_netlist.RANGES.
-const DEF = { funding_cut: 0.5, premium_pp: 3, k_rate: 130, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.10, Ki_s: 0.10, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1 };
+const DEF = { funding_cut: 0.5, premium_pp: 3, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, firm_link: 0.15, loss_firm: 0.01, eta_firm: 0.10 };
 type Params = typeof DEF;
 type Key = keyof Params;
-const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 6], k_rate: [1, 300], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 1.5], Ki_s: [0, 1.5], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2] };
+const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 6], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], firm_link: [0, 1], loss_firm: [0, 0.1], eta_firm: [0, 0.3] };
 const overrides = (p: Params) => Object.fromEntries((Object.keys(DEF) as Key[]).filter(k => Math.abs(p[k] - DEF[k]) > 1e-9).map(k => [k, p[k]]));
 const YEAR0 = 1996.46;  // calendar year of run year 0 (scenario.YEAR_AT_RAW_ZERO)
 
@@ -108,39 +108,43 @@ function Panel({ part, p, set, alm, setAlm, fb, setFb, run }: { part: Part; p: P
     case 'desk': return <><p className="eyebrow">Controller</p><h3>ALM Desk</h3>
       <p className="muted small">Tracks the ALCO's financial targets with the client rates: two PI controllers (Menkveld, 2025). FTP = (mortgage rate + savings rate)/2; spread = mortgage rate − savings rate (the mortgage rate is Menkveld's loan rate).</p>
       <Toggle label="Desk on (closed loop)" on={alm} set={setAlm}/>
-      <h4>Liquidity risk: FTP rate</h4><p className="muted small">Raises the FTP when the loan-to-deposit ratio is above target ({f(run?.targets.ltf_pct, 0)}%).</p>
+      <h4>Liquidity risk: FTP rate</h4><p className="muted small">Raises the FTP when the NSFR (net stable funding ratio) falls below target ({f(run?.targets.nsfr_pct, 0)}%).</p>
       <Stepper label="Kp" value={p.Kp_ftp} k="Kp_ftp" set={set}/><Stepper label="Ki" value={p.Ki_ftp} k="Ki_ftp" set={set}/>
       <h4>Solvency risk: spread</h4><p className="muted small">Raises the spread when the Tier 1 capital ratio falls below target ({f(run?.targets.tier1_pct, 1)}%).</p>
       <Stepper label="Kp" value={p.Kp_s} k="Kp_s" set={set}/><Stepper label="Ki" value={p.Ki_s} k="Ki_s" set={set}/>
       <p className="muted small">One click = 20% stronger or weaker. Open the ALM Desk block (+) for its op-amp breadboard.</p>
       <button className="ghost small" onClick={() => (['Kp_ftp', 'Ki_ftp', 'Kp_s', 'Ki_s'] as Key[]).forEach(k => set(k, DEF[k]))}><RotateCcw size={13}/> Default gains</button></>;
     case 'reporting': return <><p className="eyebrow">Sensor · measured output y</p><h3>ALM Reporting</h3>
-      <p className="muted small">Turns the cash flow projections of the bank inside the Economy box into financial reports: the Tier 1 capital ratio (solvency) and the loan-to-deposit ratio (liquidity).</p>
+      <p className="muted small">Turns the cash flow projections of the bank inside the Economy box into financial reports: the Tier 1 capital ratio (solvency) and the NSFR (liquidity); the loan-to-deposit ratio is reported as well.</p>
       <table className="bk-table"><tbody>
-        <tr><td>Mortgages</td><td>{f(now('I(Bk_m)'), 1)}</td></tr><tr><td>Firm loans</td><td>40.0</td></tr>
+        <tr><td>Mortgages (long)</td><td>{f(now('I(Bk_m)'), 1)}</td></tr><tr><td>Firm loans (short)</td><td>{f(now('I(Bk_lf)'), 1)}</td></tr>
         <tr><td>Deposits</td><td>{f(now('I(Bk_dep)'), 1)}</td></tr><tr><td>Deposits of other banks</td><td>{f(now('I(Bk_w)'), 1)}</td></tr>
-        <tr><td>Equity</td><td>{f(now('I(Bk_e)'), 2)}</td></tr><tr><td>Tier 1</td><td>{f(now('I(Bk_t1)'), 1)}%</td></tr><tr><td>Loan-to-deposit</td><td>{f(now('I(Bk_ltf)'), 1)}%</td></tr>
+        <tr><td>Equity</td><td>{f(now('I(Bk_e)'), 2)}</td></tr><tr><td>Tier 1</td><td>{f(now('I(Bk_t1)'), 1)}%</td></tr><tr><td>Available stable funding (ASF)</td><td>{f(now('I(Bk_asf)'), 1)}</td></tr><tr><td>Required stable funding (RSF)</td><td>{f(now('I(Bk_rsf)'), 1)}</td></tr><tr><td>NSFR = ASF / RSF</td><td>{f(now('I(Bk_nsfr)'), 1)}%</td></tr><tr><td>Loan-to-deposit</td><td>{f(now('I(Bk_ltf)'), 1)}%</td></tr>
       </tbody></table><p className="muted small">Illustrative units; the mortgage book starts at 100. Values at the canvas's year.</p></>;
     case 'board': return <><p className="eyebrow">Reference governor · reference input r</p><h3>ALCO</h3>
-      <p className="muted small">The Asset-Liability Committee sets the financial targets the ALM Desk tracks: here the bank's start values, Tier 1 capital ratio {f(run?.targets.tier1_pct, 1)}% and loan-to-deposit ratio {f(run?.targets.ltf_pct, 0)}%. Set by hand, as in Menkveld's simulations.</p>
-      <p className="muted small">Regulatory constraint: Basel III requires a Tier 1 capital ratio of at least 6%.</p></>;
+      <p className="muted small">The Asset-Liability Committee sets the financial targets the ALM Desk tracks: here the bank's start values, Tier 1 capital ratio {f(run?.targets.tier1_pct, 1)}% and NSFR {f(run?.targets.nsfr_pct, 0)}%. Set by hand, as in Menkveld's simulations.</p>
+      <p className="muted small">Regulatory constraints (Basel III): Tier 1 capital ratio at least 6%, NSFR at least 100%.</p></>;
     case 'others': return <><p className="eyebrow">Disturbance d</p><h3>Other banks</h3>
       <p className="muted small">The crisis comes from outside your bank: other banks withdraw their deposits and charge more, and lending to firms (I8) is cut. Timing as the W-shaped financial crisis of the housing model. A funding gap is borrowed from the central bank at a penalty rate.</p>
       <Knob label="Deposits withdrawn" hint="Share of the deposits of other banks that is withdrawn in the crisis." value={p.funding_cut} k="funding_cut" step={0.05} format={x => `${Math.round(x * 100)}%`} set={set}/>
-      <Knob label="Interbank premium" hint="Extra cost of what is left of those deposits." value={p.premium_pp} k="premium_pp" step={0.25} format={x => `+${f(x, 2)} pp`} set={set}/></>;
+      <Knob label="Interbank premium" hint="Extra cost of what is left of those deposits." value={p.premium_pp} k="premium_pp" step={0.25} format={x => `+${f(x, 2)} pp`} set={set}/>
+      <Knob label="Firm credit cut reaching your bank" hint="Share of the netlist's firm-credit cut (I8) that hits your bank's new firm loans. 15%: Dutch bank lending to firms did not collapse in 2008–2013." value={p.firm_link} k="firm_link" step={0.05} format={x => `${Math.round(x * 100)}%`} set={set}/>
+      <Knob label="Losses on firm loans" hint="A year, at the height of the crisis. 1%: Dutch loan-loss allowances rose by about 1.5 pp of loans in 2008–2011." value={p.loss_firm} k="loss_firm" step={0.005} format={x => `${f(x * 100, 1)}%`} set={set}/></>;
     case 'covid': return <><p className="eyebrow">Disturbance d</p><h3>Covid shock</h3>
       <p className="muted small">The housing netlist's own Covid shock at the firms, as in the main model (2020.5, fading over about 8 years).</p>
       <Knob label="Size of the Covid shock" hint="× 1 as in the main model; 0 switches it off." value={p.covid_scale} k="covid_scale" step={0.1} format={x => `× ${f(x, 1)}`} set={set}/></>;
     case 'gov': return <><p className="eyebrow">Disturbance d</p><h3>Government</h3>
-      <p className="muted small">Here the government does not control: its owner-occupied subsidy is a change the desk has to live with.</p>
+      <p className="muted small">Here the government does not control: its owner-occupied subsidy is a change the desk has to live with. The historical path of the main model, plus an optional step.</p>
+      <Knob label="Historical subsidy" hint="The owner-occupied subsidy path of the main model; 0 switches it off." value={p.hist_subsidy} k="hist_subsidy" step={0.5} format={x => `× ${f(x, 1)}`} set={set}/>
       <Knob label="Subsidy change" hint="Step in the owner-occupied subsidy (model units)." value={p.gov_step} k="gov_step" step={1} format={x => `${x > 0 ? '+' : ''}${f(x, 0)}`} set={set}/>
       <Knob label="From" hint="When the step starts (half a year to build up)." value={p.gov_year} k="gov_year" step={0.5} format={x => (YEAR0 + x).toFixed(1)} set={set}/></>;
     default: return <><p className="eyebrow">System</p><h3>Economy</h3>
       <p className="muted small">The housing netlist of the rest of the site (a separate copy) with the bank added. The desk's mortgage rate replaces its fixed interest-rate input; the savings rate drives its savings interest.</p>
       <Toggle label="Mortgage rate reaches the housing market" on={fb} set={setFb}/>
-      <Knob label="Strength of the rate channel" hint="Multiplies the netlist's own rate effect (×1: +1 pp gives only −0.1%). 130 is the demo default; above about 250 the loop runs away." value={p.k_rate} k="k_rate" step={1} format={x => `× ${f(x, 0)}`} set={set}/>
+      <Knob label="Strength of the rate channel" hint="Multiplies the netlist's own rate effect (×1: +1 pp gives only −0.1%). 300 is the demo default." value={p.k_rate} k="k_rate" step={1} format={x => `× ${f(x, 0)}`} set={set}/>
       <Knob label="Owners that move per year" hint="Movers repay and borrow again at today's value." value={p.theta0} k="theta0" step={0.005} format={x => `${f(x * 100, 1)}%`} set={set}/>
       <Knob label="Underwater owners move less" hint="ESB 2017: 22% less." value={p.uw_mobility} k="uw_mobility" step={0.01} format={x => `${Math.round(x * 100)}% less`} set={set}/>
+      <Knob label="Firms borrow less when the loan rate rises" hint="Fewer new firm loans per percentage point above the start rate." value={p.eta_firm} k="eta_firm" step={0.01} format={x => `${Math.round(x * 100)}% per pp`} set={set}/>
       <Knob label="Spread of loan-to-value" hint="Sets the underwater share (17% at the start)." value={p.sigma_ltv} k="sigma_ltv" step={0.01} format={x => f(x, 2)} set={set}/></>;
   }
 }
@@ -149,7 +153,7 @@ function Panel({ part, p, set, alm, setAlm, fb, setFb, run }: { part: Part; p: P
 function useLive(): Record<string, number | null> {
   const { result, at } = useContext(AtContext);
   const v = (signal: string, sc = 1) => { const t = result && readTrace(result, signal); return t && t[at] != null ? t[at] * sc : null; };
-  return { ftp: v('I(Bk_ftp)'), s: v('I(Bk_s)'), rm: v('I(Bk_rm)'), rs: v('I(Bk_rs)'), t1: v('I(Bk_t1)'), ltf: v('I(Bk_ltf)'), dep: v('I(Bk_dep)'), eq: v('I(Bk_e)') };
+  return { ftp: v('I(Bk_ftp)'), s: v('I(Bk_s)'), rm: v('I(Bk_rm)'), rs: v('I(Bk_rs)'), t1: v('I(Bk_t1)'), ltf: v('I(Bk_ltf)'), nsfr: v('I(Bk_nsfr)'), dep: v('I(Bk_dep)'), eq: v('I(Bk_e)') };
 }
 function LiveDesk({ p, alm }: { p: Params; alm: boolean }) { return <DeskBoard K={p} v={useLive()} alm={alm}/>; }
 function LiveSheet() { return <BalanceBoard v={useLive()}/>; }
@@ -160,31 +164,38 @@ function LiveSheet() { return <BalanceBoard v={useLive()}/>; }
 // endogenous mortgage book (was I§Mortgages), deposits and equity (capacitors with their behavioural sources) and the
 // Tier 1 and loans/funding read-outs. Positions are in the free part of the bank layout (1100 x 700), Claude's choice.
 const RENAME: Record<string, { name: string; type?: string; role: string; trace?: string }> = {
-  'Interest_Rates': { name: 'B§Mortgage_rate_ALM', type: 'bi2', role: 'Mortgage rate u₁ from the ALM Desk (FTP + spread/2). Replaces the fixed interest-rate input; drives the mortgage interest.', trace: 'I(Bk_rm)' },
-  'I§Mortgages': { name: 'B§Mortgages', type: 'bi2', role: 'Mortgage book, endogenous: movers repay and borrow again at today\'s house value, within LTV and LTI limits.' },
-  'B2': { name: 'B2', role: 'Savings interest = savings × savings rate u₂ from the ALM Desk (FTP − spread/2).' },
-  'B§Mortgage_interest': { name: 'B§Mortgage_interest', role: 'Mortgage interest = mortgage debt × the mortgage rate from the ALM Desk.' },
-  'I8': { name: 'I8', role: 'Lending to firms. Cut in the crisis (other banks).' },
+  'Interest_Rates': { name: 'B§Mortgage_rate_ALM', type: 'bi2', role: 'Netlist: B§Mortgage_rate_ALM (on the nodes of the old fixed Interest_Rates input), I = 0.01033 + 300·(mortgage rate − 3.7%)/6. Turns u₁, the mortgage rate from the ALM Desk (FTP + spread/2, shown here in %), into the netlist\'s interest input; the mortgage interest reads it.', trace: 'I(Bk_rm)' },
+  'I§Mortgages': { name: 'B§Mortgages', type: 'bi2', role: 'Netlist: B§Mortgages (replaces the outside input I§Mortgages), I = (θ·V·ℓ − θ·M − M/60)/6. New mortgages: movers repay and borrow again at today\'s house value, within LTV and LTI limits; the netlist\'s Mortgage_debt integrates it.' },
+  'B2': { name: 'B2', role: 'Netlist: B2, I = 5 × savings rate / 1.5%. The savings interest follows u₂, the savings rate from the ALM Desk (FTP − spread/2).' },
+  'B§Mortgage_interest': { name: 'B§Mortgage_interest', role: 'Netlist: B§Mortgage_interest, I = I(Mortgage_debt) × I(Mortgage_rate_ALM): mortgage debt × the rate from the ALM Desk.' },
+  'I8': { name: 'B§Firm_loans', type: 'bi2', role: 'Netlist: B§Firm_loans (on the nodes of the old I8), I = 30·(1 − 15%·(1 − firm credit/30))·(1 − 10% per pp the loan rate is above 3.7%). New loans to firms through the firm-loan port; firm credit is the netlist\'s own crisis path.', trace: 'I(Firm_loans)' },
+  'B5': { name: 'B5', role: 'Netlist: B5, I = 10 × (firm loans / 40) × (loan rate / 3.7%). Firm-loan interest, floating: it follows the loan rate from the ALM Desk at once.' },
 };
 const added = (name: string, type: string, pins: number[][], role: string, trace: string, state = 'active') =>
   ({ name, a: '', b: '', value: '', state, type, role, pins, agent: 'bank', flows: [] as string[], trace, netlist: '' });
 const BANK_PARTS = [
-  added('B§Deposit_flow', 'bi2', [[890, 190], [890, 110]], 'Deposits flow in and out with the savings rate: (D* − D)/τ.', 'I(Bk_dep)'),
-  added('C§Deposits', 'cap', [[1000, 110], [1000, 190]], 'Deposits D (capacitor: the stock).', 'I(Bk_dep)'),
-  added('B§Net_interest', 'bi2', [[890, 350], [890, 270]], 'Net interest income minus losses on underwater mortgages and payout.', 'I(Bk_nii)'),
-  added('C§Equity', 'cap', [[1000, 270], [1000, 350]], 'Equity E (capacitor: the stock).', 'I(Bk_e)'),
-  added('B§Tier_1', 'bi2', [[360, 120], [480, 120]], 'Read-out: Tier 1 capital ratio = Tier 1 capital (equity) / risk-weighted assets. Measured by ALM Reporting.', 'I(Bk_t1)', 'readout'),
-  added('B§Loans_funding', 'bi2', [[360, 220], [480, 220]], 'Read-out: loan-to-deposit ratio = loans / deposits (incl. deposits of other banks). Measured by ALM Reporting.', 'I(Bk_ltf)', 'readout'),
+  added('B§Deposit_flow', 'bi2', [[875, 190], [875, 110]], 'Netlist: B§Deposit_flow, I = (D* − D)/1 year with D* = 110·(1 + 5% per pp the savings rate is above 1.5%). Charges the deposits capacitor.', 'I(Deposit_flow)'),
+  added('C§Deposits', 'cap', [[985, 110], [985, 190]], 'Netlist: B§bk_Dep = 110 + idt(I(Deposit_flow))/6. Deposits D: the integral of the inflow (in ngspice an idt is a capacitor charged by that current).', 'I(Bk_dep)'),
+  added('B§Net_interest', 'bi2', [[875, 350], [875, 270]], 'Netlist: B§Net_interest, I = NII − 0.4%·underwater share·mortgages − 1%·crisis·firm loans − payout. Charges the equity capacitor.', 'I(Net_interest)'),
+  added('C§Equity', 'cap', [[985, 270], [985, 350]], 'Netlist: B§bk_E = 8.5 + idt(I(Net_interest))/6. Equity E, the Tier 1 capital.', 'I(Bk_e)'),
+  added('B§Firm_book_flow', 'bi2', [[875, 530], [875, 450]], 'Netlist: B§Firm_book_flow, I = new firm loans (B§Firm_loans) − repayment (firm loans / 1.33 years). Charges the firm-loan capacitor.', 'I(Firm_book_flow)'),
+  added('C§Firm_loans', 'cap', [[985, 450], [985, 530]], 'Netlist: B§bk_Lf = 40 + idt(I(Firm_book_flow))/6. Firm loans: a short book (1.33 years at the start).', 'I(Bk_lf)'),
+  added('B§Tier_1', 'bi2', [[360, 120], [480, 120]], 'Read-out, netlist: B§bk_t1 = equity / risk-weighted assets, with RWA = mortgages·12%·(LTV/LTV₀)² + firm loans. Measured by ALM Reporting.', 'I(Bk_t1)', 'readout'),
+  added('B§Loans_funding', 'bi2', [[360, 220], [480, 220]], 'Read-out, netlist: B§bk_nsfr = ASF / RSF (net stable funding ratio, Basel III). ASF, available stable funding (B§bk_asf) = 90%·deposits + 100%·equity + 0%·deposits of other banks (short-term interbank funding, Basel 0%). RSF, required stable funding (B§bk_rsf) = 65%·mortgages + 50%·firm loans. Measured by ALM Reporting.', 'I(Bk_nsfr)', 'readout'),
 ];
-const BANK_WIRES = [[890, 110, 1000, 110], [890, 190, 1000, 190], [890, 270, 1000, 270], [890, 350, 1000, 350]];
+const BANK_WIRES = [[875, 110, 985, 110], [875, 190, 985, 190], [875, 270, 985, 270], [875, 350, 985, 350], [875, 450, 985, 450], [875, 530, 985, 530]];
 // The loop signals' cards in bank mode (they replace the housing ones: house price, construction payments, ...).
 // Traces from bank_netlist.simulate: ratios and rates ×100, so in % (errors in percentage points).
 const BANK_LOOP: NonNullable<MapData['loop']> = {
-  y_reference: { label: 'Financial targets', title: 'Reference input r · Tier 1 target (L/D target 100%)', signal: 'Bank_target_t1', unit: '%', color: '#2b6599', dock: { kind: 'signal', id: 'y_reference' } },
-  y_error: { label: 'Target deviations', title: 'Control error e · target deviations (target − measured)', signal: 'Bank_dev_t1', unit: '% points', color: '#3f9a1f', pair: { signal: 'Bank_dev_ltd', label: 'loan-to-deposit', color: '#c98a1b', first: 'Tier 1' }, dock: { kind: 'agent', id: 'controller' } },
-  x1: { label: 'Tier 1 ratio', title: 'Cash flow projection · Tier 1 capital ratio', signal: 'I(Bk_t1)', unit: '%', color: '#3f9a1f', dock: { kind: 'sensor', id: '' } },
-  x2: { label: 'Loan-to-deposit ratio', title: 'Cash flow projection · loan-to-deposit ratio', signal: 'I(Bk_ltf)', unit: '%', color: '#c98a1b', dock: { kind: 'sensor', id: '' } },
-  y_price: { label: 'Financial reports', title: 'Measured output y · Tier 1 capital ratio (L/D: card x₂)', signal: 'I(Bk_t1)', unit: '%', color: '#3f9a1f', dock: { kind: 'sensor', id: '' } },
+  // channel 1 = solvency (Tier 1 capital ratio, spread), channel 2 = liquidity (NSFR, FTP rate)
+  y_reference: { label: 'Tier 1 target', title: 'Reference input r₁ · Tier 1 target', signal: 'Bank_target_t1', unit: '%', color: '#2b6599', dock: { kind: 'signal', id: 'y_reference' } },
+  r_nsfr: { label: 'NSFR target', title: 'Reference input r₂ · NSFR target', signal: 'Bank_target_nsfr', unit: '%', color: '#2b6599', dock: { kind: 'signal', id: 'y_reference' } },
+  y_error: { label: 'Tier 1 deviation', title: 'Control error e₁ · Tier 1 target − Tier 1', signal: 'Bank_dev_t1', unit: '% points', color: '#1f2a26', dock: { kind: 'agent', id: 'controller' } },
+  e_nsfr: { label: 'NSFR deviation', title: 'Control error e₂ · NSFR target − NSFR', signal: 'Bank_dev_nsfr', unit: '% points', color: '#1f2a26', dock: { kind: 'agent', id: 'controller' } },
+  x1: { label: 'Assets', title: 'State x₁ · Assets', signal: 'I(Bk_m)', unit: 'model units', color: '#b9851c', pair: { first: 'mortgages', signal: 'I(Bk_lf)', label: 'firm loans', color: '#2e7d32' }, third: { signal: 'I(Bk_v)', label: 'home value', color: '#8a948f' }, note: 'Home value gives the loan-to-value (LTV).', dock: { kind: 'sensor', id: '' } },
+  x2: { label: 'Liabilities & equity', title: 'State x₂ · Liabilities & equity', signal: 'I(Bk_dep)', unit: 'model units', color: '#1f6fc4', pair: { first: 'deposits', signal: 'I(Bk_w)', label: 'other banks', color: '#c0392b' }, third: { signal: 'I(Bk_e)', label: 'equity', color: '#5c6b65' }, dock: { kind: 'sensor', id: '' } },
+  y_price: { label: 'Tier 1 ratio', title: 'Tier 1 capital ratio', note: 'Equity ÷ risk-weighted assets. Mortgages 12–45% by LTV (DNB), firm loans 100% (Basel).', signal: 'I(Bk_t1)', unit: '%', color: '#3f9a1f', dock: { kind: 'sensor', id: '' } },
+  y_nsfr: { label: 'NSFR', title: 'Net Stable Funding Ratio', note: 'Available ÷ required stable funding (Basel III). ASF: equity 100%, deposits 90%, other banks 0%. RSF: mortgages 65%, firm loans 50%.', signal: 'I(Bk_nsfr)', unit: '%', color: '#3f9a1f', dock: { kind: 'sensor', id: '' } },
 };
 function patchMap(m: MapData): MapData {
   const ren = (n: string) => RENAME[n]?.name ?? n;
@@ -192,14 +203,14 @@ function patchMap(m: MapData): MapData {
     : fl.id === 'rental_subsidy' ? { ...fl, label: 'Savings rate', short: 'u₂ Savings rate', signal: 'I(Bk_rs)', description: 'Client rate set by the ALM Desk: FTP − spread/2. Enters the bank at B2, the savings interest.' } : fl);
   const elements = [...m.elements.map(e => RENAME[e.name] && e.agent === 'bank' ? { ...e, name: RENAME[e.name].name, type: RENAME[e.name].type ?? e.type, role: RENAME[e.name].role, trace: RENAME[e.name].trace ?? e.trace } : e), ...BANK_PARTS];
   const bank = m.layouts.bank;
-  const layouts = { ...m.layouts, bank: { ...bank, wires: [...bank.wires, ...BANK_WIRES], grounds: [...bank.grounds, [945, 190], [945, 350]],
+  const layouts = { ...m.layouts, bank: { ...bank, wires: [...bank.wires, ...BANK_WIRES], grounds: [...bank.grounds, [930, 190], [930, 350], [930, 530]],
     // the desk's two rates enter the bank from the top and run to their sources
     signals: [{ flow: 'owner_subsidy', path: [[600, 0], [600, 140], [662, 140]] }, { flow: 'rental_subsidy', path: [[625, 0], [625, 415], [420, 415], [420, 560], [372, 560]] }] } };
   const covid = m.disturbances.find(d => d.id === 'd_covid');
   return { ...m, flows, elements, layouts, loop: BANK_LOOP, controller: { label: 'ALM Desk', description: 'Your bank\'s ALM Desk: tracks the ALCO\'s targets with a PI controller on the FTP rate (liquidity risk) and one on the spread (solvency risk). Its two client rates enter the bank.' },
     disturbances: [...(covid ? [covid] : []),
-      { id: 'd_others', label: 'Other banks: deposits withdrawn, firm loans cut', signal: 'I(Bk_w)', unit: 'units', target: 'bank', element: 'I8' },
-      { id: 'd_gov', label: 'Government subsidy', signal: 'I(Owner_occupied_subsidies)', unit: 'model units', target: 'households', element: 'I§Owner_occupied_subsidies' }] };
+      { id: 'd_others', label: 'Other banks: deposits withdrawn, firm credit cut', signal: 'I(Bk_w)', unit: 'units', target: 'bank', element: 'B§Firm_loans' },
+      { id: 'd_gov', label: 'Government subsidy (historical + step)', signal: 'I(Owner_occupied_subsidies)', unit: 'model units', target: 'households', element: 'I§Owner_occupied_subsidies' }] };
 }
 const DESIGN: Design = { K: [0, 0, 0], filtered: true, settling: 4, overshoot: 25 };
 
@@ -233,8 +244,8 @@ export function BankMode() {
     return {
       price: both('price_index', 'House price'), uw: both('underwater_pct', 'Underwater'),
       rates: [...(other ? [L(other, 'mortgage_rate_pct', `Mortgage rate, ${COMPARE[cmp].label.toLowerCase()}`, C.cmp, 'dash')] : []), L(now, 'mortgage_rate_pct', 'Mortgage rate', C.mortgage), L(now, 'savings_rate_pct', 'Savings rate', C.savings), L(now, 'ftp_pct', 'FTP', C.ftp, 'solid', 1.2)],
-      t1: [...both('tier1_pct', 'Tier 1'), T(now.targets.tier1_pct, 'Target')], ltf: [...both('ltf_pct', 'Loan-to-deposit'), T(now.targets.ltf_pct, 'Target')],
-      dist: [{ name: 'Deposits of other banks withdrawn', x: X(now), y: now.wholesale_funding.map(w => w == null ? null : 100 * (30 - w) / 30) as number[], color: C.shock }, { name: 'Covid shock', x: X(now), y: now.covid.map(c => c == null ? null : 100 * c / 80) as number[], color: C.covid }],
+      t1: [...both('tier1_pct', 'Tier 1'), T(now.targets.tier1_pct, 'Target')], ltf: [...both('nsfr_pct', 'NSFR'), T(now.targets.nsfr_pct, 'Target')],
+      dist: [{ name: 'Deposits of other banks withdrawn', x: X(now), y: now.wholesale_funding.map(w => w == null ? null : 100 * (30 - w) / 30) as number[], color: C.shock }, { name: 'Covid shock', x: X(now), y: now.covid.map(c => c == null ? null : 100 * c / 80) as number[], color: C.covid }, { name: 'Historical subsidy', x: X(now), y: now.subsidy_hist.map(v => v == null ? null : 100 * v / 24.01) as number[], color: C.savings }],
       crisis: now.crisis_years ? [now.crisis_years[0] + now.year0, now.crisis_years[1] + now.year0] as [number, number] : null,
     };
   }, [now, other, cmp]);
@@ -274,8 +285,8 @@ export function BankMode() {
         <BankChart title="Underwater share" unit="% of owners" lines={charts.uw} crisis={charts.crisis}/>
         <div><BankChart title="Client rates: mortgage and savings rate, and FTP" unit="% a year" lines={charts.rates} crisis={charts.crisis}/><Key_ items={[{ name: 'Mortgage rate', color: C.mortgage }, { name: 'Savings rate', color: C.savings }, { name: 'FTP', color: C.ftp }]}/></div>
         <div><BankChart title="Solvency risk: Tier 1 capital ratio" unit="%" lines={charts.t1} crisis={charts.crisis}/><Key_ items={[{ name: 'target', color: C.target, dash: 'dash' }]}/></div>
-        <div><BankChart title="Liquidity risk: loan-to-deposit ratio" unit="%" lines={charts.ltf} crisis={charts.crisis}/><Key_ items={[{ name: 'target', color: C.target, dash: 'dash' }]}/></div>
-        <div><BankChart title="Disturbances" unit="% of default size" lines={charts.dist} crisis={charts.crisis}/><Key_ items={[{ name: 'Deposits of other banks withdrawn (% of their deposits)', color: C.shock }, { name: 'Covid shock (% of its main-model size)', color: C.covid }]}/></div>
+        <div><BankChart title="Liquidity risk: NSFR" unit="%" lines={charts.ltf} crisis={charts.crisis}/><Key_ items={[{ name: 'target', color: C.target, dash: 'dash' }]}/></div>
+        <div><BankChart title="Disturbances" unit="% of default size" lines={charts.dist} crisis={charts.crisis}/><Key_ items={[{ name: 'Deposits of other banks withdrawn (% of their deposits)', color: C.shock }, { name: 'Covid shock (% of its main-model size)', color: C.covid }, { name: 'Historical subsidy (% of its 1996 level)', color: C.savings }]}/></div>
       </div>
     </section>}
 
@@ -285,10 +296,11 @@ export function BankMode() {
         <li><b>Mortgage book:</b> dM/dt = θ·V·ℓ<sub>new</sub> − θ·M − M/T. V follows the house price, θ (movers) is lower when underwater, ℓ<sub>new</sub> is the smaller of the LTV limit and the LTI room. It replaces the netlist's outside mortgage input; the netlist's own debt integrator holds M.</li>
         <li><b>Client rates:</b> mortgage rate = FTP + spread/2, savings rate = FTP − spread/2 (Menkveld eq. 3-4, 3-8, where the mortgage rate is his loan rate). The mortgage rate drives the netlist's mortgage interest (debt × rate), multiplied by the rate-channel strength. The savings rate drives the netlist's savings interest.</li>
         <li><b>Bank:</b> deposits follow the savings rate; equity grows with net interest income minus losses on underwater mortgages; Tier 1 = equity / risk-weighted assets.</li>
-        <li><b>ALM Desk:</b> PI on the FTP rate for the loan-to-deposit ratio (liquidity risk), PI on the spread for the Tier 1 capital ratio (solvency risk), as in Menkveld §3-2 and §3-3-2.</li>
-        <li><b>Disturbances:</b> other banks withdraw part of their deposits and raise the premium, and firm lending is cut (W-shaped, as the housing model's financial crisis); the Covid shock at the firms; the government's subsidy step.</li>
+        <li><b>Firm loans:</b> a short book (1.3 years) fed by the netlist's firm-loan port; firms borrow less when the loan rate rises, the firm-loan interest floats with it, and in the crisis part of the firm-credit cut reaches the bank and some firm loans default.</li>
+        <li><b>ALM Desk:</b> PI on the FTP rate for the NSFR (liquidity risk: long mortgages need more stable funding than short firm loans), PI on the spread for the Tier 1 capital ratio (solvency risk), as in Menkveld §3-2 and §3-3-2.</li>
+        <li><b>Disturbances:</b> other banks withdraw part of their deposits and raise the premium, and firm lending is cut (W-shaped, as the housing model's financial crisis); the Covid shock at the firms; the government's historical subsidy path and an optional step.</li>
       </ul>
-      <p className="muted note">Changes from Menkveld's set-up: the bank lends mortgages as well as to firms, and the deposits in the loan-to-deposit ratio include the deposits of other banks (interbank funding), so that a withdrawal by other banks shows up in it; the crisis enters as that withdrawal. Any funding gap is borrowed from the central bank at the crisis premium plus a 2 pp penalty; "Rates frozen" means the bank keeps its rates and absorbs that cost. The gains and the rate-channel strength are demo choices, not estimates.</p>
+      <p className="muted note">Changes from Menkveld's set-up: the bank lends long mortgages as well as short loans to firms, and the liquidity target is the NSFR (his eq. 3-3) rather than the loan-to-deposit ratio; the crisis enters as a withdrawal of other banks' deposits. Checked against the Netherlands 2008–2014: the desk raises the mortgage rate (Dutch rates stayed about 1 pp above neighbouring countries), protects capital, and house prices fall. The bank channel alone gives about −7%; the −21% fall of 2008–2013 also had other causes. NSFR factors from Basel III: the deposits of other banks are short-term interbank funding and count 0%. Any funding gap is borrowed from the central bank at the crisis premium plus a 2 pp penalty; "Rates frozen" means the bank keeps its rates and absorbs that cost. The gains and the rate-channel strength are demo choices, not estimates.</p>
     </details>
     <p className="muted note">ALM structure, names and rate definitions after B.S.R. Menkveld, <i>Economic Engineering for Proactive Asset and Liability Management: Managing Liquidity and Solvency Risk with Process Control</i>, MSc thesis, TU Delft, 2025.</p>
   </div>;

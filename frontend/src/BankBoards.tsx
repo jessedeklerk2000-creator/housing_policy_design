@@ -32,15 +32,15 @@ export function DeskBoard({ K, v, alm }: { K: { Kp_ftp: number; Ki_ftp: number; 
     {W([[544, y], [640, y]], `${k}o`)}{port(560, y - 16, `${out} ${outV}`, `${k}ol`)}
   </g>;
   return frame(1100, 990, 'ALM Desk breadboard', <>
-    {pi(260, 'Liquidity risk: PI → FTP', K.Kp_ftp, K.Ki_ftp, 'e₁ = target − loan-to-deposit (inverted)', 'FTP', `${n(v.ftp)}%`, 'f')}
-    {pi(680, 'Solvency risk: PI → spread', K.Kp_s, K.Ki_s, 'e₂ = target − Tier 1', 'spread', `${n(v.s)}%`, 's')}
+    {pi(260, 'Liquidity risk: PI → FTP', K.Kp_ftp, K.Ki_ftp, 'e₂ = NSFR target − NSFR', 'FTP', `${n(v.ftp)}%`, 'f')}
+    {pi(680, 'Solvency risk: PI → spread', K.Kp_s, K.Ki_s, 'e₁ = Tier 1 target − Tier 1', 'spread', `${n(v.s)}%`, 's')}
     {/* the client rates: mortgage rate (Menkveld's loan rate) = FTP + spread/2, savings rate = FTP − spread/2 */}
     {W([[640, 260], [760, 260], [760, 446]], 'a1')}{W([[640, 680], [760, 680], [760, 494]], 'a2')}{sum(760, 470, ['+', '+½'], 'rm')}
     {W([[700, 260], [700, 200], [870, 200], [870, 576]], 'b1')}{W([[700, 680], [700, 760], [870, 760], [870, 624]], 'b2')}{dot(700, 260, 'd1')}{dot(700, 680, 'd2')}
     {sum(870, 600, ['+', '−½'], 'rs')}
     {W([[784, 470], [1080, 470]], 'u1')}{port(1076, 456, `u₁ mortgage rate ${n(v.rm)}%`, 'u1l', 'end')}
     {W([[894, 600], [1080, 600]], 'u2')}{port(1076, 586, `u₂ savings rate ${n(v.rs)}%`, 'u2l', 'end')}
-  </>, 'FTP = FTP₀ − (Kp·e₁ + Ki·∫e₁)  ·  spread = spread₀ + Kp·e₂ + Ki·∫e₂  ·  mortgage rate = FTP + spread/2  ·  savings rate = FTP − spread/2',
+  </>, 'spread = spread₀ + Kp·e₁ + Ki·∫e₁  ·  FTP = FTP₀ + Kp·e₂ + Ki·∫e₂  ·  mortgage rate = FTP + spread/2  ·  savings rate = FTP − spread/2',
     alm ? 'Normalised values. Each inverting stage is followed by a gain −1 stage (not drawn); FTP₀ and spread₀ are added as offsets.' : 'Desk switched off: the rates stay at their start values.');
 }
 
@@ -56,6 +56,6 @@ export function BalanceBoard({ v }: { v: Vals }) {
     {cell(560, 700, 'Equity', [['net interest', 'NII', true], ['losses', 'loss·uw·M', false], ['payout', 'pay₀·E/E₀', false]], 'Equity E', `E = ${n(v.eq, 2)}`, 'e')}
     {port(40, 610, `D* rises with the savings rate (${n(v.rs)}%)`, 'p1')}
     {port(560, 610, `Tier 1 capital ratio = E / risk-weighted assets = ${n(v.t1, 1)}%`, 'p2')}
-    {port(560, 645, `loan-to-deposit = loans / (D + deposits of other banks) = ${n(v.ltf, 1)}%`, 'p3')}
+    {port(560, 645, `NSFR = available / required stable funding = ${n(v.nsfr, 1)}%`, 'p3')}
   </>, 'τ·dD/dt = D* − D  ·  dE/dt = NII − losses − payout', 'NII = mortgage rate·loans + market rate·cash − savings rate·D − (market rate + premium)·deposits of other banks.');
 }

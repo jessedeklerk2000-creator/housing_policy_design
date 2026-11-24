@@ -470,7 +470,11 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .problem-card h3 { margin:0; font-size:17px; } .problem-card p { margin:0; font-size:14px; line-height:1.45; }
 .problem-card ul { margin:2px 0; padding-left:18px; font-size:13.5px; line-height:1.45; } .problem-card li { margin:2px 0; }
 .problem-card a { color:var(--blue); } .problem-card .how { color:#3c4a45; } .problem-card > button { align-self:flex-start; margin-top:auto; }
-.problem-fig { width:100%; max-height:120px; display:block; } .problem-fig.small { max-height:86px; margin:4px 0 0; }
+.problem-fig { width:100%; max-height:170px; display:block; font-family:inherit; font-size:10.5px; } .problem-fig.small { max-height:110px; margin:4px 0 0; }
+/* landing-page figures (Guide.tsx Figure) */
+.problem-fig .fg-grid { stroke:var(--line); stroke-width:1; } .problem-fig .fg-axis { stroke:var(--muted); stroke-width:1; opacity:.6; } .problem-fig .fg-mut { fill:var(--muted); font-size:10px; }
+.problem-fig .fg-ref { stroke:var(--ink); stroke-width:1.4; stroke-dasharray:5 3; opacity:.75; }
+.problem-fig .fg-line { fill:none; stroke:var(--ink); stroke-width:2.2; stroke-linejoin:round; } .problem-fig .fg-dot { fill:var(--ink); } .problem-fig .fg-ink { fill:var(--ink); }
 .problem-fig .fig-label { font-size:10px; fill:var(--muted); font-family:inherit; } .problem-fig .fig-label.water { fill:#174f8c; }
 .method-strip { display:flex; flex-wrap:wrap; gap:8px; list-style:none; padding:0; margin:14px 0 6px; }
 .method-strip li { flex:1 1 200px; } .method-strip button.link { width:100%; display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--panel); text-align:left; font-size:13.5px; color:var(--ink); }
@@ -534,3 +538,4 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .bk-el { font-size:20px; font-weight:650; fill:#1f2a26; } .bk-elv { font-size:18px; fill:#1d7a99; font-variant-numeric:tabular-nums; } .bk-row { font-size:24px; font-weight:700; fill:#1f2a26; } .bk-taken { color:#a8321f; }
 .bk-port { font-size:20px; font-weight:600; fill:#1f2a26; } .bk-row { font-size:20px !important; }
 .bk-board-svg { max-height:none; padding:60px 80px; box-sizing:border-box; } .bk-board-svg > svg { overflow:visible; }
+.pin-card .card-note { margin:4px 0 0; font-size:10.5px; line-height:1.35; color:#56625d; white-space:normal; }

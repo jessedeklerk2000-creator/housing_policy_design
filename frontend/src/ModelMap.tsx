@@ -111,9 +111,10 @@ type BlockData = { icon?: React.ReactNode; label: string; sub?: string; tone: st
 // The year marker (Play, slider) reaches the drawing through this context, so the graph's nodes and edges are not
 // rebuilt every frame: React Flow then keeps its measured blocks (rebuilding them each frame hid blocks and arrows).
 export const AtContext = createContext<{ result: Result | null; at: number }>({ result: null, at: 0 });
-function Val({ signal }: { signal: string }) {
+function Val({ signal, digits }: { signal: string; digits?: number }) {
   const { result, at } = useContext(AtContext); const t = result && readTrace(result, signal);
-  return <>{t ? fmt(t[Math.min(at, t.length - 1)]) : ''}</>;
+  const v = t ? t[Math.min(at, t.length - 1)] : null;
+  return <>{v == null ? '' : digits != null ? v.toFixed(digits) : fmt(v)}</>;
 }
 const CBS_SIZE: Point = [1000, 520], CBS_Y = { x1: 218, x2: 342, out: 280 };
 function CbsCircuit() {
@@ -186,7 +187,7 @@ type ProbeActions = { addSens: () => void; hasSens: boolean; pinned: (p: Probe) 
 const probeKey = (p: Probe) => `${p.flow}:${p.q}`;
 const probeOf = (id: string): Probe => { const [flow, q] = id.split(':'); return { flow, q: q as Probe['q'] }; };
 // Loop signals that open a card when clicked: what they read, their colour, their step output and what 'dock' opens.
-const LOOP_SIGNALS: Record<string, { label: string; title: string; signal: string; unit: string; color: string; pair?: { signal: string; label: string; color: string; first?: string }; step?: { kind: 'signal' | 'flow'; id: string }; dock: Selection }> = {
+const LOOP_SIGNALS: Record<string, { label: string; title: string; note?: string; signal: string; unit: string; color: string; pair?: { signal: string; label: string; color: string; first?: string }; third?: { signal: string; label: string; color: string }; step?: { kind: 'signal' | 'flow'; id: string }; dock: Selection }> = {
   y_yoy: { label: 'Year-on-year', title: 'Output · year-on-year price change', signal: 'yoy', unit: '% a year', color: '#3f9a1f', dock: { kind: 'signal', id: 'y_yoy' } },
   y_reference: { label: 'Target r', title: 'Reference r · House price target', signal: 'I(Reference)', unit: 'Model units', color: '#2b6599', step: { kind: 'signal', id: 'y_reference' }, dock: { kind: 'signal', id: 'y_reference' } },
   y_error: { label: 'Gap e', title: 'Gap e · target minus price', signal: 'I(Error)', unit: 'Model units', color: '#1f2a26', step: { kind: 'signal', id: 'y_error' }, dock: { kind: 'signal', id: 'y_error' } },
@@ -215,10 +216,10 @@ function probeInfo(map: MapData, p: Probe) {
   return { f, signal, title: `${f.label} · ${p.q === 'f' ? 'flow f' : 'effort e'}`, unit: p.q === 'f' ? f.unit : 'Model units (node voltage)', color: p.q === 'f' ? COLOR[f.kind] : '#6b4fa0',
     step: { kind: p.q === 'f' ? 'flow' : 'effort', id: f.id } as const };
 }
-function MiniPlot({ y, at, color, w = 240, h = 92, k = 1, label, ghost, ghostColor = '#2F6FB5', ghost2, ghost2Color = '#7cc96a', second, secondColor = '#1f6fc4' }: { y: number[]; at?: number; color: string; w?: number; h?: number; k?: number; label?: string; ghost?: number[]; ghostColor?: string; ghost2?: number[]; second?: number[]; secondColor?: string; ghost2Color?: string }) {
+function MiniPlot({ y, at, color, w = 240, h = 92, k = 1, label, ghost, ghostColor = '#2F6FB5', ghost2, ghost2Color = '#7cc96a', second, secondColor = '#1f6fc4', third, thirdColor = '#c0392b' }: { third?: number[]; thirdColor?: string; y: number[]; at?: number; color: string; w?: number; h?: number; k?: number; label?: string; ghost?: number[]; ghostColor?: string; ghost2?: number[]; second?: number[]; secondColor?: string; ghost2Color?: string }) {
   // White space above and below the line (10% of the range plus room for the max/min labels), so a step that jumps
   // straight to its final value does not run along the top edge.
-  const all = [...y, ...(ghost ?? []), ...(ghost2 ?? []), ...(second ?? [])], lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * .1, top = 18 * k, bot = 16 * k;
+  const all = [...y, ...(ghost ?? []), ...(ghost2 ?? []), ...(second ?? []), ...(third ?? [])], lo = Math.min(...all), hi = Math.max(...all), pad = (hi - lo) * .1, top = 18 * k, bot = 16 * k;
   const sx = (i: number) => 4 + i / (y.length - 1) * (w - 8), sy = (v: number) => h - bot - (hi > lo ? (v - lo + pad) / (hi - lo + 2 * pad) : .5) * (h - top - bot);
   // With a time marker: the line up to that time is dark, the rest faint, and a dot with the year rides on it (Play).
   const pts = (a: number, b: number) => y.slice(a, b).map((v, i) => `${sx(a + i)},${sy(v)}`).join(' ');
@@ -230,6 +231,9 @@ function MiniPlot({ y, at, color, w = 240, h = 92, k = 1, label, ghost, ghostCol
     {second && <><polyline fill="none" stroke={secondColor} strokeOpacity={at !== undefined ? .22 : 1} strokeWidth={2.2 * k} strokeLinejoin="round" points={second.map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>
       {at !== undefined && <><polyline fill="none" stroke={secondColor} strokeWidth={2.4 * k} strokeLinejoin="round" points={second.slice(0, at + 1).map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>
         <circle cx={sx(at)} cy={sy(second[at])} r={3.6 * k} fill={secondColor} stroke="#fff" strokeWidth={1.2 * k}/></>}</>}
+    {third && <><polyline fill="none" stroke={thirdColor} strokeOpacity={at !== undefined ? .22 : 1} strokeWidth={2.2 * k} strokeLinejoin="round" points={third.map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>
+      {at !== undefined && <><polyline fill="none" stroke={thirdColor} strokeWidth={2.4 * k} strokeLinejoin="round" points={third.slice(0, at + 1).map((v, i) => `${sx(i)},${sy(v)}`).join(' ')}/>
+        <circle cx={sx(at)} cy={sy(third[at])} r={3.6 * k} fill={thirdColor} stroke="#fff" strokeWidth={1.2 * k}/></>}</>}
     <polyline fill="none" stroke={color} strokeOpacity={at !== undefined ? .22 : 1} strokeWidth={2.2 * k} strokeLinejoin="round" points={pts(0, y.length)}/>
     {at !== undefined && <><polyline fill="none" stroke={color} strokeWidth={2.4 * k} strokeLinejoin="round" points={pts(0, at + 1)}/>
       <line x1={sx(at)} x2={sx(at)} y1={2} y2={h - 2} stroke="#8a9692" strokeDasharray="3 3"/><circle cx={sx(at)} cy={sy(y[at])} r={3.6 * k} fill={color} stroke="#fff" strokeWidth={1.2 * k}/>
@@ -393,7 +397,7 @@ function PinLayer({ map, probes, result, at, fallback, steps, lines = {} }: { ma
     // Step response with Play: the year slider's progress runs the step through its own 15 years (no marker at the end)
     const frac = result && result.year.length > 1 ? at / (result.year.length - 1) : 1, tStep = Object.values(steps?.responses ?? {}).find(r => r.t)?.t;
     const sAt = (n: number) => frac < 1 ? Math.round(frac * (n - 1)) : undefined, sLab = (i?: number) => i !== undefined && tStep ? `${(frac * tStep[tStep.length - 1]).toFixed(1)} yr` : undefined;
-    return <div key={id} data-pin={probeKey(p)} className={'pin-card' + (steps ? ' step-mode' : '')} style={{ left: pos.x, top: pos.y, width: S.w, height: S.h, ['--s' as string]: f, zIndex: front === id ? 3 : p.flow === 'y_yoy' || p.flow === 'y_price' ? 2 : 1 }} onPointerDownCapture={() => setFront(id)} onPointerDown={drag(id, base)}>{handle(id, 'probe')}
+    return <div key={id} data-pin={probeKey(p)} className={'pin-card' + (steps ? ' step-mode' : '')} style={{ left: pos.x, top: pos.y, width: S.w, ...(p.q === 's' && map.loop?.[p.flow]?.note ? { minHeight: S.h } : { height: S.h }), ['--s' as string]: f, zIndex: front === id ? 3 : p.flow === 'y_yoy' || p.flow === 'y_price' ? 2 : 1 }} onPointerDownCapture={() => setFront(id)} onPointerDown={drag(id, base)}>{handle(id, 'probe')}
       <div className="pin-head"><strong title={info.title}>{steps ? `${info.f.label} · step response` : info.title}</strong><PinTools keepOpen={!!probes.bodeFrom}>
         {(() => { const from = probes.bodeFrom, isFrom = !!from && probeKey(from) === probeKey(p), canIn = !!probeInput(map, p);
           return from ? <button className={isFrom ? 'on' : 'bode-ready'} title={isFrom ? 'Cancel the Bode plot' : 'Bode plot from the marked input to this signal'} aria-label={isFrom ? 'Cancel Bode' : 'Bode to here'}
@@ -437,8 +441,9 @@ function PinLayer({ map, probes, result, at, fallback, steps, lines = {} }: { ma
             return <><YoyBody at={at} color={color} k={f} w={pw} h={ph} year={result!.year} model={y.map(v => v + infl)} cbs={probes.cbs} lag={probes.lag} cpb={probes.cpb} ghost={gy} ghost2={gz}/><small>{result!.year[at].toFixed(1)}: <b>{fmt(y[at] + infl)}</b>{gy ? <span className="ghost-note" style={{ color: '#8a9692' }}> · {cmp!.label}: {fmt(gy[at])}</span> : null}{gz ? <span className="ghost-note" style={{ color }}> · Ziegler–Nichols PID (dotted): {fmt(gz[at])}</span> : null}{probes.cbs ? <span className="ghost-note" style={{ color: '#8a9692' }}> · grey bars: CBS</span> : null}</small></>;
           }
           const pair = p.q === 's' ? loopSig(map, p.flow)?.pair : undefined, y2 = pair ? readTrace(result!, pair.signal) : undefined;
-          if (pair && y2) return <><MiniPlot y={y} at={at} color={color} w={pw} h={ph} k={f} label={result!.year[at].toFixed(1)} second={y2} secondColor={color === MUTED ? MUTED : pair.color}/><small>{result!.year[at].toFixed(1)}: <b style={{ color }}>{pair.first ?? 'rent'} {fmt(y[at])}</b> · <b style={{ color: color === MUTED ? MUTED : pair.color }}>{pair.label} {fmt(y2[at])}</b>{!pair.first && <> · renters pay {fmt(Math.abs(y[at] / y2[at] - 1) * 100)}% {y[at] >= y2[at] ? 'more' : 'less'}</>}</small></>;
-          return <><MiniPlot y={y} at={at} color={color} w={pw} h={ph} k={f} label={result!.year[at].toFixed(1)} ghost={g} ghostColor={cmp?.color} ghost2={g2} ghost2Color={color}/><small>{result!.year[at].toFixed(1)}: <b>{fmt(y[at])}</b>{g ? <span className="ghost-note" style={{ color: cmp!.color }}> · {cmp!.label}: {fmt(g[at])}</span> : null}{g2 ? <span className="ghost-note" style={{ color }}> · Ziegler–Nichols PID (dotted): {fmt(g2[at])}</span> : null}</small></>;
+          const th = pair ? loopSig(map, p.flow)?.third : undefined, y3 = th ? readTrace(result!, th.signal) : undefined;
+          if (pair && y2) return <><MiniPlot y={y} at={at} color={color} w={pw} h={ph} k={f} label={result!.year[at].toFixed(1)} second={y2} secondColor={color === MUTED ? MUTED : pair.color} third={y3} thirdColor={color === MUTED ? MUTED : th?.color}/><small>{result!.year[at].toFixed(1)}: <b style={{ color }}>{pair.first ?? 'rent'} {fmt(y[at])}</b> · <b style={{ color: color === MUTED ? MUTED : pair.color }}>{pair.label} {fmt(y2[at])}</b>{th && y3 ? <> · <b style={{ color: color === MUTED ? MUTED : th.color }}>{th.label} {fmt(y3[at])}</b></> : null}{!pair.first && <> · renters pay {fmt(Math.abs(y[at] / y2[at] - 1) * 100)}% {y[at] >= y2[at] ? 'more' : 'less'}</>}</small></>;
+          return <><MiniPlot y={y} at={at} color={color} w={pw} h={ph} k={f} label={result!.year[at].toFixed(1)} ghost={g} ghostColor={cmp?.color} ghost2={g2} ghost2Color={color}/><small>{result!.year[at].toFixed(1)}: <b>{map.loop && p.q === 's' && map.loop[p.flow] ? y[at].toFixed(2) : fmt(y[at])}</b>{g ? <span className="ghost-note" style={{ color: cmp!.color }}> · {cmp!.label}: {fmt(g[at])}</span> : null}{g2 ? <span className="ghost-note" style={{ color }}> · Ziegler–Nichols PID (dotted): {fmt(g2[at])}</span> : null}</small>{p.q === 's' && map.loop?.[p.flow]?.note ? <p className="card-note">{map.loop[p.flow].note}</p> : null}</>;
         })() : <small className="muted">Run the simulation to see this signal.</small>}</div>;
   })}</div>;
 }
@@ -678,8 +683,10 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
   return useMemo(() => {
     if (!map) return { nodes: [] as Node[], edges: [] as Edge[], pinDefault: {} as Record<string, XY>, lines: {} as Record<string, Point[]> };
     const value = (signal: string) => result && readTrace(result, signal) ? <Val signal={signal}/> : undefined;
-    // bank mode: the loop carries two channels (Menkveld Fig. 3-2), Tier 1 capital ratio and loan-to-deposit ratio
-    const two = (a: string, b: string) => result && readTrace(result, a) && readTrace(result, b) ? <>T1 <Val signal={a}/> · L/D <Val signal={b}/></> : undefined;
+    // bank loop: r, e, y and x in % with two decimals, so that e = r - y can be read off the canvas
+    const value2 = (signal: string) => result && readTrace(result, signal) ? <Val signal={signal} digits={2}/> : undefined;
+    // bank mode: the loop carries two channels (Menkveld Fig. 3-2), Tier 1 capital ratio and NSFR
+    const two = (a: string, b: string) => result && readTrace(result, a) && readTrace(result, b) ? <>T1 <Val signal={a}/> · NSFR <Val signal={b}/></> : undefined;
     const on = (s: Selection) => selection.kind === s.kind && selection.id === s.id;
     const nodes: Node[] = [], edges: Edge[] = [], railStart: Record<string, Point> = {}, pinDefault: Record<string, XY> = {}, lines: Record<string, Point[]> = {};
     const block = (id: string, r: Rect, data: Partial<BlockData>, z = 1) => nodes.push({ id, type: 'block', position: { x: r.x, y: r.y }, draggable: false, zIndex: z, data: { label: '', tone: '', width: r.w, height: r.h, ...data } });
@@ -833,9 +840,24 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     }
     // ---- loop signals (two goals when the rental share loop is on)
     const mimo = scenario.feedback && scenario.share_control;
-    if (!view.noParliament) lines.y_reference = [[parl.x + parl.w, mainY], [sum.x, mainY]];
-    if (!view.noParliament) sig('r', [[parl.x + parl.w, mainY], [sum.x, mainY]], { color: scenario.feedback ? '#2b6599' : '#b8c2bd', dashed: !scenario.feedback, markDist: (sum.x - parl.x - parl.w) / 2, letter: 'r', name: bv ? 'Financial targets' : mimo ? 'Targets' : 'Housing target', sub: probes?.stepAt === 'y_reference' ? 'Unit step +1 enters here' : bv ? 'Reference input r' : mimo ? 'Price & share r' : 'Reference signal r', value: bv ? two('Bank_target_t1', 'Bank_target_ltd') : value('I(Reference)'), labelSide: 'above', selected: on({ kind: 'signal', id: 'y_reference' }), pick: card('y_reference') ?? (() => select({ kind: 'signal', id: 'y_reference' })) });
-    sig('e', [[sum.x + sum.w, mainY], [ctrl.x, mainY]], { color: scenario.feedback ? '#1f2a26' : '#b8c2bd', letter: 'e', name: bv ? 'Target deviations' : mimo ? 'Gaps' : 'Gap', sub: bv ? 'Control error e' : mimo ? 'Errors e' : 'Error e', value: bv ? two('Bank_dev_t1', 'Bank_dev_ltd') : scenario.feedback ? value('I(Error)') : undefined, dashed: !scenario.feedback, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_error' }), pick: card('y_error') ?? (() => select({ kind: 'signal', id: 'y_error' })) });
+    // bank mode (Menkveld Fig. 3-2): two channels drawn as two lines each; 1 = Tier 1 (solvency), 2 = NSFR (liquidity)
+    const dch = sum.h * 0.22, D = 30 * lab;  // dch: where the two lines meet the summing junction; D: their spacing
+    if (bv) {
+      const fbOn = scenario.feedback, rc = fbOn ? '#2b6599' : '#b8c2bd', ec = fbOn ? '#1f2a26' : '#b8c2bd';
+      const ch = [{ k: 1, dy: -D, dj: -dch, r: 'y_reference', e: 'y_error', rn: 'Tier 1 target', en: 'Tier 1 deviation', rv: 'Bank_target_t1', ev: 'Bank_dev_t1', side: 'above' as const },
+                  { k: 2, dy: D, dj: dch, r: 'r_nsfr', e: 'e_nsfr', rn: 'NSFR target', en: 'NSFR deviation', rv: 'Bank_target_nsfr', ev: 'Bank_dev_nsfr', side: 'below' as const }];
+      ch.forEach(c => {
+        const y = mainY + c.dy, sub_ = (n: number) => n === 1 ? '₁' : '₂';
+        const yj = mainY + c.dj, bend = 26 * lab;
+        if (!view.noParliament) { lines[c.r] = [[parl.x + parl.w, y], [sum.x - bend, y], [sum.x + 2, yj]];
+          sig(`r${c.k}`, lines[c.r], { color: rc, dashed: !fbOn, markDist: (sum.x - bend - parl.x - parl.w) / 2, letter: `r${sub_(c.k)}`, name: c.rn, value: value2(c.rv), labelSide: c.side, selected: on({ kind: 'signal', id: 'y_reference' }), pick: card(c.r) ?? (() => select({ kind: 'signal', id: 'y_reference' })) }); }
+        lines[c.e] = [[sum.x + sum.w - 2, yj], [sum.x + sum.w + bend, y], [ctrl.x, y]];
+        sig(`e${c.k}`, lines[c.e], { color: ec, letter: `e${sub_(c.k)}`, name: c.en, markAt: 1, markDist: (ctrl.x - sum.x - sum.w - bend) / 2, value: value2(c.ev), dashed: !fbOn, labelSide: c.side, selected: on({ kind: 'signal', id: 'y_error' }), pick: card(c.e) ?? (() => select({ kind: 'signal', id: 'y_error' })) });
+      });
+    }
+    if (!bv && !view.noParliament) lines.y_reference = [[parl.x + parl.w, mainY], [sum.x, mainY]];
+    if (!bv && !view.noParliament) sig('r', [[parl.x + parl.w, mainY], [sum.x, mainY]], { color: scenario.feedback ? '#2b6599' : '#b8c2bd', dashed: !scenario.feedback, markDist: (sum.x - parl.x - parl.w) / 2, letter: 'r', name: bv ? 'Financial targets' : mimo ? 'Targets' : 'Housing target', sub: probes?.stepAt === 'y_reference' ? 'Unit step +1 enters here' : bv ? 'Reference input r' : mimo ? 'Price & share r' : 'Reference signal r', value: bv ? two('Bank_target_t1', 'Bank_target_nsfr') : value('I(Reference)'), labelSide: 'above', selected: on({ kind: 'signal', id: 'y_reference' }), pick: card('y_reference') ?? (() => select({ kind: 'signal', id: 'y_reference' })) });
+    if (!bv) sig('e', [[sum.x + sum.w, mainY], [ctrl.x, mainY]], { color: scenario.feedback ? '#1f2a26' : '#b8c2bd', letter: 'e', name: bv ? 'Target deviations' : mimo ? 'Gaps' : 'Gap', sub: bv ? 'Control error e' : mimo ? 'Errors e' : 'Error e', value: bv ? two('Bank_dev_t1', 'Bank_dev_nsfr') : scenario.feedback ? value('I(Error)') : undefined, dashed: !scenario.feedback, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_error' }), pick: card('y_error') ?? (() => select({ kind: 'signal', id: 'y_error' })) });
     const subsidy = (id: string) => map.flows.find(f => f.id === id)!;
     ([['owner_subsidy', 'u2', u2y], ['rental_subsidy', 'u1', u1y]] as const).forEach(([id, letter, y], i) => {
       // switched off: no arrow, except in the CPB backbone view, where the subsidy equations point at both subsidies
@@ -890,12 +912,23 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     }
     const xMark = view.system && (scenario.bank || (r1 && r2)) ? { markAt: 4, markDist: 22 + 95 * lab } : view.system ? { markDist: (sensor.x - R.cpb.x - R.cpb.w) / 2 } : {};
     lines.x1 = x1pts; lines.x2 = x2pts;
-    sig('x1', x1pts, { color: COLOR.money, letter: 'x₁', name: bv ? 'Tier 1 ratio' : 'Construction payments', value: value(bv ? 'I(Bk_t1)' : 'I(Construction_cost)'), markDist: 95 * lab, ...xMark, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_price' }), pick: card('x1') ?? (() => select({ kind: 'signal', id: 'y_price' })), target: { kind: 'signal', id: 'y_price' } });
-    sig('x2', x2pts, { color: COLOR.real, letter: 'x₂', name: bv ? 'Loan-to-deposit ratio' : 'New construction', value: value(bv ? 'I(Bk_ltf)' : 'I(Construction)'), markDist: 95 * lab, ...xMark, labelSide: 'below', selected: on({ kind: 'flow', id: 'houses' }), pick: card('x2') ?? (() => select({ kind: 'flow', id: 'houses' })), target: { kind: 'flow', id: 'houses' } });
+    sig('x1', x1pts, { color: COLOR.money, letter: 'x₁', name: bv ? 'Assets' : 'Construction payments', value: bv ? <>mortgages, firm loans, home value</> : value('I(Construction_cost)'), markDist: 95 * lab, ...xMark, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_price' }), pick: card('x1') ?? (() => select({ kind: 'signal', id: 'y_price' })), target: { kind: 'signal', id: 'y_price' } });
+    sig('x2', x2pts, { color: COLOR.real, letter: 'x₂', name: bv ? 'Liabilities & equity' : 'New construction', value: bv ? <>deposits, other banks, equity</> : value('I(Construction)'), markDist: 95 * lab, ...xMark, labelSide: 'below', selected: on({ kind: 'flow', id: 'houses' }), pick: card('x2') ?? (() => select({ kind: 'flow', id: 'houses' })), target: { kind: 'flow', id: 'houses' } });
     // y always leaves the sensor; the feedback branch is grey and dashed with the loop switch open.
-    lines.y_price = [[sensor.x + sensor.w, gc], [sensor.x + sensor.w + 170 * lab, gc]];
-    sig('yout', [[sensor.x + sensor.w, gc], [sensor.x + sensor.w + 170 * lab, gc]], { color: LOOP, letter: 'y', name: bv ? 'Financial reports' : mimo ? 'Price index & rental share' : 'House price index', sub: bv ? 'Measured output y' : mimo ? 'Outputs y' : 'Output y', value: bv ? two('I(Bk_t1)', 'I(Bk_ltf)') : value('I(Construction_cost)'), markDist: 120, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_price' }), pick: card('y_price') ?? (() => select({ kind: 'signal', id: 'y_price' })), target: { kind: 'signal', id: 'y_price' } });
-    {
+    if (bv) {
+      const fbOn = scenario.feedback, fbY = group.y + group.h + 90, tap = sensor.x + sensor.w + 60;
+      const ch = [{ k: 1, dy: -D, id: 'y_price', n: 'Tier 1 ratio', v: 'I(Bk_t1)', side: 'above' as const, sx: -dch },
+                  { k: 2, dy: D, id: 'y_nsfr', n: 'NSFR', v: 'I(Bk_nsfr)', side: 'below' as const, sx: dch }];
+      ch.forEach(c => {
+        const y = gc + c.dy, yb = fbY + (c.k - 1) * 44 * lab, t = tap + (c.k - 1) * 30 * lab, sx = sum.x + sum.w / 2 + c.sx, l = c.k === 1 ? '₁' : '₂';
+        lines[c.id] = [[sensor.x + sensor.w, y], [sensor.x + sensor.w + 170 * lab, y]];
+        sig(`yout${c.k}`, lines[c.id], { color: LOOP, letter: `y${l}`, name: c.n, value: value2(c.v), markDist: 120, labelSide: c.side, selected: on({ kind: 'signal', id: 'y_price' }), pick: card(c.id) ?? (() => select({ kind: 'signal', id: 'y_price' })), target: { kind: 'signal', id: 'y_price' } });
+        sig(`y${c.k}`, [[t, y], [t, yb], [sx, yb], [sx, sum.y + sum.h * (c.k === 1 ? 0.95 : 0.95)]], { color: fbOn ? LOOP : '#b8c2bd', dashed: !fbOn, switchAt: [t - (t - sx) / 4, yb], switchOpen: !fbOn, onSwitch: flip, letter: `y${l}`, markAt: 2, markDist: (t - sx) / 2, name: `${c.n}`, labelSide: c.k === 1 ? 'above' : 'below', pick: card(c.id) ?? (() => select({ kind: 'signal', id: 'y_price' })) });
+      });
+    }
+    if (!bv) lines.y_price = [[sensor.x + sensor.w, gc], [sensor.x + sensor.w + 170 * lab, gc]];
+    if (!bv) sig('yout', [[sensor.x + sensor.w, gc], [sensor.x + sensor.w + 170 * lab, gc]], { color: LOOP, letter: 'y', name: bv ? 'Financial reports' : mimo ? 'Price index & rental share' : 'House price index', sub: bv ? 'Measured output y' : mimo ? 'Outputs y' : 'Output y', value: bv ? two('I(Bk_t1)', 'I(Bk_nsfr)') : value('I(Construction_cost)'), markDist: 120, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_price' }), pick: card('y_price') ?? (() => select({ kind: 'signal', id: 'y_price' })), target: { kind: 'signal', id: 'y_price' } });
+    if (!bv) {
       const fbY = group.y + group.h + 90, tap = sensor.x + sensor.w + 60, fb = scenario.feedback;
       sig('y', [[tap, gc], [tap, fbY], [sum.x + sum.w / 2, fbY], [sum.x + sum.w / 2, sum.y + sum.h]], { color: fb ? LOOP : '#b8c2bd', dashed: !fb, switchAt: [tap - (tap - sum.x - sum.w / 2) / 4, fbY], switchOpen: !fb, onSwitch: flip, letter: 'y', markAt: 2, markDist: (tap - sum.x - sum.w / 2) / 2, name: bv ? 'Financial reports' : mimo ? 'Price index & rental share' : 'House price index', sub: bv ? 'Measured output y' : mimo ? 'Feedback signals' : 'Feedback signal', labelSide: 'above', pick: card('y_price') ?? (() => select({ kind: 'signal', id: 'y_price' })) });
     }

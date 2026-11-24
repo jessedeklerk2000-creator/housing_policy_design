@@ -271,32 +271,44 @@ export function Coach({ step, sub, busy, onShow, onContinue, onNext, onExit }: {
 
 /** The two problems, drawn: a house under the water line (mortgage above the value), and a ladder whose rungs move apart. */
 export function Figure({ kind, small }: { kind: 'underwater' | 'ladder'; small?: boolean }) {
-  const cls = `problem-fig${small ? ' small' : ''}`;
-  // the water is the mortgage: when the price falls, the debt rises above the value of the home
-  if (kind === 'underwater') return <svg className={cls} viewBox="0 0 200 110" role="img" aria-label="A house under water: the mortgage is higher than the value of the home">
-    <path d="M10 22 L36 28 L58 24 L80 42 L100 38 L118 56" fill="none" stroke="var(--bad)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M118 56 l-9 -2 m9 2 l-1 -9" fill="none" stroke="var(--bad)" strokeWidth="2.4" strokeLinecap="round"/>
-    <text x="10" y="15" className="fig-label">house price</text>
-    <path d="M128 106 V78 L152 60 L176 78 V106 Z" fill="var(--panel)" stroke="var(--ink)" strokeWidth="2" strokeLinejoin="round"/>
-    <rect x="146" y="88" width="12" height="18" fill="none" stroke="var(--ink)" strokeWidth="2"/>
-    <text x="152" y="54" textAnchor="middle" className="fig-label">home value</text>
-    <rect x="0" y="70" width="200" height="40" fill="var(--blue)" opacity=".22"/>
-    <path d="M0 70 q10 -5 20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0 t20 0" fill="none" stroke="var(--blue)" strokeWidth="2"/>
-    <text x="8" y="94" className="fig-label water">mortgage debt</text>
-  </svg>;
-  // rungs further apart higher up: each step is harder for the one below; an arrow on the price
-  const rungs = [96, 82, 66, 47, 24];
-  return <svg className={cls} viewBox="0 0 200 110" role="img" aria-label="A housing ladder whose rungs move further apart as prices rise">
-    <line x1="70" y1="106" x2="70" y2="12" stroke="var(--ink)" strokeWidth="2.4" strokeLinecap="round"/>
-    <line x1="110" y1="106" x2="110" y2="12" stroke="var(--ink)" strokeWidth="2.4" strokeLinecap="round"/>
-    {rungs.map(y => <line key={y} x1="70" y1={y} x2="110" y2={y} stroke="var(--ink)" strokeWidth="2"/>)}
-    <circle cx="60" cy="86" r="5" fill="var(--green)"/><path d="M60 91 v10 m0 -6 l-6 4 m6 -4 l6 4" stroke="var(--green)" strokeWidth="2.2" strokeLinecap="round"/>
-    <text x="52" y="108" textAnchor="end" className="fig-label">starter</text>
-    <circle cx="121" cy="14" r="5" fill="var(--blue)"/><path d="M121 19 v10 m0 -6 l-6 4 m6 -4 l6 4" stroke="var(--blue)" strokeWidth="2.2" strokeLinecap="round"/>
-    <text x="130" y="18" className="fig-label">owner</text>
-    <path d="M150 96 L150 40" stroke="var(--bad)" strokeWidth="2.4" strokeLinecap="round"/><path d="M143 48 L150 38 L157 48" fill="none" stroke="var(--bad)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-    <text x="160" y="72" className="fig-label">price</text>
-  </svg>;
+  const cls = `problem-fig fig${small ? ' small' : ''}`;
+  // The two figures of the landing page (economicsystemsandcontrol.com, 24 Nov 2026): the CBS house price index 2006-2014
+  // (peak 2008 = 100, -21% to 2013) and the housing ladder (CPB, 2026).
+  if (kind === 'underwater') return <svg className={cls} viewBox="0 0 380 160" role="img" aria-label="CBS house price index 2006 to 2014, peak 2008 = 100: the price falls 21% to 2013, below the price paid at the peak">
+<line className="fg-grid" x1="44" y1="108.0" x2="370" y2="108.0"/><text className="fg-mut" x="38" y="111.5" textAnchor="end">80</text><line className="fg-grid" x1="44" y1="74.0" x2="370" y2="74.0"/><text className="fg-mut" x="38" y="77.5" textAnchor="end">90</text><line className="fg-grid" x1="44" y1="40.0" x2="370" y2="40.0"/><text className="fg-mut" x="38" y="43.5" textAnchor="end">100</text>
+<text className="fg-mut" x="8" y="12" fontSize="9.5">house price index (peak 2008 = 100)</text>
+<line className="fg-axis" x1="44" y1="131" x2="370" y2="131"/>
+<g className="fg-mut" textAnchor="middle"><text x="50.0" y="146">2006</text><text x="121.1" y="146">2008</text><text x="192.2" y="146">2010</text><text x="263.3" y="146">2012</text><text x="334.4" y="146">2014</text></g>
+<path d="M143.3,40.0 L152.2,42.5 L161.1,44.8 L170.0,53.3 L178.9,57.7 L187.8,60.6 L196.7,60.9 L205.6,60.6 L214.4,60.3 L223.3,64.0 L232.2,65.7 L241.1,67.1 L250.0,69.3 L258.9,74.7 L267.8,78.6 L276.7,84.3 L285.6,96.1 L294.4,97.8 L303.3,104.3 L312.2,109.9 L321.1,109.1 L330.0,109.9 L338.9,108.5 L347.8,106.8 L356.7,104.3 L365.6,104.0 L365.6,40.0 Z" fill="#c0392b" fillOpacity=".13"/>
+<line className="fg-ref" x1="143.3" y1="40.0" x2="365.6" y2="40.0"/>
+<polyline className="fg-line" points="54.4,70.7 63.3,67.1 72.2,63.1 81.1,61.7 90.0,58.1 98.9,54.1 107.8,49.3 116.7,48.2 125.6,43.9 134.4,43.7 143.3,40.0 152.2,42.5 161.1,44.8 170.0,53.3 178.9,57.7 187.8,60.6 196.7,60.9 205.6,60.6 214.4,60.3 223.3,64.0 232.2,65.7 241.1,67.1 250.0,69.3 258.9,74.7 267.8,78.6 276.7,84.3 285.6,96.1 294.4,97.8 303.3,104.3 312.2,109.9 321.1,109.1 330.0,109.9 338.9,108.5 347.8,106.8 356.7,104.3 365.6,104.0"/>
+<circle className="fg-dot" cx="143.3" cy="40.0" r="3.2"/><circle cx="312.2" cy="109.9" r="3.2" fill="#c0392b"/>
+<text className="fg-ink" x="151.3" y="34.0">price paid at the 2008 peak</text>
+<text className="fg-ink" x="62" y="79.1">home value</text>
+<text x="242.0" y="58.4" fill="#c0392b" fontWeight="600">underwater</text>
+<text x="306.2" y="125.9" fill="#c0392b" fontWeight="600">−21%</text>
+</svg>;
+  return <svg className={cls} viewBox="0 0 380 150" role="img" aria-label="Housing ladder from social rent to a detached house: with a starter subsidy one household climbs up, and without new homes another drops down">
+<defs><marker id="fg-ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3f9a1f"/></marker>
+<marker id="fg-ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/></marker></defs>
+<line x1="168" y1="12" x2="168" y2="140" stroke="#a7aeab" strokeWidth="2.5"/><line x1="218" y1="12" x2="218" y2="140" stroke="#a7aeab" strokeWidth="2.5"/>
+<line x1="168" y1="30" x2="218" y2="30" stroke="#a7aeab" strokeWidth="2.5"/>
+<g transform="translate(150,29) scale(1.15) translate(-145,-29)"><path d="M134,29 V19 L145,11 L156,19 V29 Z" fill="#7f8c87"/><rect x="137" y="21" width="4" height="4" fill="#fff"/><rect x="149" y="21" width="4" height="4" fill="#fff"/><rect x="143" y="23" width="4" height="6" fill="#fff"/></g>
+<line x1="168" y1="54" x2="218" y2="54" stroke="#a7aeab" strokeWidth="2.5"/>
+<g transform="translate(150,53) scale(1.15) translate(-145,-53)"><path d="M134,53 V44 L139,38 L144,44 L149,38 L154,44 V53 Z" fill="#7f8c87"/><rect x="137.5" y="48" width="3" height="5" fill="#fff"/><rect x="147.5" y="48" width="3" height="5" fill="#fff"/></g>
+<line x1="168" y1="78" x2="218" y2="78" stroke="#a7aeab" strokeWidth="2.5"/>
+<g transform="translate(150,77) scale(1.15) translate(-145,-77)"><path d="M134,77 V69 L141,63 L148,69 V77 Z" fill="#7f8c87"/><rect x="139.5" y="72" width="3" height="5" fill="#fff"/></g>
+<line x1="168" y1="102" x2="218" y2="102" stroke="#a7aeab" strokeWidth="2.5"/>
+<g transform="translate(150,101) scale(1.15) translate(-145,-101)"><rect x="134" y="87" width="16" height="14" fill="#7f8c87"/><rect x="137" y="90" width="3" height="3" fill="#fff"/><rect x="144" y="90" width="3" height="3" fill="#fff"/><rect x="140.5" y="95" width="3" height="6" fill="#fff"/></g>
+<line x1="168" y1="126" x2="218" y2="126" stroke="#a7aeab" strokeWidth="2.5"/>
+<g transform="translate(150,125) scale(1.15) translate(-145,-125)"><rect x="134" y="107" width="16" height="18" fill="#7f8c87"/><rect x="137" y="110" width="3" height="3" fill="#fff"/><rect x="137" y="115" width="3" height="3" fill="#fff"/><rect x="137" y="120" width="3" height="3" fill="#fff"/><rect x="143" y="110" width="3" height="3" fill="#fff"/><rect x="143" y="115" width="3" height="3" fill="#fff"/><rect x="143" y="120" width="3" height="3" fill="#fff"/></g>
+<circle cx="207" cy="61" r="3.3" fill="#3f9a1f"/><path d="M203,66 h8 l-1,7 h-6 z" fill="#3f9a1f"/><path d="M204,73 l-1.5,5 M210,73 l1.5,5" stroke="#3f9a1f" strokeWidth="2.2" strokeLinecap="round"/><path d="M211,67 l4,-6" stroke="#3f9a1f" strokeWidth="2" strokeLinecap="round"/>
+<circle cx="180" cy="85" r="3.3" fill="#8a5a12"/><path d="M176,90 h8 l-1,7 h-6 z" fill="#8a5a12"/><path d="M177,97 l-1.5,5 M183,97 l1.5,5" stroke="#8a5a12" strokeWidth="2.2" strokeLinecap="round"/>
+<path d="M226,99 C246,95 246,82 226,76" fill="none" stroke="#3f9a1f" strokeWidth="1.8" markerEnd="url(#fg-ag)"/>
+<path d="M180,66 C166,72 166,82 176,84" fill="none" stroke="#c0392b" strokeWidth="1.6" strokeDasharray="3 2" markerEnd="url(#fg-ar)"/>
+<text x="252" y="80" fill="#3f9a1f" fontWeight="600">starter subsidy:</text><text x="252" y="93" fill="#3f9a1f">one climbs up</text>
+<text x="252" y="112" fill="#c0392b" fontWeight="600">no new homes:</text><text x="252" y="125" fill="#c0392b">another drops down</text>
+</svg>;
 }
 
 const SRC = {

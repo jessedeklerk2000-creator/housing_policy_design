@@ -6,7 +6,7 @@ const page = await browser.newPage({ viewport: { width: 2200, height: 1300 } });
 await page.goto('http://127.0.0.1:8001/?mode=bank');
 await page.waitForSelector('.map-canvas .react-flow__node', { timeout: 40000 }); await page.waitForTimeout(2500);
 await page.getByRole('button', { name: 'Whole model' }).click(); await page.waitForTimeout(1500);
-const marks = page.locator('.map-canvas svg text').filter({ hasText: /^(u1|u2|d|x₁|x₂|y|r|e)$/ }); const nm = await marks.count();
+const marks = page.locator('.map-canvas svg text').filter({ hasText: /^(u1|u2|d|x₁|x₂|y|r|e|r₁|r₂|e₁|e₂|y₁|y₂)$/ }); const nm = await marks.count();
 for (let i = 0; i < nm; i++) { await marks.nth(i).click({ force: true }).catch(() => {}); await page.waitForTimeout(400); }
 await page.getByRole('button', { name: 'Play through time' }).click(); await page.waitForTimeout(9000);
 await page.getByRole('button', { name: 'Whole model' }).click(); await page.waitForTimeout(1500);

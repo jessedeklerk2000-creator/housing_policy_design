@@ -17,7 +17,7 @@ const LABEL_OFFSET: Record<string, [number, number]> = {
   'I§Rental_subsidies1': [-24, 56], 'I§Owner_occupied_subsidies': [-24, 56], 'B§PID': [-24, 56], 'L§Supply_owner_occupied': [-142, 0], 'C3': [-14, 62], 'C2': [-14, 62], 'R20': [-74, 0], 'L§Supply_rent': [-132, 0], 'B§Housing_services': [-30, 205], 'Interest_Rates': [-176, 0], 'V§Shock_covid': [0, -6], 'V§Shock_financialcrisis': [0, -6], 'L§F_Consumption': [18, -6], 'C7': [0, 0],
 };
 const DISPLAY: Record<string, string> = {
-  'B§Mortgage_rate_ALM': 'Mortgage rate (ALM)', 'B§Deposit_flow': 'Inflow', 'B§Net_interest': 'NII', 'C§Deposits': 'Deposits', 'C§Equity': 'Equity', 'B§Loans_funding': 'Loan-to-deposit',  // bank view
+  'B§Mortgage_rate_ALM': 'Mortgage rate (ALM)', 'B§Deposit_flow': 'Inflow', 'B§Net_interest': 'NII', 'C§Deposits': 'Deposits', 'C§Equity': 'Equity', 'B§Loans_funding': 'NSFR', 'B§Firm_loans': 'New firm loans', 'B§Firm_book_flow': 'Lending', 'C§Firm_loans': 'Firm book',  // bank view
   'L§Supply_owner_occupied': 'Supply owner', 'L§Supply_rent': 'Supply rent', 'L§Gross_imputed_rent': 'Gross imp.', 'V§Maintenance_costs': 'Maintenance', 'L§Demand_owner_occupied': 'Demand owner', 'I§Owner_occupied_subsidies': 'Owner subsidies', 'I§Rental_subsidies1': 'Rental subsidies', 'B§PID': 'PID output', 'B§PID_I_Robust': 'PID I', 'V§Shock_financialcrisis': 'Crisis shock', 'V§Shock_covid': 'Covid shock', 'L§Supply_consumption': 'Supply goods', 'L§Demand_consumption': 'Demand goods', 'I§Mortgages': 'Mortgages', 'B§Mortgage_interest': 'Mortgage interest', 'Interest_Rates': 'Interest rates', 'Incomeactual': 'Income (historical)', 'V§Construction_cost': 'Construction cost',
 };
 const short = (e: Element) => DISPLAY[e.name] ?? e.name.split('§').pop()!.replace(/_/g, ' ');
