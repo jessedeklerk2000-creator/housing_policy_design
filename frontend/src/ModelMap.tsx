@@ -3,6 +3,7 @@ import { BaseEdge, Controls, Handle, Position, ReactFlow, ReactFlowProvider, use
 import '@xyflow/react/dist/style.css';
 import { Activity, BarChart3, Camera, Coins, Globe, Home, Landmark, Sigma, ShieldCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Maximize2, Minus, Pause, Play, Plus, Image as ImageIcon } from 'lucide-react';
 import { savePng } from './shot';
+import { LabelCtx, TERMS, mappingCsv, mappingTex, namePlain, symbolsFor, type LabelMode, type LabelState } from './elementNames';
 import { IdentPanel } from './Ident';
 import { api } from './api';
 import { Chart, type Line } from './Chart';
@@ -618,7 +619,7 @@ function Inspector({ map, selection, pick, result, pinned, scenario, enter, laye
   }
   if (selection.kind === 'element') {
     const e = map.elements.find(x => x.name === selection.id) as Element, state = stateOf(e, scenario);
-    return <><p className="eyebrow">{e.role}</p><h3>{e.name}</h3>
+    return <><p className="eyebrow">{e.role}</p><h3 title={`Netlist id: ${e.name}`}>{namePlain(e.name)}</h3>
       {state !== 'active' && <p className="state-note">{STATE_NOTE[state]}</p>}
       <p className="direction">Nodes {e.a} → {e.b}{e.agent && layer !== e.agent ? <> · <button className="link" onClick={() => enter(e.agent!)}>Open {name(e.agent)}</button></> : null}</p>
       {result ? <><Chart title="Flow" unit="Model units" height={200} lines={lines(e.trace, 'Flow', '#3f8f4f')}/>{e.a !== e.b && <Chart title="Incentive across" unit="Model units" height={200} lines={lines(`V(${e.a.toLowerCase()},${e.b.toLowerCase()})`, 'Incentive across', '#a8660c')}/>}</> : hint('this component')}
@@ -665,7 +666,7 @@ const CPB_PORTS: Record<string, { p: Point; side: Side }> = {
 };
 // Collapsed agents all have one size; the financial sector is as tall as the collapsed CPB box,
 // so its four left ports line up with the CPB's four right ports.
-const AGENT_BOX: Point = [250, 160], FIN_BOX: Point = [250, 230];
+const AGENT_BOX: Point = [250, 160], FIN_BOX: Point = [250, 230], FIG_BOX: Point = [220, 100];
 // Closed agents in the CPB backbone view: room for their equation cards (canvas units)
 const FORMULA_BOX: Record<string, Point> = { constructors: [600, 190], investors: [600, 230], households: [600, 360] };
 /** Port of a collapsed block: ports keep their side and order from the drawing, evenly spaced along that side. */
@@ -711,7 +712,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     const eq = Math.floor(100 * Math.min(lab / 1.3,
       ...CPB_AGENTS.filter(id => withEq(id) && view.agents.includes(id) && !sideOn(id) && natW?.[id]).map(id => stripCap(id) / natW![id]))) / 100;
     const cardW = (id: string) => (natW?.[id] ?? 0) + CARD_PAD;  // the widest card of an agent at scale 1
-    const AB = (id: string): Point => withEq(id) && FORMULA_BOX[id] ? [Math.max(AGENT_BOX[0], Math.max(FORMULA_BOX[id][0], cardW(id) + 28) * eq), Math.max(AGENT_BOX[1], FORMULA_BOX[id][1] * eq)] : AGENT_BOX;
+    const AB = (id: string): Point => withEq(id) && FORMULA_BOX[id] ? [Math.max(AGENT_BOX[0], Math.max(FORMULA_BOX[id][0], cardW(id) + 28) * eq), Math.max(AGENT_BOX[1], FORMULA_BOX[id][1] * eq)] : figure ? FIG_BOX : AGENT_BOX;  // figure mode: closed agents compact, the opened one dominates
     // beside the circuit: a column that fits the widest card at the same scale
     const STRIP_W: Record<string, number> = { constructors: 470, investors: 500, households: 700 };
     const side = (id: string) => sideOn(id) ? Math.max(STRIP_W[id], cardW(id)) * eq : 0;
@@ -1090,14 +1091,35 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
   const [shooting, setShooting] = useState(false);
   // Figure mode (?figure=1): a clean, white canvas for thesis figures; "keep highlight" keeps a clicked equation's flows lit
   const [figure, setFigure] = useState(() => { try { return new URLSearchParams(location.search).get('figure') === '1'; } catch { return false; } });
+  // Labels: element names, formula symbols or both (normal view and figure mode); Hide faded: figure mode export
+  const [labelMode, setLabelMode] = useState<LabelMode>('names'), [hideFaded, setHideFaded] = useState(true);
+  const labelState = useMemo<LabelState>(() => { const f = hl ? TERMS.find(t => t.id === hl.id) : undefined;
+    return { mode: labelMode, symbols: labelMode === 'names' ? {} : symbolsFor(hl?.id ?? null), nodes: TERMS.flatMap(t => t.node && (t === f || labelMode !== 'names') ? [t.node] : []) }; }, [labelMode, hl]);
+  const download = (name: string, text: string, type: string) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); URL.revokeObjectURL(a.href); };
+  const exportMapping = () => { download('figure_mapping.csv', mappingCsv(), 'text/csv'); download('figure_mapping.tex', mappingTex(), 'text/x-tex'); };
   const flipFigure = () => setFigure(f => { const n = !f; try { const u = new URL(location.href); if (n) u.searchParams.set('figure', '1'); else u.searchParams.delete('figure'); history.replaceState(null, '', u); } catch { /* ignore */ } return n; });
   const bodyRef = useRef<HTMLDivElement>(null);
+  // Figure mode: crop to the drawn content (visible nodes and edges, or only the opened agents) plus a 24 px margin
+  const contentBox = (canvas: HTMLElement, selectionOnly: boolean) => {
+    const c = canvas.getBoundingClientRect(), vis = (el: globalThis.Element) => getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none';
+    const sel = selectionOnly ? view.agents.map(a => `.react-flow__node[data-id="${a}"]`).join(',') : '.react-flow__node:not([data-id="anchor"]), .react-flow__edge';
+    const rs = sel ? [...canvas.querySelectorAll(sel)].filter(vis).map(el => el.getBoundingClientRect()).filter(r => r.width > 2 && r.height > 2) : [];
+    if (!rs.length) return undefined;
+    const m = 24, x0 = Math.max(0, Math.min(...rs.map(r => r.left)) - c.left - m), y0 = Math.max(0, Math.min(...rs.map(r => r.top)) - c.top - m);
+    const x1 = Math.min(c.width, Math.max(...rs.map(r => r.right)) - c.left + m), y1 = Math.min(c.height, Math.max(...rs.map(r => r.bottom)) - c.top + m);
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  };
+  const shootSelection = async () => {
+    const canvas = canvasRef.current; if (!canvas) return; setShooting(true);
+    try { await savePng(canvas, 'figure-' + (view.agents.join('-') || 'map') + '-selection', 4, contentBox(canvas, true)); }
+    catch (e) { console.error(e); alert('Screenshot failed: ' + (e instanceof Error ? e.message : String(e))); } finally { setShooting(false); }
+  };
   const shootCanvas = async () => {
     // The canvas, plus the side panels when they are open (collapsed handles are left out).
     const body = bodyRef.current, canvas = canvasRef.current; if (!body || !canvas) return;
     setShooting(true);
     try {
-      if (figure) await savePng(canvas, 'figure-' + (view.agents.length ? view.agents.join('-') : 'map'), 4);
+      if (figure) await savePng(canvas, 'figure-' + (view.agents.length ? view.agents.join('-') : 'map'), 4, contentBox(canvas, false));
       else await savePng(dock || (left && leftOpen) ? body : canvas, 'housing-model-canvas');
     }
     catch (e) { console.error(e); alert('Screenshot failed: ' + (e instanceof Error ? e.message : String(e))); }
@@ -1191,7 +1213,7 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
     addBode: (from, to, at) => { const id = `bode-${probeKey(from)}-${probeKey(to)}`; setCharts(old => old.some(c => c.id === id) ? old : [...old, { id, kind: 'bode', from, to }]); setPinPos(old => ({ ...old, [id]: at })); setBodeFrom(null); }, pos: pinPos, setPos: (id, q) => setPinPos(old => ({ ...old, [id]: q })), place: (p, at) => { setPins(old => old.some(same(p)) ? old : [...old, p]); setPinPos(old => ({ ...old, [`pin-${p.flow}:${p.q}`]: at })); }, sense: toggleIn(setSensed) }), [pins, sensed, pinPos, tuning, stepInput, charts, bodeFrom, ctx, cbs, lag, cpb, !!tour, ghost, selection.kind, tour?.compare, pinned, tourReject, stepping, result, played, zn, showZn, shockShow, stale, stepSeen, stepKey]);
   const actions: ProbeActions = { addSens: () => setCharts(old => old.some(c => c.kind === 'sens') ? old.filter(c => c.kind !== 'sens') : [...old, { id: 'sens', kind: 'sens' }]), hasSens: charts.some(c => c.kind === 'sens'), pinned: p => pins.some(same(p)), sensed: p => sensed.some(same(p)), pin: toggleIn(setPins), sense: toggleIn(setSensed), list: sensed, count: pins.length, stepInput, setStepInput };
   const canvasRef = useRef<HTMLDivElement>(null);
-  const labelOf = (t: Selection) => !map ? t.id : t.kind === 'flow' ? map.flows.find(f => f.id === t.id)?.label ?? t.id : t.kind === 'signal' ? [...map.disturbances, ...map.outputs].find(o => o.id === t.id)?.label ?? t.id : t.id;
+  const labelOf = (t: Selection) => !map ? t.id : t.kind === 'flow' ? map.flows.find(f => f.id === t.id)?.label ?? t.id : t.kind === 'signal' ? [...map.disturbances, ...map.outputs].find(o => o.id === t.id)?.label ?? t.id : t.kind === 'element' ? namePlain(t.id) : t.id;
   const openMenu = useCallback((target: Selection, e: React.MouseEvent) => {
     e.preventDefault(); const r = canvasRef.current!.getBoundingClientRect();
     setMenuAt({ x: e.clientX - r.left, y: e.clientY - r.top, target, label: '' });
@@ -1249,6 +1271,10 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
       <button className={view.formulas ? 'secondary' : 'ghost'} aria-pressed={!!view.formulas} title="Show the CPB equations on the agents (click one to light up its flows and elements)" onClick={() => { setView(view.formulas ? { ...view, formulas: false } : { ...view, system: true, cpb: true, formulas: true }); }}><Sigma size={14}/> CPB formulas</button></>}
       <button className="ghost" data-no-shot title="Save the canvas (and the open side panels) as a high-resolution PNG (3x)" disabled={shooting} onClick={shootCanvas}>{shooting ? <LoaderCircle className="spin" size={14}/> : <Camera size={14}/>} {figure ? 'Save figure' : 'Screenshot canvas'}</button>
       <button className={figure ? 'secondary' : 'ghost'} data-no-shot aria-pressed={figure} title="Figure mode: white background, no buttons or hints, fixed formula size; the screenshot is saved at 4x for the thesis" onClick={flipFigure}><ImageIcon size={14}/> Figure mode</button>
+      <label className="keep-hl" data-no-shot title="Element labels on the circuits: their names, the symbols of the CPB equations, or both">Labels <select aria-label="Element labels" value={labelMode} onChange={e => setLabelMode(e.target.value as LabelMode)}><option value="names">names</option><option value="symbols">symbols</option><option value="both">both</option></select></label>
+      {(figure || view.formulas) && <button className="ghost" data-no-shot title="Download the element → symbol → meaning → equation table (CSV and LaTeX booktabs) for under the figure" onClick={exportMapping}>Export mapping</button>}
+      {figure && <><label className="keep-hl" data-no-shot title="Leave out everything drawn faded (outside the highlighted equation, or inactive in this run)"><input type="checkbox" checked={hideFaded} onChange={e => setHideFaded(e.target.checked)}/> hide faded</label>
+        <button className="ghost" data-no-shot disabled={shooting || !view.agents.length} title="Save only the opened agent(s), cropped, at 4x" onClick={shootSelection}>Save selection</button></>}
       {figure && <label className="keep-hl" data-no-shot title="Light up the flows and elements of one CPB equation in the figure (the equation itself goes into the report)">Highlight <select aria-label="Highlight formula" value={hl?.id ?? ''} onChange={e => setHl(Object.values(FORMULAS).flat().find(f => f.id === e.target.value) ?? null)}>
         <option value="">none</option>{Object.values(FORMULAS).flat().map(f => <option key={f.id} value={f.id}>{f.title} ({f.no})</option>)}</select></label>}
       <label className="label-size" title="Size of block headers, signal names and the Parliament, Tax Authority and CBS blocks">Label size <output>{lab.toFixed(1)}×</output><input type="range" aria-label="Label size" min={1} max={2.5} step={0.1} value={lab} onChange={e => setLab(Number(e.target.value))}/></label>
@@ -1260,7 +1286,7 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
     <div className="map-body" ref={bodyRef} style={{ gridTemplateColumns: `${left ? (leftOpen ? '290px ' : '34px ') : ''}minmax(0,1fr) ${!dock ? '34px' : selection.kind === 'ident' || selection.kind === 'robust' ? '520px' : selection.kind === 'agent' && selection.id === 'controller' ? '460px' : '340px'}` }}>
       {left && (leftOpen ? <aside className="inspector left-dock"><button className="dock-toggle" aria-label="Collapse scenario panel" title="Collapse" onClick={() => setLeftOpen(false)}><Minus size={14}/></button>{left}</aside>
         : <button className="dock-handle" data-no-shot aria-label="Open scenario panel" title="Open scenario panel" onClick={() => setLeftOpen(true)}><ChevronRight size={16}/><span>Scenario</span></button>)}
-      <div className={'map-canvas' + (playing ? ' playing' : '') + (figure ? ' figure-mode' : '')} ref={canvasRef} style={{ ['--lab' as string]: lab, ['--eq' as string]: lab / 1.3 }} onClick={() => setMenuAt(null)}><ReactFlowProvider><Canvas hl={hl} setHl={setHl} map={map} view={view} setView={setView} scenario={scenario} result={result} at={at} selection={selection} select={setSelection} focus={focus} menu={openMenu} flip={() => setFeedback(!scenario.feedback)} probes={probeState} step={stepGain} steps={stepping ? steps : null} lab={lab} figure={figure} chips={{ update, stepping, stepInput, setStepInput: pickStep, showCtrl: view.controller || tuning || !!forceChips?.ctrl, showMarket: view.system || (selection.kind === 'agent' && selection.id === 'system') || !!forceChips?.market }}/></ReactFlowProvider>
+      <div className={'map-canvas' + (playing ? ' playing' : '') + (figure ? ' figure-mode' : '') + (figure && hideFaded ? ' hide-faded' : '')} ref={canvasRef} style={{ ['--lab' as string]: lab, ['--eq' as string]: lab / 1.3 }} onClick={() => setMenuAt(null)}><ReactFlowProvider><LabelCtx.Provider value={labelState}><Canvas hl={hl} setHl={setHl} map={map} view={view} setView={setView} scenario={scenario} result={result} at={at} selection={selection} select={setSelection} focus={focus} menu={openMenu} flip={() => setFeedback(!scenario.feedback)} probes={probeState} step={stepGain} steps={stepping ? steps : null} lab={lab} figure={figure} chips={{ update, stepping, stepInput, setStepInput: pickStep, showCtrl: view.controller || tuning || !!forceChips?.ctrl, showMarket: view.system || (selection.kind === 'agent' && selection.id === 'system') || !!forceChips?.market }}/></LabelCtx.Provider></ReactFlowProvider>
         {menuAt && <div className="ctx-menu" role="menu" style={{ left: menuAt.x, top: menuAt.y }} onClick={e => e.stopPropagation()}>
           {menuAt.target.kind === 'agent' && (menuAt.target.id === 'parliament' || menuAt.target.id === 'sum') ? <>
             <p>{menuAt.target.id === 'parliament' ? 'Parliament' : 'Summing junction'}</p>

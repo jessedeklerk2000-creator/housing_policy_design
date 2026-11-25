@@ -1,0 +1,36 @@
+\begin{tabular}{llll}
+\toprule
+Element & Symbol & Meaning & Equation\\
+\midrule
+\multicolumn{4}{l}{\textit{Constructors}}\\
+$B_{\text{constr.}}$ & $I_t$ & new construction; the netlist uses exponent 0.6 and a 1-year delay & New construction (2.14)\\
+$V_{\text{constr.}}$ & $P_m^{\beta}$ & construction payment, the driver of I\_t in the circuit (stands in for the price term) & New construction (2.14)\\
+$L_{\text{constr.}}$ & -- & numerical & New construction (2.14)\\
+\midrule
+\multicolumn{4}{l}{\textit{Households}}\\
+$L_{\text{rent}}$ & $h_h$ & rental housing demand & Utility and budget (2.1)\\
+$L_{\text{owner}}$ & $h_k$ & owner-occupied housing demand & Utility and budget (2.1)\\
+$L_{\text{x}}$ & $x$ & other consumption & Utility and budget (2.1)\\
+$B_{\text{own}}$ & -- & owning versus renting coupling (carries θ, σ in the CPB model); no single symbol & Utility and budget (2.1)\\
+$L_{\text{income}}$ & $b$ & budget: income into the households & Utility and budget (2.1)\\
+$L_{\text{rent pay}}$ & $w_h h_h$ & rent paid & Utility and budget (2.1)\\
+$L_{\text{imp. pay}}$ & $w_k h_k$ & imputed rent paid & Utility and budget (2.1)\\
+$L_{\text{cons.}}$ & $p_x x$ & other consumption spending & Utility and budget (2.1)\\
+$R_{\text{cons.}}$ & -- & numerical & Utility and budget (2.1)\\
+$R_{\text{rent}}$ & -- & friction (resistor basis) & Utility and budget (2.1)\\
+$R_{\text{imp.}}$ & -- & friction (resistor basis) & Utility and budget (2.1)\\
+$I_{\text{subs. own}}$ & $s_k$ & owner-occupied subsidy rate (open loop, historical path) & Subsidy formula (2.6)\\
+$I_{\text{subs. rent}}$ & $s_h$ & rental subsidy rate & Subsidy formula (2.6)\\
+$B_{\text{PID}}$ & $s_k$ & owner-occupied subsidy set by the controller (closed loop) & Subsidy formula (2.6)\\
+\midrule
+\multicolumn{4}{l}{\textit{Investors}}\\
+$B_{\text{stock}}$ & $H_t$ & housing stock: accumulates I\_t & New construction (2.14)\\
+$L_{\text{houses}}$ & -- & numerical & New construction (2.14)\\
+$L_{\text{gross rent}}$ & $w^{*}_h$ & gross rent received & Market price of a house (2.17)\\
+$L_{\text{gross imp.}}$ & $w^{*}_k$ & gross imputed rent received & Market price of a house (2.17)\\
+$V_{\text{maint.}}$ & $\kappa$ & maintenance cost & Market price of a house (2.17)\\
+$L_{\text{maint.}}$ & -- & numerical & Market price of a house (2.17)\\
+$R_{\text{maint.}}$ & -- & numerical & Market price of a house (2.17)\\
+$R_{\text{constr.}}$ & -- & numerical & Market price of a house (2.17)\\
+\bottomrule
+\end{tabular}

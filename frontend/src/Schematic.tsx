@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
+import { LabelCtx, NAMES, namePlain, tex } from './elementNames';
 import type { Element, Flow, MapData, Scenario, Selection } from './types';
 
 export const STATE_NOTE: Record<string, string> = {
@@ -39,8 +40,17 @@ function ElementView({ e, state, selected, pick, menu }: { e: Element; state: st
   return <g className={`element ${state}${selected ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`${e.name}, ${e.role}${state === 'active' ? '' : `. ${STATE_NOTE[state] ?? ''}`}`} onClick={ev => { ev.stopPropagation(); pick(); }} onContextMenu={ev => { if (menu) { ev.preventDefault(); ev.stopPropagation(); menu(ev); } }} onKeyDown={k => { if (k.key === 'Enter' || k.key === ' ') { k.preventDefault(); k.stopPropagation(); pick(); } }}>
     <rect className="hit" x={Math.min(ax, bx) - (vertical ? 26 : 2)} y={Math.min(ay, by) - (vertical ? 2 : 26)} width={Math.abs(bx - ax) + (vertical ? 52 : 4)} height={Math.abs(by - ay) + (vertical ? 4 : 52)} rx={5}/>
     <g className="glyph" transform={`translate(${ax} ${ay}) rotate(${angle})`}><Glyph type={e.type} length={length}/></g>
-    <text x={(vertical ? mx + 26 : mx) + shift[0]} y={(vertical ? my + 7 : my - 28) + shift[1]} textAnchor={vertical ? 'start' : 'middle'}>{short(e)}</text>
+    <ElementLabel e={e} x={(vertical ? mx + 26 : mx) + shift[0]} y={(vertical ? my + 7 : my - 28) + shift[1]} anchor={vertical ? 'start' : 'middle'}/>
   </g>;
+}
+/** Element label: its display name (letter + subscript, elementNames), its formula symbol (KaTeX), or both (Labels switch). */
+function ElementLabel({ e, x, y, anchor }: { e: Element; x: number; y: number; anchor: 'start' | 'middle' }) {
+  const { mode, symbols } = useContext(LabelCtx), n = NAMES[e.name], sym = symbols[e.name];
+  const name = <text x={x} y={y} textAnchor={anchor}>{n ? <>{n.letter}<tspan className="el-sub" baselineShift="sub">{n.sub}</tspan></> : short(e)}<title>{`${n ? namePlain(e.name) + ' · ' : ''}${e.name}`}</title></text>;
+  if (mode === 'names' || !sym) return name;
+  const W = 240, fx = anchor === 'start' ? x : x - W / 2, fy = mode === 'both' ? y + 6 : y - 26;
+  const symbol = <foreignObject x={fx} y={fy} width={W} height={40} className="el-sym-fo"><div className={'el-sym ' + anchor} dangerouslySetInnerHTML={{ __html: tex(sym) }}/></foreignObject>;
+  return mode === 'symbols' ? symbol : <>{name}{symbol}</>;
 }
 
 /** Terminal pair on the agent border: flow rail with ammeter, return rail, voltmeter between them. */
@@ -101,6 +111,7 @@ function traceFlow(segs: Seg[], start: number[], pins: { name: string; pins: num
 const SHOCK_RED = '#c5352a', SUBSIDY_BLUE = '#1f6fc4';
 export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inputs = [], inputSide = 'left', outside = false, highlight = [], litFlows = [], trace = [] }: { outside?: boolean; highlight?: string[]; litFlows?: string[]; trace?: string[]; map: MapData; agent: string; scenario: Scenario; selection: Selection; pick: (s: Selection) => void; menu?: (s: Selection, ev: React.MouseEvent) => void; inputs?: { id: string; label: string; element?: string }[]; inputSide?: 'left' | 'top' }) {
   const layout = map.layouts[agent], [w, h] = layout.size;
+  const nodesHere = useContext(LabelCtx).nodes.filter(nd => NAMES[nd.element]?.agent === agent);
   const hidden = (e: Element) => (e.name === 'I§Owner_occupied_subsidies' && scenario.feedback) || (e.name === 'B§PID' && !scenario.feedback);
   const elements = map.elements.filter(e => e.agent === agent && !hidden(e));
   const flow = (id: string) => map.flows.find(f => f.id === id)!;
@@ -165,6 +176,10 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
       const pts = inputPath(inputSide, i, inputs.length, [w, h], e.pins);
       return <g key={d.id} className={`d-input${selection.kind === 'signal' && selection.id === d.id ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`Disturbance ${d.label} enters at ${e.name}`} onClick={ev => { ev.stopPropagation(); pick({ kind: 'signal', id: d.id }); }}>
         <title>{`${d.label} enters here`}</title><path d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-shock)`}/></g>; })}
+    {/* formula nodes (Budget b): a marked node where the branch currents meet */}
+    {nodesHere.map(nd => { const el = elements.find(x => x.name === nd.element); if (!el?.pins) return null;
+      const p = el.pins.reduce((a, b) => (nd.side === 'right' ? b[0] > a[0] : b[0] < a[0]) ? b : a);
+      return <g key={nd.label} className="formula-node"><title>{nd.meaning}</title><circle cx={p[0]} cy={p[1]} r={9}/><text x={p[0] + 4} y={p[1] - 16}>{nd.label}</text></g>; })}
     {elements.map(e => <ElementView key={e.name} e={e} state={stateOf(e, scenario)} selected={(selection.kind === 'element' && selection.id === e.name) || highlight.includes(e.name) || chainLit.has(e.name)} pick={() => pick({ kind: 'element', id: e.name })} menu={menu && (ev => menu({ kind: 'element', id: e.name }, ev))}/>)}
   </svg>;
 }

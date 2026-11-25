@@ -2,7 +2,7 @@
 // Elements with a data-no-shot attribute, and the canvas zoom buttons, are made invisible during the capture.
 // They are hidden, not removed: some are columns of a CSS grid (the collapsed dock tabs), and removing them
 // would shift the other columns (the right dock then lands on top of the canvas).
-export async function savePng(el: HTMLElement, name: string, maxRatio = 3): Promise<void> {
+export async function savePng(el: HTMLElement, name: string, maxRatio = 3, crop?: { x: number; y: number; w: number; h: number }): Promise<void> {
   const { toPng } = await import('html-to-image');
   const w = el.scrollWidth, h = el.scrollHeight;
   const ratio = Math.min(maxRatio, 32000 / w, 32000 / h, Math.sqrt(2.5e8 / (w * h)));
@@ -18,7 +18,13 @@ export async function savePng(el: HTMLElement, name: string, maxRatio = 3): Prom
   const before = hidden.map(n => n.style.visibility);
   hidden.forEach(n => { n.style.visibility = 'hidden'; });
   try {
-    const url = await toPng(el, { pixelRatio: ratio, width: w, height: h, backgroundColor: bg });
+    let url = await toPng(el, { pixelRatio: ratio, width: w, height: h, backgroundColor: bg });
+    if (crop) {  // figure mode: cut the image to the drawn content (CSS px of el)
+      const img = new Image(); img.src = url; await img.decode();
+      const cv = document.createElement('canvas'); cv.width = Math.round(crop.w * ratio); cv.height = Math.round(crop.h * ratio);
+      cv.getContext('2d')!.drawImage(img, crop.x * ratio, crop.y * ratio, crop.w * ratio, crop.h * ratio, 0, 0, cv.width, cv.height);
+      url = cv.toDataURL('image/png');
+    }
     const a = document.createElement('a');
     a.href = url; a.download = `${name}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`; a.click();
   } finally {
