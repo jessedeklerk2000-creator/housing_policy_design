@@ -688,3 +688,4 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .figure-mode .rail-name, .figure-mode .rail.selected .rail-name { font-size:var(--fig-label) !important; }
 .figure-mode .circuit .lit-wires path.ret { stroke-width:3.5; opacity:.95; }  /* return (ground) lines clearer in figures */
 .figure-mode .circuit .u-signal .u-sig-name { font-size:calc(var(--fig-label) * 2); paint-order:stroke; stroke:#fff; stroke-width:6px; }
+.circuit .u-signal.fig-u path { stroke:#38b2d3; stroke-dasharray:none; stroke-width:6; } .circuit .u-signal.fig-u .u-sig-name { fill:#38b2d3; }

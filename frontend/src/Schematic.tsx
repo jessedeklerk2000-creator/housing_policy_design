@@ -109,7 +109,7 @@ function traceFlow(segs: Seg[], start: number[], pins: { name: string; pins: num
   }
   return lit;
 }
-const SHOCK_RED = '#c5352a', SUBSIDY_BLUE = '#1f6fc4';
+const SHOCK_RED = '#c5352a', SUBSIDY_BLUE = '#1f6fc4', POLICY_CYAN = '#38b2d3';  // POLICY_CYAN = COLOR.policy in ModelMap
 export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inputs = [], inputSide = 'left', outside = false, highlight = [], litFlows = [], trace = [] }: { outside?: boolean; highlight?: string[]; litFlows?: string[]; trace?: string[]; map: MapData; agent: string; scenario: Scenario; selection: Selection; pick: (s: Selection) => void; menu?: (s: Selection, ev: React.MouseEvent) => void; inputs?: { id: string; label: string; element?: string }[]; inputSide?: 'left' | 'top' }) {
   const layout = map.layouts[agent], [w, h] = layout.size;
   const svgRef = useRef<SVGSVGElement>(null), labelCtx = useContext(LabelCtx);
@@ -200,16 +200,20 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
   }
   return <svg ref={svgRef} className="circuit embedded" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${map.agents[agent].label} circuit`}>
     {BREADBOARD}<rect x={0} y={0} width={w} height={h} fill="url(#breadboard)"/>
-    <defs>{([['shock', SHOCK_RED], ['subsidy', SUBSIDY_BLUE]] as const).map(([k, c]) => <marker key={k} id={`in-${agent}-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="22" markerHeight="22" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" fill={c}/></marker>)}</defs>
+    <defs>{([['shock', SHOCK_RED], ['subsidy', SUBSIDY_BLUE], ['policy', POLICY_CYAN]] as const).map(([k, c]) => <marker key={k} id={`in-${agent}-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="22" markerHeight="22" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" fill={c}/></marker>)}</defs>
     <g className="return-wires">{[...layout.return_wires, ...layout.common_returns].map((r, i) => <path key={i} d={line(r)}/>)}{layout.dots.map(([x, y], i) => <circle key={`d${i}`} className="return-dot" cx={x} cy={y} r={5}/>)}</g>
     <g className="wires">{layout.wires.map((r, i) => <path key={i} d={line(r)}/>)}</g>
     {(litW.size > 0 || litR.size > 0 || geoR.size > 0 || geoC.size > 0) && <g className="lit-wires">{[...geoC].map(([i, g]) => <path key={'c' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...geoR].map(([i, g]) => <path key={'n' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...litR].map(([i, c]) => <path key={'r' + i} className="ret" stroke={c} d={line(geoLR.get(i) ?? layout.return_wires[i])}/>)}{[...litW].map(([i, c]) => <path key={'w' + i} stroke={c} d={line(geo.get(i) ?? layout.wires[i])}/>)}</g>}
     <g className="grounds">{layout.grounds.map(([x, y], i) => <path key={i} d={`M${x - 14} ${y}H${x + 14}L${x} ${y + 16}Z`}/>)}</g>
     {/* outside: the canvas draws the subsidy and shock arrows straight through to the element (one unbroken arrow) */}
-    {/* figure mode (Jesse): the subsidy signals enter from the left edge, each on its own lane, then down into the source */}
-    {outside && labelCtx.figure && layout.signals.filter(sig => litFlows.includes(sig.flow)).map((sig, i, all) => { const yIn = 70 + 26 * (all.length - 1 - i);
-      const pts = [[0, yIn], [sig.path[0][0], yIn], ...sig.path.slice(1)];
-      return <g key={'fig' + sig.flow} className="u-signal lit"><path d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/>
+    {/* figure mode (Jesse): the subsidy signals as in the normal view (solid, policy colour), straight in from the left on
+        their own lane, then straight down into the top of their source */}
+    {outside && labelCtx.figure && layout.signals.filter(sig => litFlows.includes(sig.flow)).map((sig, i, all) => {
+      const src = elements.find(e => e.pins && (sig.flow === 'rental_subsidy' ? e.name === 'I§Rental_subsidies1' : e.name === (scenario.feedback ? 'B§PID' : 'I§Owner_occupied_subsidies')));
+      if (!src?.pins) return null;
+      const cx = (src.pins[0][0] + src.pins[1][0]) / 2, cy = (src.pins[0][1] + src.pins[1][1]) / 2, yIn = 70 + 26 * (all.length - 1 - i);  // the farther source on the higher lane: no crossing
+      const pts = [[0, yIn], [cx, yIn], [cx, cy - 24]];
+      return <g key={'fig' + sig.flow} className="u-signal lit fig-u"><path d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-policy)`}/>
         <text className="u-sig-name" x={14} y={yIn - 7}>{sig.flow === 'rental_subsidy' ? 'u₁' : 'u₂'}</text></g>; })}
     {!outside && layout.signals.filter(sig => sig.flow !== 'rental_subsidy' || scenario.rental_subsidy).map(sig => <g key={sig.flow} className={`u-signal${selection.kind === 'flow' && selection.id === sig.flow ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`Control signal ${flow(sig.flow).label}`} onClick={ev => { ev.stopPropagation(); pick({ kind: 'flow', id: sig.flow }); }} onContextMenu={ev => { if (menu) { ev.preventDefault(); ev.stopPropagation(); menu({ kind: 'flow', id: sig.flow }, ev); } }}>
       <path d={sig.path.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/></g>)}
