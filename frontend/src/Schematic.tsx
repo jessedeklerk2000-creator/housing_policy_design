@@ -1,5 +1,5 @@
 import { useContext, useLayoutEffect, useRef, useState } from 'react';
-import { LabelCtx, NAMES, namePlain, tex } from './elementNames';
+import { LabelCtx, NAMES, namePlain, nameTex, tex } from './elementNames';
 import type { Element, Flow, MapData, Scenario, Selection } from './types';
 
 export const STATE_NOTE: Record<string, string> = {
@@ -48,9 +48,10 @@ function ElementLabel({ e, x, y, anchor }: { e: Element; x: number; y: number; a
   const { mode, symbols } = useContext(LabelCtx), n = NAMES[e.name], sym = symbols[e.name];
   const name = <text x={x} y={y} textAnchor={anchor}>{n ? <>{n.letter}<tspan className="el-sub" baselineShift="sub">{n.sub}</tspan></> : short(e)}<title>{`${n ? namePlain(e.name) + ' · ' : ''}${e.name}`}</title></text>;
   if (mode === 'names' || !sym) return <g className="el-label">{name}</g>;
-  const W = 240, fx = anchor === 'start' ? x : x - W / 2, fy = mode === 'both' ? y + 6 : y - 26;
-  const symbol = <foreignObject x={fx} y={fy} width={W} height={40} className="el-sym-fo"><div className={'el-sym ' + anchor} dangerouslySetInnerHTML={{ __html: tex(sym) }}/></foreignObject>;
-  return <g className="el-label">{mode === 'symbols' ? symbol : <>{name}{symbol}</>}</g>;
+  // both: one line, name and symbol (L_rent : h_h), so the label stays as low as a name
+  const nt = nameTex(e.name), W = mode === 'both' ? 360 : 240, fx = anchor === 'start' ? x : x - W / 2;
+  const body = mode === 'both' && nt ? `${nt}\\colon ${sym}` : sym;
+  return <g className="el-label"><foreignObject x={fx} y={y - 26} width={W} height={40} className="el-sym-fo"><div className={'el-sym ' + anchor} dangerouslySetInnerHTML={{ __html: tex(body) }}/></foreignObject></g>;
 }
 
 /** Terminal pair on the agent border: flow rail with ammeter, return rail, voltmeter between them. */
@@ -121,13 +122,11 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     if (!labelCtx.figure) return;
     const boxes = labels.map(l => ({ l, b: l.getBBox() })).filter(x => x.b.width > 0).sort((a, b) => a.b.y - b.b.y || a.b.x - b.b.x);
     const placed: DOMRect[] = [];
+    const clash = (b: DOMRect, dy: number) => placed.some(p => b.x < p.x + p.width + 4 && b.x + b.width + 4 > p.x && b.y + dy < p.y + p.height + 4 && b.y + dy + b.height + 4 > p.y);
     for (const { l, b } of boxes) {
-      let dy = 0;
-      for (let k = 0; k < 12; k++) {
-        const hitBox = placed.find(p => b.x < p.x + p.width + 4 && b.x + b.width + 4 > p.x && b.y + dy < p.y + p.height + 4 && b.y + dy + b.height + 4 > p.y);
-        if (!hitBox) break;
-        dy = hitBox.y + hitBox.height + 4 - b.y;
-      }
+      // the smallest shift, up or down (at most 60 units), that clears the labels already placed; otherwise stay
+      const cand = [0, ...placed.flatMap(p => [p.y + p.height + 4 - b.y, p.y - 4 - b.height - b.y])].filter(d => Math.abs(d) <= 60).sort((a, c) => Math.abs(a) - Math.abs(c));
+      const dy = cand.find(d => !clash(b, d)) ?? 0;
       if (dy) l.setAttribute('transform', `translate(0 ${dy})`);
       placed.push(new DOMRect(b.x, b.y + dy, b.width, b.height));
     }
@@ -183,7 +182,8 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     const ends = [...layout.return_wires, ...layout.common_returns].flatMap(r => [[r[0], r[1]], [r[2], r[3]]]);
     prune(litW, layout.wires as Seg[], [...litEls.flatMap(e => e.pins), ...flowsHere.map(f => layout.ports[f.id]), ...layout.grounds, ...ends], geo);
     // a lit return must end on something lit (a lit element, another lit return, a ground): no dangling return lines
-    prune(litR, layout.return_wires as Seg[], [...litEls.flatMap(e => e.pins), ...flowsHere.flatMap(f => layout.returns[f.id] ? [layout.returns[f.id]] : []), ...layout.grounds], geoLR);
+    const wireEnds = [...litW.keys()].flatMap(i => { const g = geo.get(i) ?? layout.wires[i]; return [[g[0], g[1]], [g[2], g[3]]]; });  // a return may end on a lit wire (L goods)
+    prune(litR, layout.return_wires as Seg[], [...litEls.flatMap(e => e.pins), ...flowsHere.flatMap(f => layout.returns[f.id] ? [layout.returns[f.id]] : []), ...layout.grounds, ...wireEnds], geoLR);
   }
   if (traceSet.size) {
     // the return side of the traced node (Jesse): the return wires that join the money flows' returns

@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+import { openPanels } from './_lib.mjs';
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: 1600, height: 1000 }, deviceScaleFactor: 2 });
+await page.goto('http://127.0.0.1:8001/'); await openPanels(page); await page.waitForTimeout(2500);
+const b = page.getByRole('button', { name: 'CPB formulas' }); if (await b.getAttribute('aria-pressed') !== 'true') await b.click(); await page.waitForTimeout(1500);
+await page.getByRole('button', { name: 'Expand Households' }).first().dispatchEvent('click'); await page.waitForTimeout(1500);
+await page.getByRole('button', { name: 'Figure mode' }).click(); await page.waitForTimeout(600);
+await page.getByLabel('Highlight formula').selectOption('utility'); await page.getByLabel('Element labels').selectOption('both'); await page.waitForTimeout(1000);
+await page.locator('.react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(1200);
+await page.locator('.react-flow__node[data-id="households"]').screenshot({ path: 'e2e/shots/both_labels.png' });
+process.exit(0);
