@@ -425,6 +425,7 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
     if (!map) return next;
     const g = geometry(next, map, sizes), byId: Record<string, R | undefined> = { ...g.R, ...g.inner?.sub, bs: g.inner?.bs, acc: g.inner?.acc, desk: g.inner?.desk };
     const target = next[k] ? byId[k] : subs.includes(k) ? byId.acc : (k === 'bs' || k === 'acc' || k === 'desk') ? g.R.bank : undefined;
+    if (k === 'acc' || subs.includes(k)) return next;  // Accounting and its statements open in place, no zoom (Jesse)
     window.setTimeout(() => { if (target) rf.fitBounds({ x: target.x - 40, y: target.y - 40, width: target.w + 80, height: target.h + 80 }, { duration: 450 }); else rf.fitView({ duration: 450, padding: 0.04 }); }, 40);
     return next;
   }), [rf, map, sizes]);
