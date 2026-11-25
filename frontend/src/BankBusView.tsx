@@ -42,6 +42,9 @@ const BUSES: Bus[] = [
 const STRAIGHT = { on: false };  // set per render: Ports view (terminal() aligns the closed bank's left ports)
 const CPB4 = ['constructors', 'investors', 'households', 'firms'];
 const HM_PORTS: Record<'R' | 'B', string[]> = { R: ['mortgages', 'mortgage_interest', 'savings', 'savings_interest'], B: ['loans', 'loan_interest'] };
+// the ALM Desk breadboard (BankBoards.DeskBoard): its viewBox and terminals, so e₁, e₂ end on the PI inputs and u₁, u₂
+// leave from the rate outputs when the desk is open
+const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1: [20, 680] as P, u1: [1080, 470] as P, u2: [1080, 600] as P };
 type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
@@ -77,7 +80,7 @@ function geometry(o: Open, map: MapData) {
       acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(eq.y + eq.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
     }
     const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + 90, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
-    const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: 880, h: 580 } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
+    const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
     inner = { bs, acc, alco, sum, desk, circ: o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null, sub };
     R.bank = { x: bx, y: by, w: Math.max(acc.x + acc.w, desk.x + desk.w, alco.x + alco.w) + 70 - bx, h: Math.max(bs.y + bs.h, acc.y + acc.h, desk.y + desk.h) + 120 - by };
   } else R.bank = { x: bx, y: by, w: 260, h: Math.max(420, (o.hm ? R.households.y + R.households.h : R.hm.y + R.hm.h) + 30 - by) };  // tall enough for straight lines
@@ -95,7 +98,8 @@ function terminal(map: MapData, g: Geo, o: Open, agent: string, flow: string): {
     if (c) { const k = g.cs, P0 = l.ports[flow], Q0 = l.returns[flow];
       return side === 'L' ? { p: [r.x, c.y + P0[1] * k], q: [r.x, c.y + Q0[1] * k], side } : { p: [c.x + P0[0] * k, r.y + r.h], q: [c.x + Q0[0] * k, r.y + r.h], side }; }
     // Ports view, closed bank: a left port sits at the height of its counterpart's terminal, so the line runs straight
-    if (side === 'L' && !c && STRAIGHT.on) { const bus = BUSES.find(b => b.flows.includes(flow))!, t = terminal(map, g, o, bus.a, flow);
+    // (only while the bank is closed: open, its ports land on the Bank circuit)
+    if (side === 'L' && !g.inner && STRAIGHT.on) { const bus = BUSES.find(b => b.flows.includes(flow))!, t = terminal(map, g, o, bus.a, flow);
       if (t.p[1] > r.y + HEAD && t.q[1] < r.y + r.h - 10) return { p: [r.x, t.p[1]], q: [r.x, t.q[1]], side }; }
     const acc = g.inner?.bs, same = Object.keys(l.ports).filter(f => sideOf(l.ports[f]) === side).sort((a, b) => l.ports[a][side === 'L' ? 1 : 0] - l.ports[b][side === 'L' ? 1 : 0]), i = same.indexOf(flow);
     if (side === 'L') { const y0 = acc ? acc.y + 60 : r.y + 80, dy = acc ? (acc.h - 100) / same.length : (r.h - 120) / same.length, y = y0 + i * dy; return { p: [r.x, y], q: [r.x, y + LANE], side }; }
@@ -285,7 +289,13 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
         over.push(arrow([[x1, inc.y], [x1, ly], [kx, ly], [kx, ky], [key.x, ky]], G, 's-np', 'net profit', 0.3)); }
     }
     wires.push(arrow([[sum[0], alco.y + alco.h], [sum[0], sum[1] - 17]], '#2b6599', 'r', 'r₁, r₂'));
-    wires.push(arrow([[sum[0], sum[1] + 17], [sum[0], dk.y]], '#1f2a26', 'e', 'e₁, e₂'));
+    // the desk's terminals in canvas units (open desk), from its breadboard coordinates
+    const dt = (q: P): P => { const k = (dk.w - 16) / DESK_VB[0]; return [dk.x + 8 + q[0] * k, dk.y + HEAD + 6 + q[1] * k]; };
+    if (o.desk) {
+      const [e2, e1] = [dt(DESK_T.e2), dt(DESK_T.e1)], ly = dk.y - 28;
+      over.push(arrow([[sum[0], sum[1] + 17], [sum[0], ly], [dk.x - 30, ly], [dk.x - 30, e2[1]], e2], '#1f2a26', 'e2', 'e₂ NSFR', 0.6));
+      over.push(arrow([[dk.x - 30, e2[1]], [dk.x - 30, e1[1]], e1], '#1f2a26', 'e1', 'e₁ Tier 1', 0.5));
+    } else wires.push(arrow([[sum[0], sum[1] + 17], [sum[0], dk.y]], '#1f2a26', 'e', 'e₁, e₂'));
     // u: the desk's rates into the bank's rate sources (B§Mortgage_rate_ALM and B2 on the breadboard)
     const el = (name: string): P | null => { const e = map.elements.find(x => x.agent === 'bank' && x.name === name); if (!circ || !e?.pins) return null;
       const cx = e.pins.reduce((s, p) => s + p[0], 0) / e.pins.length, cy = e.pins.reduce((s, p) => s + p[1], 0) / e.pins.length; return [circ.x + cx * g.cs, circ.y + cy * g.cs]; };
@@ -293,7 +303,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     ['u₁ loan rate', 'u₂ savings rate'].forEach((name, i) => {  // labels on the top lane, clear of each other
       // over the top of Accounting, then down into the breadboard's rate source (or the closed box's right edge)
       const uy = dk.y + 45 + 30 * i, mx = acc.x + acc.w + 40 + 25 * i, t = uT[i], top = Math.min(bs.y, acc.y) - 20 - 18 * i, dx = bs.x + bs.w + 40 + 20 * i;
-      const pts = circ ? [[dk.x, uy], [mx, uy], [mx, top], [t[0], top], [t[0], t[1] - 22]] : [[dk.x, uy], [mx, uy], [mx, top], [dx, top], [dx, t[1]], [t[0], t[1]]];
+      // open desk: from its rate output on the right, round the desk and over the top lane
+      const head: number[][] = o.desk ? (() => { const u = dt(i ? DESK_T.u2 : DESK_T.u1), rx = dk.x + dk.w + 30 + 22 * i; return [u, [rx, u[1]], [rx, top]]; })() : [[dk.x, uy], [mx, uy], [mx, top]];
+      const pts = circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
       over.push(arrow(pts, PU, 'u' + i, name, 0.5));
     });
     inside = <>

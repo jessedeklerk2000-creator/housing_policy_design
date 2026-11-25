@@ -737,7 +737,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       return { p: [left + x * s, top + y * s], side: x === 0 ? 'L' : x === w ? 'R' : y === 0 ? 'T' : 'B', ret: [left + rx * s, top + ry * s] };
     };
     let group: Rect = { x: GX, y: GY, w: 250, h: 150 }, cpbRegion: Rect | null = null, finRegion: Rect | null = null;
-    const g12 = 340, rowGap = figure ? 200 : 340, g23 = 340, framePad = 34;  // figure mode: the two rows closer together (report)
+    const g12 = 340, rowGap = figure ? 260 : 340, g23 = 340, framePad = 34;  // figure mode: the two rows closer together (report)
     // Which disturbances are drawn: a shock whose scale is 0 is not (the bank's inputs are all zero with the bank off).
     const SCALE_OF: Record<string, keyof Scenario> = { d_income: 'income_scale', d_covid: 'covid_scale', d_crisis: 'crisis_scale', d_mortgages: 'mortgage_scale', d_interest: 'interest_scale' };
     const active = (d: { id: string; target?: string }) => (d.target !== 'bank' || bankOn) && !(SCALE_OF[d.id] && scenario[SCALE_OF[d.id]] === 0);
@@ -783,7 +783,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       const shown = map.flows.filter(f => f.port && (CHANNEL[f.id] === 'c23' || CHANNEL[f.id] === 'bottom' || view.cpb));
       const inv = R.investors, hh = R.households, cpb = R.cpb, fin = R.finance;
       const channels: Record<string, [number, number]> = { c23: [cpb.x + cpb.w + 50, fin.x - 50], bottom: [maxY + 50, maxY + 105] };
-      if (view.cpb) { channels.c12 = [inv.x - g12 + 55, inv.x - 55]; channels.row = [inv.y + inv.h + 55, hh.y - 160]; }
+      if (view.cpb) { channels.c12 = [inv.x - g12 + 55, inv.x - 55]; channels.row = figure ? [inv.y + inv.h + 45, hh.y - 70] : [inv.y + inv.h + 55, hh.y - 160]; }  // figure mode: rows closer, lanes keep their room
       const info: Record<string, { a: ReturnType<typeof portOf>; b: ReturnType<typeof portOf> }> = {};
       const wires: Wire[] = shown.map(f => { const [s1, t1] = ends(f), a = portOf(s1, f.id), b = portOf(t1, f.id); info[f.id] = { a, b }; return { id: f.id, P: a.p, sp: a.side, Q: b.p, channel: CHANNEL[f.id] }; });
       const paths = assignLanes(wires, channels), nth: Record<string, number> = {};

@@ -29,8 +29,10 @@ export const FORMULAS: Record<string, Formula[]> = {
       tex: '\\begin{aligned}' + '\\max\\; u &= \\bigl[(\\theta(h_k-\\bar h_k)^{\\rho} + (1-\\theta)(h_h-\\bar h_h)^{\\rho})^{1/\\rho}\\bigr]^{\\delta}\\, x^{1-\\delta}' + ' \\\\ \\text{s.t.}\\; b &= w_k h_k + w_h h_h + p_x x\\end{aligned}',
       note: 'θ preference for owning, σ = 1/(1 − ρ) = 2, δ = 0.117; b: every money flow into and out of the households',
       explain: 'Households split their budget b over owning (h_k), renting (h_h) and other consumption (x). θ: the preference for owning; h̄: the minimum housing they need; σ = 2: how easily they switch between owning and renting; δ: the weight of housing in utility. Every euro of b goes to rent, imputed rent or other consumption. In the circuit: controlled sources turn the marginal utilities into incentives, and money in equals money out over the household ports.',
-      flows: ['rental_services', 'owner_services', 'goods', 'rent', 'imputed_rent', 'consumption', 'income', 'savings', 'savings_interest'],
-      elements: ['L§Demand_rent', 'L§Demand_owner_occupied', 'B4', 'L§Demand_consumption', 'L§Income', 'L§Consumption', 'L§Rent', 'L§Imputed_rent'] },
+      flows: ['rental_services', 'owner_services', 'goods', 'rent', 'imputed_rent', 'consumption', 'income'],
+      elements: ['L§Demand_rent', 'L§Demand_owner_occupied', 'B4', 'L§Demand_consumption', 'L§Income', 'L§Consumption', 'L§Rent', 'L§Imputed_rent'],
+      // the budget node (Jesse): Income, Consumption, Rent and Imputed rent and the wires between them; not the savings pair R18/R2
+      trace: ['L§Income', 'L§Consumption', 'R12', 'L§Rent', 'R5', 'L§Imputed_rent', 'R4'] },
     { id: 'subsidy', title: 'Subsidy formula', no: '2.6', tex: 'w_{k,h} = w^{*}_{k,h}\\,(1 - s_{k,h})',
       note: 'sₖ owner-occupied, sₕ rental subsidy rate: the Tax Authority’s inputs',
       explain: 'Households pay the gross price w* minus a subsidy share s (subsidievoet): sₖ for owning, sₕ for renting. The two rates are the inputs of the system; the Tax Authority sets sₖ, and with feedback the rule sets it from the price gap.',
