@@ -23,6 +23,7 @@ const LANE = 12, HEAD = 34, S = 0.5, TILE: P = [240, 140];
 const NONE: Selection = { kind: 'none', id: '' };
 // the statement boxes inside Accounting: ledger group and opened size
 const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['eq', 'Equity statement', 'equity'], ['bal', 'Balance sheet', 'balance'], ['key', 'Key figures', 'ratios']];
+const PLOT_W = 360;  // a statement box grows by this while one of its values is plotted (plot right of the line)
 const STMT_OPEN: Record<string, P> = { inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [500, HEAD + 300], key: [380, HEAD + 270] };
 // One bus per conserved quantity (Jesse, 25 Nov 2026): a bus is a node, so it carries one good only and its flows sum
 // to zero. A market with a good and a payment gets two buses side by side (k of n): brown = real goods, green = money.
@@ -73,7 +74,7 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     let acc: R = { x: bs.x + bs.w + 150, y: by + 90, w: 230, h: 110 }, sub: Record<string, R> | null = null;
     if (o.acc) {
       // sizes: dragged by the corner grip (Jesse)
-      const sz = (k: string): P => o[k] ? sizes[k] ?? STMT_OPEN[k] : [210, 72], x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
+      const sz = (k: string): P => o[k] ? [(sizes[k] ?? STMT_OPEN[k])[0] + (sizes['plot:' + k] ? PLOT_W : 0), (sizes[k] ?? STMT_OPEN[k])[1]] : [210, 72], x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
       const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] }, eq: R = { x: x0, y: inc.y + inc.h + 70, w: sz('eq')[0], h: sz('eq')[1] };
       const bal: R = { x: x0 + Math.max(inc.w, eq.w) + 120, y: y0, w: sz('bal')[0], h: sz('bal')[1] };
       const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
@@ -136,6 +137,7 @@ function Block({ r, label, tone, open, toggle, children, z }: { r: R; label: str
 type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const { result, at, o, set, map, scenario, desk, buses, sizes, resize } = data;
+  const plotCount = useMemo(() => Object.fromEntries(STMT.map(([k]) => [k, (n: number) => { if (!!sizes['plot:' + k] !== n > 0) resize('plot:' + k, n > 0 ? [1, 1] : null); }])), [sizes, resize]);
   const rf = useReactFlow();
   STRAIGHT.on = !buses;
   const g = geometry(o, map, sizes), { R } = g, B = R.bank;
@@ -320,8 +322,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       </Block>
       <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
       {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={3}>
-        {o[k] && <div className="bus-stmt-body nowheel" style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
-          <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></div>}
+        {o[k] && <div className="bus-stmt-body nowheel" style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6, ['--row-w' as string]: `${(sizes[k] ?? STMT_OPEN[k])[0] - 40}px` }}>
+          <AtContext.Provider value={{ result, at }}><BankStatements only={gid} onPlots={plotCount[k]}/></AtContext.Provider></div>}
         {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
           onDoubleClick={e => { e.stopPropagation(); resize(k, null); }}
           onPointerDown={e => { e.stopPropagation(); e.preventDefault(); const el = e.currentTarget, z = rf.getZoom(), x0 = e.clientX, y0 = e.clientY, s0 = sub[k]; el.setPointerCapture(e.pointerId);

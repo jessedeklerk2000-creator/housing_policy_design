@@ -2,7 +2,7 @@
 // Structure after Q. Emanuels' DynaBI statement network (statement blocks of sections and accounts; each account opens
 // into its formula, inputs and source); content after Menkveld (2025) Fig. 2-2/2-3 and the bank netlist
 // (backend/housing/bank_ledger.py). Values in model units (mortgage book 100 at the start), flows per year.
-import { useContext, useState, type ReactElement } from 'react';
+import { useContext, useEffect, useState, type ReactElement } from 'react';
 import { AtContext, readTrace } from './ModelMap';
 import type { Ledger } from './types';
 
@@ -16,9 +16,10 @@ const RATIO_OVER: Record<string, string> = { tier1: 'rwa', nsfr: 'rsf', leverage
 // The signals from the statements into the key figures (what ALM Reporting reads off the sheet)
 export const KEY_INPUTS: [string, string][] = [['equity', 'equity'], ['mortgages', 'mortgages'], ['firm_loans', 'loans to firms'], ['savings', 'savings'], ['interbank', 'other banks'], ['assets', 'total assets'], ['net_profit', 'net profit']];
 
-export function BankStatements({ part = 'all', only }: { part?: 'all' | 'statements' | 'ratios'; only?: string }) {
+export function BankStatements({ part = 'all', only, onPlots }: { part?: 'all' | 'statements' | 'ratios'; only?: string; onPlots?: (n: number) => void }) {
   const { result, at } = useContext(AtContext);
   const [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set());
+  useEffect(() => { onPlots?.(plots.size); }, [plots.size, onPlots]);  // the bus view widens the box while a plot is open
   const L: Ledger | undefined = result?.ledger;
   if (!result || !L) return <div className="stmt-empty">Run the simulation to see the statements.</div>;
   const val = (id: string) => { const t = readTrace(result, 'Ledger:' + id); return t ? t[at] : undefined; };
@@ -35,15 +36,16 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
     // bar: share of the largest value of this account over the run (same idea as DynaBI's account bars)
     const s = series(id), scale = Math.max(1e-9, ...s.map(v => Math.abs(v ?? 0))), w = check ? 0 : Math.min(50, Math.abs(x ?? 0) / scale * 50);
     const ok = check ? Math.abs(x ?? 0) < 0.01 : undefined;
+    // a plotted value: the plot to the right of its line (Jesse, 25 Nov 2026)
     return <div key={k} className={'stmt-entry' + (depth ? ' sub' : '')}>
-      <button className={'stmt-row' + (TOTALS.has(id) && !depth ? ' total' : '') + (check ? ' check' : '')} onClick={() => toggle(k)} title={a.formula}>
+      <div className={'stmt-line' + (plots.has(k) ? ' plotted' : '')}><button className={'stmt-row' + (TOTALS.has(id) && !depth ? ' total' : '') + (check ? ' check' : '')} onClick={() => toggle(k)} title={a.formula}>
         <span className="stmt-op">{op}</span>
         <span className="stmt-label">{a.label}</span>
         <span className="stmt-bar">{depth === 0 && !check && <i className={(x ?? 0) < 0 ? 'neg' : ''} style={{ left: (x ?? 0) < 0 ? `${50 - w}%` : '50%', width: `${w}%` }}/>}</span>
         <b className={'stmt-val' + (ok === undefined ? '' : ok ? ' ok' : ' bad') + (plots.has(k) ? ' plotted' : '')} role="button" title="Click to plot over time" onClick={ev => { ev.stopPropagation(); togglePlot(k); }}>{show(id, x)}{ok !== undefined && (ok ? ' ✓' : ' ✗')}</b>
         <span className="stmt-fold">{isOpen ? '−' : '+'}</span>
       </button>
-      {plots.has(k) && <StmtPlot y={s} at={at} years={result.year} unit={a.unit} label={a.label}/>}
+      {plots.has(k) && <StmtPlot y={s} at={at} years={result.year} unit={a.unit} label={a.label}/>}</div>
       {isOpen && <div className="stmt-drill">
         <div className="stmt-formula">{a.label} = {a.formula}</div>
         {a.inputs.filter(i => L.accounts[i]).map(i => row(i, k, depth + 1, RATIO_OVER[id] === i ? '÷' : MINUS[id]?.includes(i) ? '−' : '+'))}

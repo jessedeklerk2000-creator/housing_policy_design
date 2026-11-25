@@ -697,3 +697,6 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .circuit .u-signal.fig-u .u-fig-name { fill:#38b2d3; font:600 calc(var(--fig-label, 12px) * 2) Inter,system-ui,sans-serif; paint-order:stroke; stroke:#fff; stroke-width:6px; }
 .circuit .u-signal.fig-u .u-fig-name { text-anchor:start; }
 .figure-mode .react-flow.hl-on .map-node.controller { opacity:1; }  /* the controller in the Subsidy figure: not faded */
+.stmt-line { display:flex; align-items:flex-start; gap:8px; } .stmt-line > .stmt-row { flex:1 1 auto; min-width:0; } .stmt-line > .stmt-plot { flex:0 0 auto; margin:0; }
+.bus-stmt-body .stmt-line > .stmt-row { flex:0 0 var(--row-w, auto); }  /* lines keep the box's own width; the plot takes the extra width */
+.bus-stmt-body .stmt-sec, .bus-stmt-body .stmt-drill { width:var(--row-w, auto); box-sizing:border-box; }
