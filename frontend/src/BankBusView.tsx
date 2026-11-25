@@ -111,9 +111,9 @@ function Block({ r, label, tone, open, toggle, children, z }: { r: R; label: str
   </div>;
 }
 
-type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode };
+type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
-  const { result, at, o, set, map, scenario, desk } = data;
+  const { result, at, o, set, map, scenario, desk, buses } = data;
   const g = geometry(o, map), { R } = g, B = R.bank;
   // click a flow, a bus or a shock: a card with its plot over the run (as the plot cards in the control-loop view)
   const [pick, setPick] = useState<Pick | null>(null);
@@ -140,6 +140,19 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     const off = ((bus.k ?? 0) - ((bus.n ?? 1) - 1) / 2) * 50;  // two buses of one market side by side
     const c = vertical ? (bus.id === 'mortgage' ? g.c2 + g.w2 + 90 : bus.id === 'deposit' ? g.c2 + g.w2 + 170 : (Math.min(A.x + A.w, Bb.x + Bb.w) + Math.max(A.x, Bb.x)) / 2 - LANE / 2 + off)
       : bus.id === 'firm' ? Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, Bb.y + Bb.h) + 70 : (A.y + A.h + Bb.y) / 2 - LANE / 2 + off;
+    if (!buses) {
+      // Ports view: the same port pairs, each flow wired straight from one agent's terminal to the other's (solid = flow
+      // f, dashed = return), in its own lane through the gap where the bus would be
+      bus.flows.forEach((flow, j) => {
+        const f = flowOf(flow), lane = c + j * 22 - (bus.flows.length - 1) * 11, [ea, eb] = [ends[2 * j], ends[2 * j + 1]];
+        const via = (a: P, b: P, x: number): number[][] => vertical ? [a, [x, a[1]], [x, b[1]], b] : [a, [a[0], x], [b[0], x], b];
+        const pf = via(ea.p, eb.p, lane), pq = via(ea.q, eb.q, lane + 9);
+        wires.push(line(pf, bus.color, `${bus.id}${j}p`)); wires.push(line(pq, bus.color, `${bus.id}${j}q`, '5 3'));
+        wires.push(hit(pf, `${bus.id}${j}p`, { kind: 'flow', id: flow, at: pf[1] as P }, `${f?.label ?? flow}: click to plot`));
+        wires.push(hit(pq, `${bus.id}${j}q`, { kind: 'ret', id: flow, at: pq[1] as P }, `${f?.label ?? flow} · incentive (return): click to plot`));
+      });
+      continue;
+    }
     const taps: P[] = [];
     const branch = (pt: P, k: number, key: string, flow: string, dash?: string) => {
       const end: P = vertical ? [c + k, pt[1]] : [pt[0], c + k]; taps.push(end);
@@ -159,7 +172,10 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // joined by the interbank bus (a money bus)
   const IB = '#c0392b', ibY = B.y + B.h - 60, fs: R = { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
   { const rx = B.x + B.w + 150, fy = fs.y + fs.h / 2 - LANE / 2, lo = Math.min(ibY, fy) - 24, hi = Math.max(ibY, fy) + LANE + 24;
-    wires.push(<g key="ib">
+    if (!buses) {
+      const pf = [[B.x + B.w, ibY], [rx, ibY], [rx, fy], [fs.x, fy]], pq = [[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE], [rx + LANE, fy + LANE], [fs.x, fy + LANE]];
+      wires.push(line(pf, IB, 'ibf')); wires.push(line(pq, IB, 'ibq', '5 3'));
+    } else wires.push(<g key="ib">
       {[0, LANE].map(k => <line key={k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
       {line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1')}{line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2', '5 3')}
       {line([[rx, fy], [fs.x, fy]], IB, 'ib3')}{line([[rx + LANE, fy + LANE], [fs.x, fy + LANE]], IB, 'ib4', '5 3')}
@@ -283,6 +299,7 @@ const nodeTypes = { diagram: Diagram };
 
 function Inner({ result, desk, patch }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData }) {
   const n = result.year.length;
+  const [buses, setBuses] = useState(false);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
   const [at, setAt] = useState(n - 1), [playing, setPlaying] = useState(false), [o, setO] = useState<Open>({});
   const [map, setMap] = useState<MapData | null>(null);
   const rf = useReactFlow();
@@ -306,12 +323,13 @@ function Inner({ result, desk, patch }: { result: Result; desk: ReactNode; patch
     return next;
   }), [rf, map]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
-    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk } }] : [], [result, at, n, o, set, map, scenario, desk]);
+    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses } }] : [], [result, at, n, o, set, map, scenario, desk, buses]);
   return <>
     <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
       <input type="range" min={0} max={n - 1} value={Math.min(at, n - 1)} onChange={e => { setPlaying(false); setAt(+e.target.value); }}/>
+      <div className="segmented small" role="group" aria-label="Connections"><button className={!buses ? 'active' : ''} aria-pressed={!buses} onClick={() => setBuses(false)}>Ports</button><button className={buses ? 'active' : ''} aria-pressed={buses} onClick={() => setBuses(true)}>Buses</button></div>
       <button className="ghost small" onClick={() => { setO({}); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 40); }}>Close all</button>
     </div>
     <div className="bus-canvas">{map ? <ReactFlow nodes={nodes} edges={[]} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.04 }} minZoom={0.05} maxZoom={4} proOptions={{ hideAttribution: true }} nodesDraggable={false}><Controls showInteractive={false}/></ReactFlow> : <p className="muted">Loading the model…</p>}</div>

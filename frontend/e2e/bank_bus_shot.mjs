@@ -13,7 +13,9 @@ await shot('bus_0');
 // click a flow, a bus and a shock: a card with plots
 const clickHit = async t => { await page.locator('.bus-wires polyline', { has: page.locator('title', { hasText: t }) }).first().dispatchEvent('click'); await page.waitForTimeout(500);
   const n = await page.locator('.bus-pick svg').count(), title = await page.locator('.bus-pick b').first().textContent(); return { t, title, plots: n }; };
-const picks = [await clickHit('Houses:'), await clickHit('Rent bus'), await clickHit('Covid'), await clickHit('Other banks')];
+const picks = [await clickHit('Houses:'), await clickHit('Covid'), await clickHit('Other banks')];
+await page.getByRole('button', { name: 'Buses' }).click(); await page.waitForTimeout(800); await shot('bus_buses');
+picks.push(await clickHit('Rent bus')); await page.getByRole('button', { name: 'Ports' }).click(); await page.waitForTimeout(500);
 await shot('bus_pick'); await page.getByRole('button', { name: 'Close' }).first().dispatchEvent('click');
 await click('Expand Households'); await shot('bus_hh');
 await click('Collapse Households'); await page.waitForTimeout(600);

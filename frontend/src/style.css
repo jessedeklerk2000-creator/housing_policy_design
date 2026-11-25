@@ -621,7 +621,9 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .bus-box.bus-agent:not(.is-open) .bus-box-head, .bus-gov .bus-box-head, .bus-fs .bus-box-head, .bus-ref .bus-box-head { border-bottom:0; height:100%; box-sizing:border-box; }
 .bus-diagram .map-node { box-sizing:border-box; }
 .bus-diagram .map-node.open { overflow:visible; }
-.bus-diagram .map-node.reference.bus-gov-block { background:#c5352a; }
+.bus-diagram .map-node.reference.bus-gov-block { background:#f3efe8; border-color:#b9ab98; box-shadow:none; }
+.bus-diagram .map-node.reference.bus-gov-block .block-head { background:#e4dccf; border-color:#b9ab98; }
+.bus-diagram .map-node.reference.bus-gov-block .block-head strong { color:#4a4033; -webkit-text-stroke:0; text-shadow:none; }
 .bus-diagram .map-node.sub-group { background:rgba(255,248,238,.7); }
 .bus-diagram .map-node .block-head .toggle { display:grid; place-items:center; width:20px; height:20px; padding:0; border:1px solid #8c8473; border-radius:4px; background:#fff; cursor:pointer; }
 .bus-diagram .map-node.sensor-open { overflow:visible; }
