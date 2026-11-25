@@ -119,6 +119,11 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     const svg = svgRef.current; if (!svg) return;
     const labels = [...svg.querySelectorAll<SVGGElement>('.el-label')];
     labels.forEach(l => l.removeAttribute('transform'));
+    // figure-mode subsidy signals start at the left edge of the CPB box
+    const cpb = document.querySelector('.react-flow__node[data-id="cpb"]')?.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    svg.querySelectorAll<SVGPathElement>('path[data-extend]').forEach(p => { if (!cpb || !sr.width) return;
+      const x0 = (cpb.left + 12 - sr.left) * (svg.viewBox.baseVal.width / sr.width);
+      p.setAttribute('d', `M${x0} ${p.dataset.y} ` + p.dataset.extend!.split(' ').map(q => 'L' + q.replace(',', ' ')).join(' ')); });
     if (!labelCtx.figure) return;
     const boxes = labels.map(l => ({ l, b: l.getBBox() })).filter(x => x.b.width > 0).sort((a, b) => a.b.y - b.b.y || a.b.x - b.b.x);
     const placed: DOMRect[] = [];
@@ -213,8 +218,8 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
       if (!src?.pins) return null;
       const cx = (src.pins[0][0] + src.pins[1][0]) / 2, cy = (src.pins[0][1] + src.pins[1][1]) / 2, yIn = 70 + 26 * (all.length - 1 - i);  // the farther source on the higher lane: no crossing
       const pts = [[0, yIn], [cx, yIn], [cx, cy - 24]];
-      return <g key={'fig' + sig.flow} className="u-signal lit fig-u"><path d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-policy)`}/>
-        <text className="u-sig-name" x={14} y={yIn - 7}>{sig.flow === 'rental_subsidy' ? 'u₁' : 'u₂'}</text></g>; })}
+      // data-extend: the layout effect moves the start to the left edge of the CPB box (no line out of thin air)
+      return <g key={'fig' + sig.flow} className="u-signal lit fig-u"><path data-extend={pts.slice(1).map(p => p.join(',')).join(' ')} data-y={yIn} d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-policy)`}/></g>; })}
     {!outside && layout.signals.filter(sig => sig.flow !== 'rental_subsidy' || scenario.rental_subsidy).map(sig => <g key={sig.flow} className={`u-signal${selection.kind === 'flow' && selection.id === sig.flow ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`Control signal ${flow(sig.flow).label}`} onClick={ev => { ev.stopPropagation(); pick({ kind: 'flow', id: sig.flow }); }} onContextMenu={ev => { if (menu) { ev.preventDefault(); ev.stopPropagation(); menu({ kind: 'flow', id: sig.flow }, ev); } }}>
       <path d={sig.path.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/></g>)}
     {!outside && inputs.map((d, i) => { const e = d.element ? map.elements.find(x => x.name === d.element && x.agent === agent) : undefined; if (!e || !e.pins || e.pins.length < 2) return null;
