@@ -291,7 +291,14 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       wires.push(line([[B.x + B.w, ibY], [x, ibY], [x, bot]], IB, 'in-ib')); wires.push(line([[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]], IB, 'iq-ib', '5 3')); }
     // the breadboard's stocks and flows are read by Accounting; Accounting reports y to Σ
     { const ya = sub ? acc.y + HEAD + 30 : acc.y + 55;
-      if (sub) over.push(arrow([[bs.x + bs.w, ya], [sub.bal.x + 40, ya], [sub.bal.x + 40, sub.bal.y]], G, 'x', 'stocks · flows', 0));
+      if (sub) {
+        // what each statement is computed from (bank_ledger.py): stocks -> balance sheet, rates and flows -> income statement,
+        // the home value (LTV, for the DNB mortgage risk weight) -> key figures
+        over.push(arrow([[bs.x + bs.w, ya], [sub.bal.x + 40, ya], [sub.bal.x + 40, sub.bal.y]], G, 'x', 'stocks', 0));
+        const yf = acc.y + HEAD + 44; over.push(arrow([[bs.x + bs.w, yf], [sub.inc.x + 40, yf], [sub.inc.x + 40, sub.inc.y]], G, 'xf', 'rates · flows', 0));
+        const yl = acc.y + acc.h - 16, ys = Math.min(yl, bs.y + bs.h - 20), kx = sub.key.x + sub.key.w / 2;
+        over.push(arrow([[bs.x + bs.w, ys], [acc.x + 12, ys], [acc.x + 12, yl], [kx, yl], [kx, sub.key.y + sub.key.h]], G, 'xl', 'home value (LTV)', 0.62));
+      }
       else wires.push(arrow([[bs.x + bs.w, ya], [acc.x, ya]], G, 'x', 'stocks · flows', 0.5)); }
     { const k = sub?.key, yy = k ? k.y + Math.min(k.h / 2, 45) : acc.y + 55, xm = alco.x - 45;
       (k ? over : wires).push(arrow([[k ? k.x + k.w : acc.x + acc.w, yy], [xm, yy], [xm, sum[1]], [sum[0] - 17, sum[1]]], G, 'y', 'y₁ Tier 1 · y₂ NSFR', 0.15)); }
