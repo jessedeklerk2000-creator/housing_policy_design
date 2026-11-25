@@ -334,25 +334,15 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .robust-docked .mc-row { flex-wrap:wrap; }
 .nyquist { margin-top:14px; } .nyquist p.small { font-size:13px; }
 .map-node.agent.with-formulas .block-body { display:block; padding:6px 14px 10px; overflow:hidden; }
-.formulas { display:flex; flex-direction:column; gap:10px; font-family:'Cambria Math','STIX Two Math','Times New Roman',serif; color:#1f2a26; }
-.formulas .eq { background:#fffaf0; border:1.5px solid #d9c9a3; border-radius:8px; padding:7px 10px; }
-.formulas .eq-title { font-family:Inter,system-ui,sans-serif; font-size:13px; font-weight:700; color:#6b4a1f; } .formulas .eq-no { font-weight:400; color:#8a7a5a; }
-.formulas .eq-body { font-size:19px; margin:3px 0 2px; white-space:nowrap; } .formulas .eq-note { font-family:Inter,system-ui,sans-serif; font-size:11.5px; color:#5f6b67; }
-.formulas .frac { display:inline-flex; flex-direction:column; vertical-align:middle; text-align:center; margin:0 3px; } .formulas .frac > span:first-child { border-bottom:1.5px solid #1f2a26; padding:0 3px; } .formulas .frac > span { font-size:16px; line-height:1.2; }
-.formulas .eq-body { line-height:1.9; } .formulas .eq-body:has(.frac) { padding:4px 0; }
-.formulas .eq-body { line-height:1.4; } .formulas .eq-body:has(.frac) { padding:6px 0 4px; }
-.formulas .frac { display:inline-flex; flex-direction:column; align-items:center; vertical-align:-0.95em; line-height:1.25; margin:0 4px; }
-.formulas .frac > span { display:block; font-size:16px; padding:1px 4px; border:0; }
-.formulas .frac > span:first-child { border-bottom:1.5px solid #1f2a26; }
-.formulas .frac { vertical-align:middle; } .formulas .eq-body:has(.frac) { padding:10px 0 8px; line-height:1; }
 
 /* CPB equations (KaTeX) on the agents: clickable cards; strip above an opened agent's circuit */
-.formulas { display:flex; flex-direction:column; gap:8px; width:100%; }
-.formulas .eq { box-sizing:border-box; display:block; text-align:center; width:100%; cursor:pointer; background:#fffaf0; border:1.5px solid #d9c9a3; border-radius:8px; padding:6px 10px; color:#1f2a26; font-family:Inter,system-ui,sans-serif; }
-.formulas .eq:hover { border-color:#b08d4a; } .formulas .eq.on { border-color:#2b6599; box-shadow:0 0 0 3px rgba(43,101,153,.25); background:#f3f8fd; }
-.formulas .eq .eq-title { font-size:13px; font-weight:700; color:#6b4a1f; } .formulas .eq .eq-no { font-weight:400; color:#8a7a5a; font-size:12px; }
-.formulas .eq .eq-body { font-size:15px; color:#1f2a26; line-height:normal; padding:0; } .formulas .eq .eq-body .katex-display { margin:2px 0; }
-.formulas .eq .eq-note { font-size:11px; color:#5f6b67; text-align:center; }
+.formulas { display:flex; flex-direction:column; gap:calc(8px * var(--eq, 1)); width:100%; color:#1f2a26; }
+.formulas .eq { box-sizing:border-box; display:block; text-align:center; width:100%; cursor:pointer; background:#fffaf0; border:1.5px solid #d9c9a3; border-radius:8px; padding:calc(6px * var(--eq, 1)) calc(10px * var(--eq, 1)); color:#1f2a26; font-family:Inter,system-ui,sans-serif; }
+/* the clicked card keeps its size: same border width, the ring is drawn inside (inset shadow) */
+.formulas .eq:hover { border-color:#b08d4a; } .formulas .eq.on { border-color:#2b6599; box-shadow:inset 0 0 0 1.5px #2b6599; background:#f3f8fd; }
+.formulas .eq .eq-title { font-size:calc(13px * var(--eq, 1)); font-weight:700; color:#6b4a1f; } .formulas .eq .eq-no { font-weight:400; color:#8a7a5a; font-size:calc(12px * var(--eq, 1)); }
+.formulas .eq .eq-body { font-size:calc(15px * var(--eq, 1)); color:#1f2a26; line-height:normal; padding:0; margin:0; white-space:nowrap; } .formulas .eq .eq-body .katex-display { margin:2px 0; }
+.formulas .eq .eq-note { font-size:calc(11px * var(--eq, 1)); color:#5f6b67; text-align:center; }
 .formula-strip { position:absolute; left:0; right:0; top:0; padding:calc(30px * var(--lab, 1) + 8px) 10px 4px; box-sizing:border-box; overflow:hidden; z-index:2; display:flex; align-items:flex-start; }
 .circuit-below { position:absolute; left:0; right:0; bottom:0; }
 .formulas .eq > div { display:block; width:100%; } .formulas .eq .eq-title { white-space:nowrap; } .formulas .eq .eq-note { white-space:normal; }
@@ -376,12 +366,6 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .robust-docked .robust-card .light { font-size:12px; }
 .robust-docked .robust-grid { gap:6px; }
 
-/* CPB formulas scale with the label-size slider (--eq = label size / 1.3) */
-.formulas { gap:calc(8px * var(--eq, 1)); }
-.formulas .eq { padding:calc(6px * var(--eq, 1)) calc(10px * var(--eq, 1)); }
-.formulas .eq .eq-title { font-size:calc(13px * var(--eq, 1)); } .formulas .eq .eq-no { font-size:calc(12px * var(--eq, 1)); }
-.formulas .eq .eq-body { font-size:calc(15px * var(--eq, 1)); }
-.formulas .eq .eq-note { font-size:calc(11px * var(--eq, 1)); }
 
 /* resize grip, bottom-right corner of the opened controller block */
 .map-node .block-grip { position:absolute; right:0; bottom:0; width:calc(18px * var(--lab, 1)); height:calc(18px * var(--lab, 1)); cursor:nwse-resize; z-index:6;
@@ -649,3 +633,15 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .bus-stmt-body { overflow:auto; background:#fff; border-radius:4px; }
 .bank-statements.single .stmt-block { border:0; box-shadow:none; margin:0; }
 .bank-statements.single .stmt-block > h4 { display:none; }
+
+/* Figure mode (thesis figures): white, no buttons or hints, formula cards in the neutral style */
+.map-canvas.figure-mode, .map-canvas.figure-mode .react-flow { background:#fff; }
+.figure-mode rect[fill="url(#breadboard)"] { display:none; }
+.figure-mode .map-key, .figure-mode .react-flow__controls, .figure-mode .react-flow__minimap, .figure-mode .block-grip, .figure-mode .show-parl { display:none; }
+.figure-mode .block-head .toggle, .figure-mode .sticky-head button { visibility:hidden; }
+.figure-mode .formulas .eq { cursor:default; }
+.figure-mode .formulas .eq:hover, .figure-mode .formulas .eq.on { border-color:#d9c9a3; box-shadow:none; background:#fffaf0; }
+.figure-mode .formulas .eq .eq-explain, .figure-mode .chip-wrap { display:none; }
+.figure-nohl .react-flow.hl-on .react-flow__edge, .figure-nohl .react-flow.hl-on .circuit *, .figure-nohl .react-flow.hl-on .map-node { opacity:1 !important; filter:none !important; }
+.figure-nohl .circuit .lit-wires { display:none; }
+.keep-hl { display:inline-flex; align-items:center; gap:4px; font-size:12px; }

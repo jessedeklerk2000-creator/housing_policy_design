@@ -9,7 +9,7 @@ const errors = []; page.on('pageerror', e => errors.push(String(e)));
 await page.goto('http://127.0.0.1:8001/'); await openPanels(page); await page.waitForTimeout(3000);
 const btn = page.getByRole('button', { name: 'CPB formulas' });
 await btn.click(); await page.waitForTimeout(2000);
-await page.locator('.react-flow__controls-fitview').click(); await page.waitForTimeout(1500);
+await page.locator('.react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(1500);
 const on = await page.locator('.eq').count();
 await page.locator('.eq', { hasText: 'Budget' }).first().dispatchEvent('click'); await page.waitForTimeout(1200);
 const lit = await page.locator('.react-flow__edge.lit').evaluateAll(es => [...new Set(es.map(e => e.getAttribute('data-id')))]);

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { BaseEdge, Controls, Handle, Position, ReactFlow, ReactFlowProvider, useReactFlow, useStore, type Edge, type EdgeProps, type Node, type NodeProps } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Activity, BarChart3, Camera, Coins, Globe, Home, Landmark, Sigma, ShieldCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Maximize2, Minus, Pause, Play, Plus } from 'lucide-react';
+import { Activity, BarChart3, Camera, Coins, Globe, Home, Landmark, Sigma, ShieldCheck, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LoaderCircle, Maximize2, Minus, Pause, Play, Plus, Image as ImageIcon } from 'lucide-react';
 import { savePng } from './shot';
 import { IdentPanel } from './Ident';
 import { api } from './api';
@@ -10,7 +10,7 @@ import { AgentCircuit, CONTROLLER_SIZE, ControllerCircuit, STATE_NOTE, inputPath
 import type { Element, Flow, MapData, Result, Scenario, Selection } from './types';
 import { ControllerLocus, Robustness, TransferPanel, type Design, type K3, type Pick } from './Analysis';
 import { NyquistPanel } from './Nyquist';
-import { FormulaCards, FORMULAS, STRIP_BOTTOM, STRIP_H, type Formula } from './Formulas';
+import { FormulaCards, FORMULAS, STRIP_BOTTOM, STRIP_H, useFormulaWidths, type Formula } from './Formulas';
 import { BodeBody, SensBody, YoyBody } from './Cards';
 import type { GuideCmd, Snap } from './Guide';
 import { CPB_PEAKS, FLAT, GROWTH, NO_SHOCKS, NO_SUBSIDY, ONE_STEP, PHASE, SHOCKS_CBS } from './Tour';
@@ -667,6 +667,8 @@ const CPB_PORTS: Record<string, { p: Point; side: Side }> = {
 // so its four left ports line up with the CPB's four right ports.
 const AGENT_BOX: Point = [250, 160], FIN_BOX: Point = [250, 230];
 // Closed agents in the CPB backbone view: room for their equation cards (canvas units)
+// Figure mode (thesis screenshots): fixed formula scale, independent of the label slider. Claude's choice, to calibrate.
+const FIGURE_EQ = 1.3;
 const FORMULA_BOX: Record<string, Point> = { constructors: [600, 190], investors: [600, 230], households: [600, 360] };
 /** Port of a collapsed block: ports keep their side and order from the drawing, evenly spaced along that side. */
 function evenPort(l: MapData['layouts'][string], flow: string, [W, H]: Point): { p: Point; side: Side; ret: Point } {
@@ -678,7 +680,7 @@ function evenPort(l: MapData['layouts'][string], flow: string, [W, H]: Point): {
   return { p, side, ret: vertical ? [p[0], p[1] + 12 * sign] : [p[0] + 12 * sign, p[1]] };
 }
 
-function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string) => void, scenario: Scenario, result: Result | null, at: number, selection: Selection, select: (s: Selection) => void, menu: (s: Selection, e: React.MouseEvent) => void, flip?: () => void, probes?: ProbeState, step?: (k: GainKey, up: boolean) => void, lab = 1, hl: Formula | null = null, setHl: (f: Formula | null) => void = () => undefined) {
+function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string) => void, scenario: Scenario, result: Result | null, at: number, selection: Selection, select: (s: Selection) => void, menu: (s: Selection, e: React.MouseEvent) => void, flip?: () => void, probes?: ProbeState, step?: (k: GainKey, up: boolean) => void, lab = 1, hl: Formula | null = null, setHl: (f: Formula | null) => void = () => undefined, natW: Record<string, number> | null = null, figure = false) {
   const bv = useContext(BankCtx);
   return useMemo(() => {
     if (!map) return { nodes: [] as Node[], edges: [] as Edge[], pinDefault: {} as Record<string, XY>, lines: {} as Record<string, Point[]> };
@@ -696,21 +698,24 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     const R: Record<string, Rect> = {}, scale: Record<string, number> = {};
     // CPB backbone view (tour): closed agents are larger and carry their CPB equations
     const withEq = (id: string) => !!view.formulas && !!FORMULAS[id];
-    // the formulas grow with the label-size slider (1.3x = the size they were drawn for)
-    const eq = lab / 1.3;
-    const AB = (id: string): Point => withEq(id) && FORMULA_BOX[id] ? [Math.max(AGENT_BOX[0], FORMULA_BOX[id][0] * eq), Math.max(AGENT_BOX[1], FORMULA_BOX[id][1] * eq)] : AGENT_BOX;
-    // Opened agent in the CPB backbone view: its formula strip sits above the circuit (strip(id) canvas units).
-    // inside an opened agent the width is the circuit's: the widest equation (utility) fits up to 1.75x labels
-    const STRIP_EQ_MAX: Record<string, number> = { households: 1.75 / 1.3 };
-    const eqIn = (id: string) => Math.min(eq, STRIP_EQ_MAX[id] ?? Infinity);
     // Equations beside the circuit (wider, flatter figure for slides) on a side without ports: Constructors left;
     // Investors and Households right, where only the bank connects (so only with the bank off). Otherwise above/below.
     const SIDE: Record<string, 'L' | 'R'> = { constructors: 'L', investors: 'R', households: 'R' };
-    // beside the circuit the equations are drawn 1.45x larger (there is room), in a column that fits the widest one
-    const SIDE_EQ = 1.45, STRIP_W: Record<string, number> = { constructors: 470, investors: 500, households: 700 };
-    const side = (id: string) => withEq(id) && view.agents.includes(id) && SIDE[id] && (SIDE[id] === 'L' || !scenario.bank) ? STRIP_W[id] * eq : 0;
+    const sideOn = (id: string) => withEq(id) && view.agents.includes(id) && !!SIDE[id] && (SIDE[id] === 'L' || !scenario.bank);
+    // ONE formula scale for every card on the canvas: it follows the label-size slider (1.3x = the size the cards were
+    // drawn for; fixed in figure mode) and is lowered until the widest formula fits the narrowest place it is shown.
+    // Boxes and side columns are sized from this scale; a strip above/below an opened circuit has the circuit's width.
+    const CARD_PAD = 26;  // strip padding + card border, canvas units
+    const stripCap = (id: string) => map.layouts[id].size[0] * SCALE.expanded - CARD_PAD;
+    const eq = Math.floor(100 * Math.min(figure ? FIGURE_EQ : lab / 1.3,
+      ...CPB_AGENTS.filter(id => withEq(id) && view.agents.includes(id) && !sideOn(id) && natW?.[id]).map(id => stripCap(id) / natW![id]))) / 100;
+    const cardW = (id: string) => (natW?.[id] ?? 0) + CARD_PAD;  // the widest card of an agent at scale 1
+    const AB = (id: string): Point => withEq(id) && FORMULA_BOX[id] ? [Math.max(AGENT_BOX[0], Math.max(FORMULA_BOX[id][0], cardW(id) + 28) * eq), Math.max(AGENT_BOX[1], FORMULA_BOX[id][1] * eq)] : AGENT_BOX;
+    // beside the circuit: a column that fits the widest card at the same scale
+    const STRIP_W: Record<string, number> = { constructors: 470, investors: 500, households: 700 };
+    const side = (id: string) => sideOn(id) ? Math.max(STRIP_W[id], cardW(id)) * eq : 0;
     const circL = (id: string) => SIDE[id] === 'L' ? side(id) : 0;  // x offset of the circuit inside the block
-    const strip = (id: string) => withEq(id) && view.agents.includes(id) && !side(id) ? (STRIP_H[id] ?? 0) * eqIn(id) : 0;
+    const strip = (id: string) => withEq(id) && view.agents.includes(id) && !side(id) ? (STRIP_H[id] ?? 0) * eq : 0;
     // An opened agent without a formula strip on top gets a band for its header (it grows with the label size), so
     // the header never covers the top of the circuit. A top strip already leaves room for it.
     const band = (id: string) => view.agents.includes(id) && !(strip(id) && !STRIP_BOTTOM.has(id)) ? HEAD_FLOW * lab : 0;
@@ -718,7 +723,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     const stripTop = (id: string) => band(id) + (STRIP_BOTTOM.has(id) ? 0 : strip(id));  // offset of the circuit inside the block
     const lit = (flow: string) => !!hl?.flows.includes(flow);
     const shift = (dx: number, dy: number, ids: string[]) => ids.forEach(i => { R[i].x += dx; R[i].y += dy; });
-    const sized = (id: string) => { const open = view.agents.includes(id), [w, h] = map.layouts[id].size; scale[id] = open ? SCALE.expanded : 0; R[id] = open ? { x: 0, y: 0, w: w * SCALE.expanded + side(id), h: Math.max(h * SCALE.expanded, side(id) ? (STRIP_H[id] ?? 0) * eq * SIDE_EQ * 0.9 : 0) + extra(id) } : { x: 0, y: 0, w: AB(id)[0], h: AB(id)[1] }; };
+    const sized = (id: string) => { const open = view.agents.includes(id), [w, h] = map.layouts[id].size; scale[id] = open ? SCALE.expanded : 0; R[id] = open ? { x: 0, y: 0, w: w * SCALE.expanded + side(id), h: Math.max(h * SCALE.expanded, side(id) ? (STRIP_H[id] ?? 0) * eq : 0) + extra(id) } : { x: 0, y: 0, w: AB(id)[0], h: AB(id)[1] }; };
     // The circuit area of an opened agent, in canvas units.
     const circ = (id: string): Rect => { const [w, h] = map.layouts[id].size, r = R[id]; if (!view.agents.includes(id)) return r; return { x: r.x + circL(id), y: r.y + stripTop(id), w: w * SCALE.expanded, h: h * SCALE.expanded }; };
     // Port of a flow on a block: agent (from its drawing), collapsed CPB box, or collapsed financial sector (drawn like Bank).
@@ -826,15 +831,15 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       const agentBlock = (id: string) => {
         const open = view.agents.includes(id), a = map.agents[id];
         const circuit = <AgentCircuit map={map} agent={id} scenario={bv ? { ...scenario, feedback: false } : scenario} selection={selection} pick={select} menu={menu} inputs={map.disturbances.filter(d => d.target === id && active(d))} inputSide={id === 'bank' ? 'top' : 'left'} outside highlight={hl?.elements} litFlows={hl?.flows} trace={hl?.trace}/>;
-        const cards = withEq(id) ? <FormulaCards agent={id} active={hl?.id ?? null} pick={setHl}/> : undefined;
+        const cards = withEq(id) ? <FormulaCards agent={id} active={hl?.id ?? null} pick={setHl} eq={eq}/> : undefined;
         const sh = strip(id), bh = band(id), sw = side(id), pc = (v: number) => `${v / R[id].h * 100}%`, pw = (v: number) => `${v / R[id].w * 100}%`;
         const cw = map.layouts[id].size[0] * SCALE.expanded, chh = map.layouts[id].size[1] * SCALE.expanded;
         block(id, R[id], open ? { label: a.label, tone: 'agent', open, tab: TAB[id], toggle: () => toggle(id),
             children: sw ? <><div className="circuit-below" style={{ top: pc(bh), left: pw(circL(id)), width: pw(cw), height: pc(chh), right: 'auto', bottom: 'auto' }}>{circuit}</div>
-              <div className={'formula-strip side ' + SIDE[id]} style={{ top: pc(bh), bottom: 0, height: 'auto', left: SIDE[id] === 'L' ? 0 : pw(cw), right: 'auto', width: pw(sw), ['--eq' as string]: eq * SIDE_EQ }}>{cards}</div></>
+              <div className={'formula-strip side ' + SIDE[id]} style={{ top: pc(bh), bottom: 0, height: 'auto', left: SIDE[id] === 'L' ? 0 : pw(cw), right: 'auto', width: pw(sw) }}>{cards}</div></>
             : sh ? (STRIP_BOTTOM.has(id)
-              ? <><div className="circuit-below" style={{ top: pc(bh), bottom: pc(sh) }}>{circuit}</div><div className="formula-strip bottom" style={{ top: 'auto', bottom: 0, height: `${sh / R[id].h * 100}%`, ['--eq' as string]: eqIn(id) }}>{cards}</div></>
-              : <><div className="formula-strip" style={{ height: `${sh / R[id].h * 100}%`, ['--eq' as string]: eqIn(id) }}>{cards}</div><div className="circuit-below" style={{ top: pc(sh) }}>{circuit}</div></>) : bh ? <div className="circuit-below" style={{ top: pc(bh) }}>{circuit}</div> : circuit }
+              ? <><div className="circuit-below" style={{ top: pc(bh), bottom: pc(sh) }}>{circuit}</div><div className="formula-strip bottom" style={{ top: 'auto', bottom: 0, height: `${sh / R[id].h * 100}%` }}>{cards}</div></>
+              : <><div className="formula-strip" style={{ height: `${sh / R[id].h * 100}%` }}>{cards}</div><div className="circuit-below" style={{ top: pc(sh) }}>{circuit}</div></>) : bh ? <div className="circuit-below" style={{ top: pc(bh) }}>{circuit}</div> : circuit }
           : { label: a.label, tone: withEq(id) ? 'agent with-formulas' : 'agent', toggle: () => toggle(id), selected: on({ kind: 'agent', id }), children: cards }, 3);
       };
       if (view.cpb) CPB_AGENTS.forEach(agentBlock);
@@ -1009,10 +1014,10 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     // After a run, dots move along every connection in the direction of the flow (supervisor 2.5).
     if (result) edges.forEach(e => { (e.data as { animate?: boolean }).animate = true; });
     return { nodes, edges, pinDefault, lines };
-  }, [map, view, scenario, result, selection, menu, flip, probes, step, lab, hl, bv]);
+  }, [map, view, scenario, result, selection, menu, flip, probes, step, lab, hl, bv, natW, figure]);
 }
 
-function Canvas({ hl, setHl, map, view, setView, scenario, result, at, selection, select, focus, menu, flip, probes, step, steps, lab = 1, chips }: { chips?: ChipCtx; hl: Formula | null; setHl: (f: Formula | null) => void; lab?: number; map: MapData; view: View; setView: (v: View) => void; scenario: Scenario; result: Result | null; at: number; selection: Selection; select: (s: Selection) => void; focus: { id: string; n: number }; menu: (s: Selection, e: React.MouseEvent) => void; flip: () => void; probes: ProbeState; step: (k: GainKey, up: boolean) => void; steps?: StepData }) {
+function Canvas({ hl, setHl, map, view, setView, scenario, result, at, selection, select, focus, menu, flip, probes, step, steps, lab = 1, chips, figure = false }: { figure?: boolean; chips?: ChipCtx; hl: Formula | null; setHl: (f: Formula | null) => void; lab?: number; map: MapData; view: View; setView: (v: View) => void; scenario: Scenario; result: Result | null; at: number; selection: Selection; select: (s: Selection) => void; focus: { id: string; n: number }; menu: (s: Selection, e: React.MouseEvent) => void; flip: () => void; probes: ProbeState; step: (k: GainKey, up: boolean) => void; steps?: StepData }) {
   const flow = useReactFlow();
   const bvc = useContext(BankCtx);
   const toggle = (k: string) => {
@@ -1025,7 +1030,8 @@ function Canvas({ hl, setHl, map, view, setView, scenario, result, at, selection
     else setView({ ...view, agents: view.agents.includes(k) ? view.agents.filter(a => a !== k) : [...view.agents, k] });
   };
   const withShow = useMemo<ProbeState>(() => ({ ...probes, show: (p, e) => { const at = flow.screenToFlowPosition({ x: e.clientX, y: e.clientY }); const c = probes.cardSize ?? { w: PIN_W, h: PIN_H }; probes.place(p, { x: at.x - c.w / 2, y: at.y - c.h - 14 }); } }), [probes, flow]);
-  const graph = useModelGraph(map, view, toggle, scenario, result, at, selection, select, menu, flip, withShow, step, lab, hl, setHl);
+  const natW = useFormulaWidths();
+  const graph = useModelGraph(map, view, toggle, scenario, result, at, selection, select, menu, flip, withShow, step, lab, hl, setHl, natW, figure);
   const shown = graph.nodes;
   useEffect(() => {
     const id = focus.id;
@@ -1075,12 +1081,19 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
   const [lab, setLab] = useState(() => { try { const v = Number(localStorage.getItem('hpl.labelSize')); return v >= 1 && v <= 2.5 ? v : 1.3; } catch { return 1.3; } });
   useEffect(() => { try { localStorage.setItem('hpl.labelSize', String(lab)); } catch { /* storage blocked */ } }, [lab]);
   const [shooting, setShooting] = useState(false);
+  // Figure mode (?figure=1): a clean, white canvas for thesis figures; "keep highlight" keeps a clicked equation's flows lit
+  const [figure, setFigure] = useState(() => { try { return new URLSearchParams(location.search).get('figure') === '1'; } catch { return false; } });
+  const [keepHl, setKeepHl] = useState(true);
+  const flipFigure = () => setFigure(f => { const n = !f; try { const u = new URL(location.href); if (n) u.searchParams.set('figure', '1'); else u.searchParams.delete('figure'); history.replaceState(null, '', u); } catch { /* ignore */ } return n; });
   const bodyRef = useRef<HTMLDivElement>(null);
   const shootCanvas = async () => {
     // The canvas, plus the side panels when they are open (collapsed handles are left out).
     const body = bodyRef.current, canvas = canvasRef.current; if (!body || !canvas) return;
     setShooting(true);
-    try { await savePng(dock || (left && leftOpen) ? body : canvas, 'housing-model-canvas'); }
+    try {
+      if (figure) await savePng(canvas, 'figure-' + (view.agents.length ? view.agents.join('-') : 'map'), 4);
+      else await savePng(dock || (left && leftOpen) ? body : canvas, 'housing-model-canvas');
+    }
     catch (e) { console.error(e); alert('Screenshot failed: ' + (e instanceof Error ? e.message : String(e))); }
     finally { setShooting(false); }
   };
@@ -1228,7 +1241,9 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
       {!bvMap && <><button data-guide="ident" className={ident ? 'secondary' : 'ghost'} title="Open loop: poles and step response from the subsidy to the house price, and change the model parameters" onClick={() => { if (ident) { setSelection({ kind: 'none', id: '' }); return; } setDock(true); setSelection({ kind: 'ident', id: '' }); setPins(old => old.some(p => p.flow === 'y_price' && p.q === 's') ? old : [...old, { flow: 'y_price', q: 's' }]); }}><Activity size={14}/> Identify system</button>
       <button data-guide="robust" className={selection.kind === 'robust' ? 'secondary' : 'ghost'} title="S, T and KS of the current controller against the limits, and random markets, in the side panel" onClick={() => { if (selection.kind === 'robust') { setSelection({ kind: 'none', id: '' }); return; } setDock(true); setSelection({ kind: 'robust', id: '' }); }}><ShieldCheck size={14}/> Robustness</button>
       <button className={view.formulas ? 'secondary' : 'ghost'} aria-pressed={!!view.formulas} title="Show the CPB equations on the agents (click one to light up its flows and elements)" onClick={() => { setView(view.formulas ? { ...view, formulas: false } : { ...view, system: true, cpb: true, formulas: true }); }}><Sigma size={14}/> CPB formulas</button></>}
-      <button className="ghost" data-no-shot title="Save the canvas (and the open side panels) as a high-resolution PNG (3x)" disabled={shooting} onClick={shootCanvas}>{shooting ? <LoaderCircle className="spin" size={14}/> : <Camera size={14}/>} Screenshot canvas</button>
+      <button className="ghost" data-no-shot title="Save the canvas (and the open side panels) as a high-resolution PNG (3x)" disabled={shooting} onClick={shootCanvas}>{shooting ? <LoaderCircle className="spin" size={14}/> : <Camera size={14}/>} {figure ? 'Save figure' : 'Screenshot canvas'}</button>
+      <button className={figure ? 'secondary' : 'ghost'} data-no-shot aria-pressed={figure} title="Figure mode: white background, no buttons or hints, fixed formula size; the screenshot is saved at 4x for the thesis" onClick={flipFigure}><ImageIcon size={14}/> Figure mode</button>
+      {figure && <label className="keep-hl" data-no-shot title="Keep the flows and elements of a clicked equation lit in the figure"><input type="checkbox" checked={keepHl} onChange={e => setKeepHl(e.target.checked)}/> keep highlight</label>}
       <label className="label-size" title="Size of block headers, signal names and the Parliament, Tax Authority and CBS blocks">Label size <output>{lab.toFixed(1)}×</output><input type="range" aria-label="Label size" min={1} max={2.5} step={0.1} value={lab} onChange={e => setLab(Number(e.target.value))}/></label>
     </div>
       {zn && tour?.compare && <button data-guide="zn-compare" className={showZn ? 'secondary' : 'ghost'} aria-pressed={showZn} title="Add the aggressive Ziegler–Nichols PID on the same inputs to the plot cards, dotted" onClick={() => setShowZn(v => !v)}>⋯ Ziegler–Nichols PID</button>}
@@ -1238,7 +1253,7 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
     <div className="map-body" ref={bodyRef} style={{ gridTemplateColumns: `${left ? (leftOpen ? '290px ' : '34px ') : ''}minmax(0,1fr) ${!dock ? '34px' : selection.kind === 'ident' || selection.kind === 'robust' ? '520px' : selection.kind === 'agent' && selection.id === 'controller' ? '460px' : '340px'}` }}>
       {left && (leftOpen ? <aside className="inspector left-dock"><button className="dock-toggle" aria-label="Collapse scenario panel" title="Collapse" onClick={() => setLeftOpen(false)}><Minus size={14}/></button>{left}</aside>
         : <button className="dock-handle" data-no-shot aria-label="Open scenario panel" title="Open scenario panel" onClick={() => setLeftOpen(true)}><ChevronRight size={16}/><span>Scenario</span></button>)}
-      <div className={'map-canvas' + (playing ? ' playing' : '')} ref={canvasRef} style={{ ['--lab' as string]: lab, ['--eq' as string]: lab / 1.3 }} onClick={() => setMenuAt(null)}><ReactFlowProvider><Canvas hl={hl} setHl={setHl} map={map} view={view} setView={setView} scenario={scenario} result={result} at={at} selection={selection} select={setSelection} focus={focus} menu={openMenu} flip={() => setFeedback(!scenario.feedback)} probes={probeState} step={stepGain} steps={stepping ? steps : null} lab={lab} chips={{ update, stepping, stepInput, setStepInput: pickStep, showCtrl: view.controller || tuning || !!forceChips?.ctrl, showMarket: view.system || (selection.kind === 'agent' && selection.id === 'system') || !!forceChips?.market }}/></ReactFlowProvider>
+      <div className={'map-canvas' + (playing ? ' playing' : '') + (figure ? ' figure-mode' : '') + (figure && !keepHl ? ' figure-nohl' : '')} ref={canvasRef} style={{ ['--lab' as string]: lab, ['--eq' as string]: lab / 1.3 }} onClick={() => setMenuAt(null)}><ReactFlowProvider><Canvas hl={hl} setHl={setHl} map={map} view={view} setView={setView} scenario={scenario} result={result} at={at} selection={selection} select={setSelection} focus={focus} menu={openMenu} flip={() => setFeedback(!scenario.feedback)} probes={probeState} step={stepGain} steps={stepping ? steps : null} lab={lab} figure={figure} chips={{ update, stepping, stepInput, setStepInput: pickStep, showCtrl: view.controller || tuning || !!forceChips?.ctrl, showMarket: view.system || (selection.kind === 'agent' && selection.id === 'system') || !!forceChips?.market }}/></ReactFlowProvider>
         {menuAt && <div className="ctx-menu" role="menu" style={{ left: menuAt.x, top: menuAt.y }} onClick={e => e.stopPropagation()}>
           {menuAt.target.kind === 'agent' && (menuAt.target.id === 'parliament' || menuAt.target.id === 'sum') ? <>
             <p>{menuAt.target.id === 'parliament' ? 'Parliament' : 'Summing junction'}</p>
