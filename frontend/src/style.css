@@ -669,3 +669,20 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 /* figure mode: flows outside the highlighted equation stay faintly visible (Jesse) */
 .figure-mode.hide-faded .react-flow.hl-on .react-flow__edge:not(.lit) { opacity:.25; }
 .react-flow.hl-on .circuit .u-signal.lit { opacity:1; } .circuit .u-signal .u-sig-name { font:italic 700 24px Georgia,serif; fill:#1f6fc4; }
+
+/* Figure mode labels (handoff figure follow-up): element labels as big as the flow labels. FIGURE_LABEL_PX = --fig-label,
+   canvas px; the circuits draw at 2 svg units per canvas px. 14 px is Claude's choice: about 9-10 pt when a Households-only
+   crop (~650 canvas px, "Save selection") is printed at 16 cm, about 5 pt for the whole CPB box. Breadboard dots stay (Jesse). */
+.map-canvas.figure-mode { --fig-label:14px; }
+.figure-mode .rail-name { font-size:var(--fig-label); }
+.figure-mode .circuit .element text { font-size:calc(var(--fig-label) * 2); paint-order:stroke; stroke:#fff; stroke-width:6px; stroke-linejoin:round; }
+.figure-mode .circuit .element text .el-sub { font-size:80%; }
+.figure-mode .el-sym { font-size:calc(var(--fig-label) * 2); text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff; }
+.figure-mode .el-sym .katex .msupsub .reset-size6.size3 { font-size:0.8em; }  /* subscripts 80 % of the letter, KaTeX default 70 % */
+.figure-mode .circuit .formula-node text { font-size:calc(var(--fig-label) * 2); font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:6px; }
+/* no highlight boxes behind elements: the highlight is the wire colour; elements in one neutral ink */
+.figure-mode .circuit .element .hit { fill:transparent !important; }
+.figure-mode .circuit .element.selected .glyph * { stroke:#26332e; stroke-width:3; }
+/* faint by default; "hide faded" leaves the flows outside the equation out altogether (also between closed agents) */
+.figure-mode.hide-faded .react-flow.hl-on .react-flow__edge:not(.lit) { visibility:hidden; }
+.figure-mode .rail-name, .figure-mode .rail.selected .rail-name { font-size:var(--fig-label) !important; }

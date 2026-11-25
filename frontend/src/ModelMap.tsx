@@ -1111,6 +1111,8 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
   };
   const shootSelection = async () => {
     const canvas = canvasRef.current; if (!canvas) return; setShooting(true);
+    // first zoom to the opened agent(s), so they are fully on the canvas (no sticky headers, nothing clipped)
+    setFocus(f => ({ id: view.agents.length === 1 ? view.agents[0] : '', n: f.n + 1 })); await new Promise(r => setTimeout(r, 900));
     try { await savePng(canvas, 'figure-' + (view.agents.join('-') || 'map') + '-selection', 4, contentBox(canvas, true)); }
     catch (e) { console.error(e); alert('Screenshot failed: ' + (e instanceof Error ? e.message : String(e))); } finally { setShooting(false); }
   };

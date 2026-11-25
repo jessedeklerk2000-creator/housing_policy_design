@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react';
+import { useContext, useLayoutEffect, useRef, useState } from 'react';
 import { LabelCtx, NAMES, namePlain, tex } from './elementNames';
 import type { Element, Flow, MapData, Scenario, Selection } from './types';
 
@@ -47,10 +47,10 @@ function ElementView({ e, state, selected, pick, menu }: { e: Element; state: st
 function ElementLabel({ e, x, y, anchor }: { e: Element; x: number; y: number; anchor: 'start' | 'middle' }) {
   const { mode, symbols } = useContext(LabelCtx), n = NAMES[e.name], sym = symbols[e.name];
   const name = <text x={x} y={y} textAnchor={anchor}>{n ? <>{n.letter}<tspan className="el-sub" baselineShift="sub">{n.sub}</tspan></> : short(e)}<title>{`${n ? namePlain(e.name) + ' · ' : ''}${e.name}`}</title></text>;
-  if (mode === 'names' || !sym) return name;
+  if (mode === 'names' || !sym) return <g className="el-label">{name}</g>;
   const W = 240, fx = anchor === 'start' ? x : x - W / 2, fy = mode === 'both' ? y + 6 : y - 26;
   const symbol = <foreignObject x={fx} y={fy} width={W} height={40} className="el-sym-fo"><div className={'el-sym ' + anchor} dangerouslySetInnerHTML={{ __html: tex(sym) }}/></foreignObject>;
-  return mode === 'symbols' ? symbol : <>{name}{symbol}</>;
+  return <g className="el-label">{mode === 'symbols' ? symbol : <>{name}{symbol}</>}</g>;
 }
 
 /** Terminal pair on the agent border: flow rail with ammeter, return rail, voltmeter between them. */
@@ -111,7 +111,28 @@ function traceFlow(segs: Seg[], start: number[], pins: { name: string; pins: num
 const SHOCK_RED = '#c5352a', SUBSIDY_BLUE = '#1f6fc4';
 export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inputs = [], inputSide = 'left', outside = false, highlight = [], litFlows = [], trace = [] }: { outside?: boolean; highlight?: string[]; litFlows?: string[]; trace?: string[]; map: MapData; agent: string; scenario: Scenario; selection: Selection; pick: (s: Selection) => void; menu?: (s: Selection, ev: React.MouseEvent) => void; inputs?: { id: string; label: string; element?: string }[]; inputSide?: 'left' | 'top' }) {
   const layout = map.layouts[agent], [w, h] = layout.size;
-  const labelCtx = useContext(LabelCtx), nodesHere = labelCtx.nodes.filter(nd => NAMES[nd.element]?.agent === agent);
+  const svgRef = useRef<SVGSVGElement>(null), labelCtx = useContext(LabelCtx);
+  // Figure mode: bigger labels must not overlap. Greedy nudge after each render: labels in reading order, each moved down
+  // below any label it would overlap (svg units, 4 units clearance).
+  useLayoutEffect(() => {
+    const svg = svgRef.current; if (!svg) return;
+    const labels = [...svg.querySelectorAll<SVGGElement>('.el-label')];
+    labels.forEach(l => l.removeAttribute('transform'));
+    if (!labelCtx.figure) return;
+    const boxes = labels.map(l => ({ l, b: l.getBBox() })).filter(x => x.b.width > 0).sort((a, b) => a.b.y - b.b.y || a.b.x - b.b.x);
+    const placed: DOMRect[] = [];
+    for (const { l, b } of boxes) {
+      let dy = 0;
+      for (let k = 0; k < 12; k++) {
+        const hitBox = placed.find(p => b.x < p.x + p.width + 4 && b.x + b.width + 4 > p.x && b.y + dy < p.y + p.height + 4 && b.y + dy + b.height + 4 > p.y);
+        if (!hitBox) break;
+        dy = hitBox.y + hitBox.height + 4 - b.y;
+      }
+      if (dy) l.setAttribute('transform', `translate(0 ${dy})`);
+      placed.push(new DOMRect(b.x, b.y + dy, b.width, b.height));
+    }
+  });
+  const nodesHere = labelCtx.nodes.filter(nd => NAMES[nd.element]?.agent === agent);
   const hidden = (e: Element) => (e.name === 'I§Owner_occupied_subsidies' && scenario.feedback) || (e.name === 'B§PID' && !scenario.feedback);
   const elements = map.elements.filter(e => e.agent === agent && !hidden(e));
   const flow = (id: string) => map.flows.find(f => f.id === id)!;
@@ -173,7 +194,7 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
       prune(net, segsR, money.map(f => layout.returns[f.id]), geoR);
     }
   }
-  return <svg className="circuit embedded" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${map.agents[agent].label} circuit`}>
+  return <svg ref={svgRef} className="circuit embedded" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${map.agents[agent].label} circuit`}>
     {BREADBOARD}<rect x={0} y={0} width={w} height={h} fill="url(#breadboard)"/>
     <defs>{([['shock', SHOCK_RED], ['subsidy', SUBSIDY_BLUE]] as const).map(([k, c]) => <marker key={k} id={`in-${agent}-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="22" markerHeight="22" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" fill={c}/></marker>)}</defs>
     <g className="return-wires">{[...layout.return_wires, ...layout.common_returns].map((r, i) => <path key={i} d={line(r)}/>)}{layout.dots.map(([x, y], i) => <circle key={`d${i}`} className="return-dot" cx={x} cy={y} r={5}/>)}</g>
