@@ -257,8 +257,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     wires.push(arrow(pts, D, 'dgov', 'd · subsidy')); wires.push(hit(pts, 'dgov', { kind: 'd', id: 'd_gov', at: [r.x - 60, y] }, 'Government subsidy: click to plot')); }
   // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
   // the financial crisis comes from the Financial sector (other banks withdraw deposits, cut credit)
-  { const t = g.inner ? g.inner.bs : B, x = t.x + t.w / 2, fx = fs.x + fs.w / 2, ly = B.y - 60, pts = [[fx, fs.y], [fx, ly], [x, ly], [x, t.y]];
-    (g.inner ? over : wires).push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); (g.inner ? over : wires).push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [x, B.y - 40] }, 'Financial crisis: deposits withdrawn, firm credit cut: click to plot')); }
+  // the financial crisis (Jesse): from outside into the Financial sector; it reaches the bank through the interbank link
+  { const fx = fs.x + fs.w / 2, pts = [[fx, fs.y - 110], [fx, fs.y]];
+    wires.push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); wires.push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [fx, fs.y - 50] }, 'Financial crisis: deposits withdrawn, firm credit cut: click to plot')); }
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
@@ -306,7 +307,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       const uy = dk.y + 45 + 30 * i, mx = acc.x + acc.w + 40 + 25 * i, t = uT[i], top = Math.min(bs.y, acc.y) - 20 - 18 * i, dx = bs.x + bs.w + 40 + 20 * i;
       // open desk: from its rate output on the right, round the desk and over the top lane
       const head: number[][] = o.desk ? (() => { const u = dt(i ? DESK_T.u2 : DESK_T.u1), rx = dk.x + dk.w + 30 + 22 * i; return [u, [rx, u[1]], [rx, top]]; })() : [[dk.x, uy], [mx, uy], [mx, top]];
-      const pts = circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
+      // Operations and Accounting closed: straight from the desk into Operations (Jesse)
+      const straight = !circ && !sub && !o.desk && uy > bs.y + HEAD && uy < bs.y + bs.h;
+      const pts = straight ? [[dk.x, uy], [bs.x + bs.w, uy]] : circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
       over.push(arrow(pts, PU, 'u' + i, name, 0.5));
     });
     inside = <>
