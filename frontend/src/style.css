@@ -698,5 +698,6 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .circuit .u-signal.fig-u .u-fig-name { text-anchor:start; }
 .figure-mode .react-flow.hl-on .map-node.controller { opacity:1; }  /* the controller in the Subsidy figure: not faded */
 .stmt-line { display:flex; align-items:flex-start; gap:8px; } .stmt-line > .stmt-row { flex:1 1 auto; min-width:0; } .stmt-line > .stmt-plot { flex:0 0 auto; margin:0; }
-.bus-stmt-body .stmt-line > .stmt-row { flex:0 0 var(--row-w, auto); }  /* lines keep the box's own width; the plot takes the extra width */
-.bus-stmt-body .stmt-sec, .bus-stmt-body .stmt-drill { width:var(--row-w, auto); box-sizing:border-box; }
+/* bus view: a plotted value opens a small card to the right of its statement box, level with its line; the box keeps its size */
+.bus-stmt-body { overflow:visible; }
+.bus-stmt-body .stmt-line > .stmt-plot { position:absolute; left:calc(100% + 22px); z-index:20; margin-top:-6px; background:#fff; border:1px solid #cfd8d3; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.14); padding:4px 6px; }

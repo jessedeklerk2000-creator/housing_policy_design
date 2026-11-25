@@ -2,7 +2,7 @@
 // Structure after Q. Emanuels' DynaBI statement network (statement blocks of sections and accounts; each account opens
 // into its formula, inputs and source); content after Menkveld (2025) Fig. 2-2/2-3 and the bank netlist
 // (backend/housing/bank_ledger.py). Values in model units (mortgage book 100 at the start), flows per year.
-import { useContext, useEffect, useState, type ReactElement } from 'react';
+import { useContext, useState, type ReactElement } from 'react';
 import { AtContext, readTrace } from './ModelMap';
 import type { Ledger } from './types';
 
@@ -16,10 +16,9 @@ const RATIO_OVER: Record<string, string> = { tier1: 'rwa', nsfr: 'rsf', leverage
 // The signals from the statements into the key figures (what ALM Reporting reads off the sheet)
 export const KEY_INPUTS: [string, string][] = [['equity', 'equity'], ['mortgages', 'mortgages'], ['firm_loans', 'loans to firms'], ['savings', 'savings'], ['interbank', 'other banks'], ['assets', 'total assets'], ['net_profit', 'net profit']];
 
-export function BankStatements({ part = 'all', only, onPlots }: { part?: 'all' | 'statements' | 'ratios'; only?: string; onPlots?: (n: number) => void }) {
+export function BankStatements({ part = 'all', only }: { part?: 'all' | 'statements' | 'ratios'; only?: string }) {
   const { result, at } = useContext(AtContext);
   const [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set());
-  useEffect(() => { onPlots?.(plots.size); }, [plots.size, onPlots]);  // the bus view widens the box while a plot is open
   const L: Ledger | undefined = result?.ledger;
   if (!result || !L) return <div className="stmt-empty">Run the simulation to see the statements.</div>;
   const val = (id: string) => { const t = readTrace(result, 'Ledger:' + id); return t ? t[at] : undefined; };
