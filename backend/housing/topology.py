@@ -33,7 +33,7 @@ FLOWS = [
     {"id": "houses", "label": "Houses", "short": "Houses", "source": "constructors", "target": "investors", "signal": "I(Construction)", "unit": "#/year", "kind": REAL, "chain": ["B§Construction", "L4"], "port": {"node": "N034", "ret": "N035"}, "description": "New houses, 0.002 × delay(construction cost^0.6, 1 year). A separate loop; B§Housing_services reads its value and accumulates it."},
     {"id": "consumption", "label": "Consumption cost", "short": "Consumption", "source": "households", "target": "firms", "signal": "I(Consumption)", "unit": "€/year", "kind": MONEY, "chain": ["R12", "L§Consumption", "L14", "L§F_Consumption"], "port": {"node": "N037", "ret": "0"}, "description": "Household spending on goods and services."},
     {"id": "income", "label": "Income", "short": "Income", "source": "firms", "target": "households", "signal": "I(Income)", "unit": "€/year", "kind": MONEY, "chain": ["Incomeactual", "L§Income"], "port": {"node": "N041", "ret": "0"}, "description": "Historical income path."},
-    {"id": "goods", "label": "Goods and services", "short": "Goods", "source": "firms", "target": "households", "signal": "I(L11)", "unit": "#/year", "kind": REAL, "chain": ["L§Supply_consumption", "L11", "L§Demand_consumption"], "port": {"node": "N040", "ret": "0"}, "description": "Quantity of goods and services sold."},
+    {"id": "goods", "label": "Goods and services", "short": "Goods", "source": "firms", "target": "households", "signal": "I(L11)", "unit": "#/year", "kind": REAL, "chain": ["L§Supply_consumption", "L11"], "port": {"node": "N040", "ret": "0"}, "description": "Quantity of goods and services sold."},
     {"id": "mortgages", "label": "Mortgages", "short": "Mortgages", "source": "bank", "target": "investors", "signal": "I(Mortgages)", "unit": "€/year", "kind": MONEY, "chain": ["I§Mortgages"], "port": {"node": "N007", "ret": "0"}, "description": "Historical new mortgage lending. Can be negative when repayments exceed lending."},
     {"id": "mortgage_interest", "label": "Mortgage interest", "short": "Mortgage interest", "source": "investors", "target": "bank", "signal": "I(Mortgage_interest)", "unit": "€/year", "kind": MONEY, "chain": ["B§Mortgage_interest"], "port": {"node": "N007", "ret": "0"}, "description": "Mortgage debt × interest rate."},
     {"id": "savings", "label": "Savings", "short": "Savings", "source": "households", "target": "bank", "signal": "I(L8)", "unit": "€/year", "kind": MONEY, "chain": ["R18", "L8"], "port": {"node": "N015", "ret": "0"}, "description": "Household saving."},
@@ -83,12 +83,12 @@ LAYOUTS = {
         "I§Rental_subsidies1": _e((700, 140), (600, 140)), "L§Rent": _e((600, 280), (600, 180)), "R5": _e((600, 400), (600, 300)),
         "I§Owner_occupied_subsidies": _e((940, 140), (840, 140)), "B§PID": _e((940, 140), (840, 140)), "L§Imputed_rent": _e((840, 280), (840, 180)), "R4": _e((840, 400), (840, 300)),
         "C6": _e((520, 400), (520, 480)), "L§Consumption": _e((240, 400), (140, 400)), "R12": _e((360, 400), (260, 400)),
-        "L§Income": _e((140, 520), (240, 520)), "L11": _e((140, 640), (240, 640)), "L§Demand_consumption": _e((300, 640), (300, 740)),
+        "L§Income": _e((140, 520), (240, 520)), "L11": _e((140, 640), (240, 640)),  # L11 = 2 H: L§Demand_consumption (1 H, in series) merged into it (Jesse, 25 Nov 2026)
         "R18": _e((1000, 420), (1100, 420)), "R2": _e((1100, 520), (1000, 520)),
     }, "wires": [
         [120, 0, 120, 140], [360, 0, 360, 100], [360, 180, 360, 220], [600, 0, 600, 180], [600, 280, 600, 300], [840, 0, 840, 180], [840, 280, 840, 300],
         [360, 400, 1000, 400], [1000, 400, 1000, 520], [0, 400, 140, 400], [240, 400, 260, 400], [0, 520, 140, 520], [240, 520, 440, 520], [440, 520, 440, 400],
-        [0, 640, 140, 640], [240, 640, 300, 640], [1100, 420, 1200, 420], [1200, 520, 1100, 520],
+        [0, 640, 140, 640], [240, 640, 300, 640], [300, 640, 300, 740], [1100, 420, 1200, 420], [1200, 520, 1100, 520],
     ], "return_wires": [
         [144, 0, 144, 20], [144, 20, 220, 20], [220, 20, 220, 140], [384, 0, 384, 20], [384, 20, 460, 20], [460, 20, 460, 220],
         [624, 0, 624, 20], [624, 20, 700, 20], [700, 20, 700, 140], [864, 0, 864, 20], [864, 20, 940, 20], [940, 20, 940, 140],

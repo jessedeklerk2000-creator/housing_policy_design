@@ -4,7 +4,7 @@ constructors,V§Construction_cost,V constr.,P_m^{\beta},"construction payment, t
 constructors,L2,L constr.,,numerical,New construction (2.14)
 households,L§Demand_rent,L rent,h_h,rental housing demand,Utility and budget (2.1)
 households,L§Demand_owner_occupied,L owner,h_k,owner-occupied housing demand,Utility and budget (2.1)
-households,L§Demand_consumption,L x,x,other consumption,Utility and budget (2.1)
+households,L11,L goods,x,other consumption (goods demand),Utility and budget (2.1)
 households,B4,B own,,"owning versus renting coupling (carries θ, σ in the CPB model); no single symbol",Utility and budget (2.1)
 households,L§Income,L income,b,budget: income into the households,Utility and budget (2.1)
 households,L§Rent,L rent pay,w_h h_h,rent paid,Utility and budget (2.1)

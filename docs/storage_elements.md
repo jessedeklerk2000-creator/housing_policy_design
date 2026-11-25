@@ -20,9 +20,8 @@ Nothing in the model is changed by this list.
 | firms | `L§F_loans` | L<sub>f. credit</sub> | `1` |  | to decide |
 | firms | `L§Supply_consumption` | L<sub>sup. goods</sub> | `1` |  | to decide |
 | households | `C6` | C<sub>income</sub> | `1` |  | friction? |
-| households | `L11` | L<sub>goods</sub> | `1` |  | to decide |
+| households | `L11` | L<sub>goods</sub> | `2` | Utility and budget (2.1): x | to decide |
 | households | `L§Consumption` | L<sub>cons.</sub> | `1 Rser=1u` | Utility and budget (2.1): p_x x | numerical? |
-| households | `L§Demand_consumption` | L<sub>x</sub> | `1` | Utility and budget (2.1): x | to decide |
 | households | `L§Demand_owner_occupied` | L<sub>owner</sub> | `2` | Utility and budget (2.1): h_k | to decide |
 | households | `L§Demand_rent` | L<sub>rent</sub> | `2` | Utility and budget (2.1): h_h | to decide |
 | households | `L§Imputed_rent` | L<sub>imp. pay</sub> | `3 Rser=1u` | Utility and budget (2.1): w_k h_k | numerical? |

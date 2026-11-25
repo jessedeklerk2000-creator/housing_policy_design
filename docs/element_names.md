@@ -46,9 +46,8 @@ Scheme: SPICE type letter + short English subscript. Claude's reading of the net
 | households | `C6` | C<sub>income</sub> | cap | `1` | household budget buffer |
 | households | `I§Owner_occupied_subsidies` | I<sub>subs. own</sub> | current | `PWL(0 23.00 6 24.01 12 24.01 12.1 24.56 ` | owner-occupied subsidy s_k (input u₂) |
 | households | `I§Rental_subsidies1` | I<sub>subs. rent</sub> | current | `PULSE(4 0 160 0 0 1000 1000)` | rental subsidy s_h (input u₁) |
-| households | `L11` | L<sub>goods</sub> | ind2 | `1` | goods received |
+| households | `L11` | L<sub>goods</sub> | ind2 | `2` | goods received and demanded (x); L§Demand_consumption merged in, 2 H |
 | households | `L§Consumption` | L<sub>cons.</sub> | ind2 | `1 Rser=1u` | consumption spending |
-| households | `L§Demand_consumption` | L<sub>x</sub> | ind2 | `1` | demand for other consumption x |
 | households | `L§Demand_owner_occupied` | L<sub>owner</sub> | ind2 | `2` | owner-occupied housing demand h_k |
 | households | `L§Demand_rent` | L<sub>rent</sub> | ind2 | `2` | rental housing demand h_h |
 | households | `L§Imputed_rent` | L<sub>imp. pay</sub> | ind2 | `3 Rser=1u` | imputed rent paid |
@@ -82,7 +81,7 @@ Scheme: SPICE type letter + short English subscript. Claude's reading of the net
 | investors | `V§Maintenance_costs` | V<sub>maint.</sub> | voltage | `PULSE(30 30 0 160 00 10)` | maintenance cost κ |
 | (not drawn) | `B3` | B<sub>cost/house</sub> | bi2 | `I=I(construction_cost)/I(construction)` | read-out: construction cost per house |
 | (not drawn) | `B7` | B<sub>serv. gap</sub> | bv | `V=20*(I(L10)-I(I5))` | housing-services gap 20·(I(L10) − I5) |
-| (not drawn) | `B§Consumptiongraph` | B<sub>cons. rat.</sub> | bi2 | `I=I(F_Consumption)/I(Demand_consumption)` | read-out: consumption ratio |
+| (not drawn) | `B§Consumptiongraph` | B<sub>cons. rat.</sub> | bi2 | `I=I(F_Consumption)/I(L11)` | read-out: consumption ratio |
 | (not drawn) | `B§Gross_housing1` | B<sub>gross i.</sub> | bi2 | `I=I(Gross_imputed_rent)/I(Demand_owner_o` | read-out: gross imputed rent per unit |
 | (not drawn) | `B§Gross_housing_rent1` | B<sub>gross r.</sub> | bi2 | `I=I(gross_rent)/I(Demand_rent)` | read-out: gross rent per unit |
 | (not drawn) | `B§Mortgage_Debt` | B<sub>mort. debt</sub> | bi2 | `I=idt(I(Mortgages))+100` | mortgage debt: 100 + ∫ mortgages |
