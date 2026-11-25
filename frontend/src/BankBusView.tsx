@@ -48,7 +48,7 @@ const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1:
 type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
-function geometry(o: Open, map: MapData) {
+function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
   const size = (id: string) => map.layouts[id].size as P;
   const box = (id: string): P => o[id] ? [size(id)[0] * S, size(id)[1] * S + HEAD] : TILE;
   const [cw, ch] = box('constructors'), [fw, fh] = box('firms'), [iw, ih] = box('investors'), [hw, hh] = box('households');
@@ -72,7 +72,8 @@ function geometry(o: Open, map: MapData) {
     // Accounting holds one box per statement, each closed until its + is clicked
     let acc: R = { x: bs.x + bs.w + 150, y: by + 90, w: 230, h: 110 }, sub: Record<string, R> | null = null;
     if (o.acc) {
-      const sz = (k: string): P => o[k] ? STMT_OPEN[k] : [210, 72], x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
+      // sizes: dragged by the corner grip (Jesse)
+      const sz = (k: string): P => o[k] ? sizes[k] ?? STMT_OPEN[k] : [210, 72], x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
       const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] }, eq: R = { x: x0, y: inc.y + inc.h + 70, w: sz('eq')[0], h: sz('eq')[1] };
       const bal: R = { x: x0 + Math.max(inc.w, eq.w) + 120, y: y0, w: sz('bal')[0], h: sz('bal')[1] };
       const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
@@ -132,11 +133,12 @@ function Block({ r, label, tone, open, toggle, children, z }: { r: R; label: str
   </div>;
 }
 
-type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean };
+type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
-  const { result, at, o, set, map, scenario, desk, buses } = data;
+  const { result, at, o, set, map, scenario, desk, buses, sizes, resize } = data;
+  const rf = useReactFlow();
   STRAIGHT.on = !buses;
-  const g = geometry(o, map), { R } = g, B = R.bank;
+  const g = geometry(o, map, sizes), { R } = g, B = R.bank;
   // click a flow, a bus or a shock: a card with its plot over the run (as the plot cards in the control-loop view)
   const [pick, setPick] = useState<Pick | null>(null);
   const hit = (pts: number[][], key: string, p: Pick, tip: string) => <polyline key={key + 'h'} points={pts.map(q => q.join(',')).join(' ')} fill="none" stroke="transparent" strokeWidth={14}
@@ -320,6 +322,12 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={3}>
         {o[k] && <div className="bus-stmt-body nowheel" style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
           <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></div>}
+        {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
+          onDoubleClick={e => { e.stopPropagation(); resize(k, null); }}
+          onPointerDown={e => { e.stopPropagation(); e.preventDefault(); const el = e.currentTarget, z = rf.getZoom(), x0 = e.clientX, y0 = e.clientY, s0 = sub[k]; el.setPointerCapture(e.pointerId);
+            const move = (ev: PointerEvent) => resize(k, [Math.max(240, s0.w + (ev.clientX - x0) / z), Math.max(HEAD + 120, s0.h + (ev.clientY - y0) / z)]);
+            const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+            el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }}/>}
       </Block>)}
       <Block r={alco} label="ALCO" tone="reference"/>
       <div className="map-node summing" style={{ position: 'absolute', left: sum[0] - 17, top: sum[1] - 17, width: 34, height: 34, zIndex: 2 }}/>
@@ -373,7 +381,9 @@ const nodeTypes = { diagram: Diagram };
 
 function Inner({ result, desk, patch }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData }) {
   const n = result.year.length;
-  const [buses, setBuses] = useState(false);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
+  const [buses, setBuses] = useState(false);
+  const [sizes, setSizes] = useState<Record<string, P>>({});
+  const resize = useCallback((k: string, s: P | null) => setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }), []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
   const [at, setAt] = useState(n - 1), [playing, setPlaying] = useState(false), [o, setO] = useState<Open>({});
   const [map, setMap] = useState<MapData | null>(null);
   const rf = useReactFlow();
@@ -392,13 +402,13 @@ function Inner({ result, desk, patch }: { result: Result; desk: ReactNode; patch
     if (k === 'hm' && !next.hm) for (const x of CPB4) next[x] = false;
     if (k === 'acc' && !next.acc) for (const x of subs) next[x] = false;
     if (!map) return next;
-    const g = geometry(next, map), byId: Record<string, R | undefined> = { ...g.R, ...g.inner?.sub, bs: g.inner?.bs, acc: g.inner?.acc, desk: g.inner?.desk };
+    const g = geometry(next, map, sizes), byId: Record<string, R | undefined> = { ...g.R, ...g.inner?.sub, bs: g.inner?.bs, acc: g.inner?.acc, desk: g.inner?.desk };
     const target = next[k] ? byId[k] : subs.includes(k) ? byId.acc : (k === 'bs' || k === 'acc' || k === 'desk') ? g.R.bank : undefined;
     window.setTimeout(() => { if (target) rf.fitBounds({ x: target.x - 40, y: target.y - 40, width: target.w + 80, height: target.h + 80 }, { duration: 450 }); else rf.fitView({ duration: 450, padding: 0.04 }); }, 40);
     return next;
-  }), [rf, map]);
+  }), [rf, map, sizes]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
-    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses } }] : [], [result, at, n, o, set, map, scenario, desk, buses]);
+    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize]);
   return <>
     <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>

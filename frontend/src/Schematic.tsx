@@ -119,11 +119,18 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     const svg = svgRef.current; if (!svg) return;
     const labels = [...svg.querySelectorAll<SVGGElement>('.el-label')];
     labels.forEach(l => l.removeAttribute('transform'));
-    // figure-mode subsidy signals start at the left edge of the CPB box
+    // figure-mode subsidy signals: from the controller (when shown) or the left edge of the CPB box, with their names
     const cpb = document.querySelector('.react-flow__node[data-id="cpb"]')?.getBoundingClientRect(), sr = svg.getBoundingClientRect();
+    const ctrl = document.querySelector('.react-flow__node[data-id="controller"]')?.getBoundingClientRect();
     svg.querySelectorAll<SVGPathElement>('path[data-extend]').forEach(p => { if (!cpb || !sr.width) return;
-      const x0 = (cpb.left + 12 - sr.left) * (svg.viewBox.baseVal.width / sr.width);
-      p.setAttribute('d', `M${x0} ${p.dataset.y} ` + p.dataset.extend!.split(' ').map(q => 'L' + q.replace(',', ' ')).join(' ')); });
+      const kx = svg.viewBox.baseVal.width / sr.width, ky = svg.viewBox.baseVal.height / sr.height, i = Number(p.dataset.i ?? 0), y = Number(p.dataset.y);
+      const x0 = (cpb.left + 12 - sr.left) * kx, rest = p.dataset.extend!.split(' ').map(q => 'L' + q.replace(',', ' ')).join(' ');
+      // owner-occupied (i = 1, the farther source, higher lane) leaves the controller higher and turns later: no crossing
+      let head = `M${x0} ${y} `, tx = x0 + 60, ty = y - 9;
+      if (ctrl) { const xc = (ctrl.right - sr.left) * kx, yc = (ctrl.top + ctrl.height * (0.6 - 0.2 * i) - sr.top) * ky, xb = x0 + 40 * i;
+        head = `M${xc} ${yc} L${xb} ${yc} L${xb} ${y} `; tx = xc + 24; ty = yc - 10; }
+      p.setAttribute('d', head + rest);
+      const t = p.parentElement?.querySelector('text.u-fig-name'); if (t) { t.setAttribute('x', String(tx)); t.setAttribute('y', String(ty)); } });
     if (!labelCtx.figure) return;
     const boxes = labels.map(l => ({ l, b: l.getBBox() })).filter(x => x.b.width > 0).sort((a, b) => a.b.y - b.b.y || a.b.x - b.b.x);
     const placed: DOMRect[] = [];
@@ -219,7 +226,8 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
       const cx = (src.pins[0][0] + src.pins[1][0]) / 2, cy = (src.pins[0][1] + src.pins[1][1]) / 2, yIn = 70 + 26 * (all.length - 1 - i);  // the farther source on the higher lane: no crossing
       const pts = [[0, yIn], [cx, yIn], [cx, cy - 24]];
       // data-extend: the layout effect moves the start to the left edge of the CPB box (no line out of thin air)
-      return <g key={'fig' + sig.flow} className="u-signal lit fig-u"><path data-extend={pts.slice(1).map(p => p.join(',')).join(' ')} data-y={yIn} d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-policy)`}/></g>; })}
+      return <g key={'fig' + sig.flow} className="u-signal lit fig-u"><path data-extend={pts.slice(1).map(p => p.join(',')).join(' ')} data-y={yIn} data-i={i} d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-policy)`}/>
+        <text className="u-fig-name" x={20} y={yIn - 9}>{sig.flow === 'rental_subsidy' ? 'Rental subsidies' : 'Owner-occupied subsidies'}</text></g>; })}
     {!outside && layout.signals.filter(sig => sig.flow !== 'rental_subsidy' || scenario.rental_subsidy).map(sig => <g key={sig.flow} className={`u-signal${selection.kind === 'flow' && selection.id === sig.flow ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`Control signal ${flow(sig.flow).label}`} onClick={ev => { ev.stopPropagation(); pick({ kind: 'flow', id: sig.flow }); }} onContextMenu={ev => { if (menu) { ev.preventDefault(); ev.stopPropagation(); menu({ kind: 'flow', id: sig.flow }, ev); } }}>
       <path d={sig.path.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/></g>)}
     {!outside && inputs.map((d, i) => { const e = d.element ? map.elements.find(x => x.name === d.element && x.agent === agent) : undefined; if (!e || !e.pins || e.pins.length < 2) return null;

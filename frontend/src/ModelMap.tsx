@@ -1008,7 +1008,8 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     }
     // Figure mode (report chapter on the CPB model): only the CPB Four Quadrants box with its agents and the flows between them
     if (figure && view.cpb) {
-      const keep = new Set(['anchor', 'cpb', ...CPB_AGENTS]), inner = new Set(map.flows.filter(f => CPB_AGENTS.includes(f.source) && CPB_AGENTS.includes(f.target)).map(f => f.id));
+      // the Subsidy formula: the controller stays, so the figure shows where the control output enters the system (Jesse)
+      const keep = new Set(['anchor', 'cpb', ...CPB_AGENTS, ...(hl?.id === 'subsidy' ? ['controller'] : [])]), inner = new Set(map.flows.filter(f => CPB_AGENTS.includes(f.source) && CPB_AGENTS.includes(f.target)).map(f => f.id));
       for (let i = nodes.length - 1; i >= 0; i--) if (!keep.has(nodes[i].id)) nodes.splice(i, 1);
       for (let i = edges.length - 1; i >= 0; i--) if (!inner.has(edges[i].id)) edges.splice(i, 1);
     }
