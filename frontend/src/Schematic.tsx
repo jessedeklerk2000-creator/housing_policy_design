@@ -118,10 +118,10 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
   pinsOf.filter(e => traceSet.has(e.name)).forEach(e => e.pins.forEach(p => traceFlow(layout.wires, p, pinsOf, traceSet).forEach(i => { if (!litW.has(i)) litW.set(i, KIND_COLOR.money); })));
   // Trim dangling ends: a lit wire must end at a lit element's pin, a lit flow's port or another lit wire; a loose end is
   // cut back to the last connection on that wire (or the wire goes dark when it has none).
-  const geo = new Map<number, Seg>();
-  if (traceSet.size) {
-    const anchors = [...pinsOf.filter(e => traceSet.has(e.name) || chainLit.has(e.name) || highlight.includes(e.name)).flatMap(e => e.pins), ...flowsHere.map(f => layout.ports[f.id])];
-    litW.forEach((_, i) => geo.set(i, [...layout.wires[i]]));
+  // trim a lit network: repeatedly cut loose ends back to the last connection (anchors or other lit wires), so only
+  // the part that joins the anchors stays lit
+  const prune = (lit: Map<number, string>, segs: Seg[], anchors: number[][], geo: Map<number, Seg>) => {
+    lit.forEach((_, i) => geo.set(i, [...segs[i]] as Seg));
     const ends = (g: Seg) => [[g[0], g[1]], [g[2], g[3]]];
     for (let changed = true, guard = 0; changed && guard < 500; guard++) { changed = false;
       for (const [i, g] of [...geo]) {
@@ -129,16 +129,26 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
         const held = (q: number[]) => anchors.some(a => near(a, q)) || others.some(h => onSeg(q, h));
         const [a, b] = ends(g), la = !held(a), lb = !held(b);
         if (!la && !lb) continue;
-        // connections on this wire: anchors and other wires' ends lying on it
         const pts = [...anchors, ...others.flatMap(ends)].filter(q => onSeg(q, g));
         const t = (q: number[]) => Math.hypot(q[0] - a[0], q[1] - a[1]), L = t(b);
         const ts = pts.map(t).filter(v => v > .5 && v < L - .5);
         const lo = la ? (ts.length ? Math.min(...ts) : null) : 0, hi = lb ? (ts.length ? Math.max(...ts) : null) : L;
         changed = true;
-        if (lo === null || hi === null || hi - lo < .5) { geo.delete(i); litW.delete(i); continue; }
+        if (lo === null || hi === null || hi - lo < .5) { geo.delete(i); lit.delete(i); continue; }
         const at = (v: number) => [a[0] + (b[0] - a[0]) * v / L, a[1] + (b[1] - a[1]) * v / L];
-        geo.set(i, [...at(lo), ...at(hi)]);
+        geo.set(i, [...at(lo), ...at(hi)] as Seg);
       }
+    }
+  };
+  const geo = new Map<number, Seg>(), geoR = new Map<number, Seg>();
+  if (traceSet.size) {
+    prune(litW, layout.wires as Seg[], [...pinsOf.filter(e => traceSet.has(e.name) || chainLit.has(e.name) || highlight.includes(e.name)).flatMap(e => e.pins), ...flowsHere.map(f => layout.ports[f.id])], geo);
+    // the return side of the traced node (Jesse): the return wires that join the money flows' returns
+    const money = flowsHere.filter(f => f.kind === 'money' && layout.returns[f.id]), net = new Map<number, string>();
+    if (money.length > 1) {
+      const segsR = [...layout.return_wires, ...layout.common_returns] as Seg[];  // the shared return rails too
+      money.forEach(f => traceFlow(segsR, layout.returns[f.id], [], new Set()).forEach(i => net.set(i, KIND_COLOR.money)));
+      prune(net, segsR, money.map(f => layout.returns[f.id]), geoR);
     }
   }
   return <svg className="circuit embedded" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${map.agents[agent].label} circuit`}>
@@ -146,7 +156,7 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     <defs>{([['shock', SHOCK_RED], ['subsidy', SUBSIDY_BLUE]] as const).map(([k, c]) => <marker key={k} id={`in-${agent}-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="22" markerHeight="22" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" fill={c}/></marker>)}</defs>
     <g className="return-wires">{[...layout.return_wires, ...layout.common_returns].map((r, i) => <path key={i} d={line(r)}/>)}{layout.dots.map(([x, y], i) => <circle key={`d${i}`} className="return-dot" cx={x} cy={y} r={5}/>)}</g>
     <g className="wires">{layout.wires.map((r, i) => <path key={i} d={line(r)}/>)}</g>
-    {(litW.size > 0 || litR.size > 0) && <g className="lit-wires">{[...litR].map(([i, c]) => <path key={'r' + i} className="ret" stroke={c} d={line(layout.return_wires[i])}/>)}{[...litW].map(([i, c]) => <path key={'w' + i} stroke={c} d={line(geo.get(i) ?? layout.wires[i])}/>)}</g>}
+    {(litW.size > 0 || litR.size > 0 || geoR.size > 0) && <g className="lit-wires">{[...geoR].map(([i, g]) => <path key={'n' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...litR].map(([i, c]) => <path key={'r' + i} className="ret" stroke={c} d={line(layout.return_wires[i])}/>)}{[...litW].map(([i, c]) => <path key={'w' + i} stroke={c} d={line(geo.get(i) ?? layout.wires[i])}/>)}</g>}
     <g className="grounds">{layout.grounds.map(([x, y], i) => <path key={i} d={`M${x - 14} ${y}H${x + 14}L${x} ${y + 16}Z`}/>)}</g>
     {/* outside: the canvas draws the subsidy and shock arrows straight through to the element (one unbroken arrow) */}
     {!outside && layout.signals.filter(sig => sig.flow !== 'rental_subsidy' || scenario.rental_subsidy).map(sig => <g key={sig.flow} className={`u-signal${selection.kind === 'flow' && selection.id === sig.flow ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`Control signal ${flow(sig.flow).label}`} onClick={ev => { ev.stopPropagation(); pick({ kind: 'flow', id: sig.flow }); }} onContextMenu={ev => { if (menu) { ev.preventDefault(); ev.stopPropagation(); menu({ kind: 'flow', id: sig.flow }, ev); } }}>

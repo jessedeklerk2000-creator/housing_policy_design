@@ -2,7 +2,7 @@
 // breadboards drawn by AgentCircuit, the same block styles), arranged around buses with the bank in the middle
 // (Jesse and his supervisor). Every bus branch ends on the real terminal of its flow: the port and the return point
 // from the netlist layout when the agent is open, the matching side of the tile when it is closed (as in the
-// control-loop view). Top level: names only. Bank level 1: Bank circuit, Accounting, ALCO, ALM Desk; level 2:
+// control-loop view). Top level: names only. Bank level 1: Operations, Accounting, ALCO, ALM Desk; level 2:
 // the bank's breadboard (process), its financial statements (sensor), or the desk's op-amp breadboard. Numbers only in the accounts (Jesse).
 // Bus structure after Q. Emanuels' DynaBI bus canvas: one bus per kind of exchange, two rails each (flow f, incentive
 // u); here the rails carry each flow's port and return terminal. Values come from the same ngspice run.
@@ -67,7 +67,7 @@ function geometry(o: Open, map: MapData) {
   const [bw0, bh0] = size('bank'), cs = 0.9, circ: P = [bw0 * cs, bh0 * cs];
   let inner: null | { bs: R; acc: R; circ: R | null; sub: Record<string, R> | null; alco: R; sum: P; desk: R } = null;
   if (o.bank) {
-    // Bank circuit = the bank's breadboard (process); Accounting = the financial statements (sensor)
+    // Operations = the bank's breadboard (process; the banking book); Accounting = the financial statements (sensor)
     const bs: R = o.bs ? { x: bx + 140, y: by + 90, w: circ[0] + 20, h: HEAD + circ[1] + 20 } : { x: bx + 140, y: by + 90, w: 280, h: 420 };
     // Accounting holds one box per statement, each closed until its + is clicked
     let acc: R = { x: bs.x + bs.w + 150, y: by + 90, w: 230, h: 110 }, sub: Record<string, R> | null = null;
@@ -256,8 +256,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   } else { const r = R.hm, y = r.y + HEAD + (r.h - HEAD) * (firmIns.length + 1) / (firmIns.length + 2), pts = [[r.x - 120, y], [r.x, y]];
     wires.push(arrow(pts, D, 'dgov', 'd · subsidy')); wires.push(hit(pts, 'dgov', { kind: 'd', id: 'd_gov', at: [r.x - 60, y] }, 'Government subsidy: click to plot')); }
   // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
-  { const t = g.inner ? g.inner.bs : B, x = t.x + t.w / 2, pts = [[x, B.y - 90], [x, t.y]];
-    (g.inner ? over : wires).push(arrow(pts, D, 'dob', 'd · financial crisis', 0)); (g.inner ? over : wires).push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [x, B.y - 40] }, 'Financial crisis: deposits withdrawn, firm credit cut: click to plot')); }
+  // the financial crisis comes from the Financial sector (other banks withdraw deposits, cut credit)
+  { const t = g.inner ? g.inner.bs : B, x = t.x + t.w / 2, fx = fs.x + fs.w / 2, ly = B.y - 60, pts = [[fx, fs.y], [fx, ly], [x, ly], [x, t.y]];
+    (g.inner ? over : wires).push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); (g.inner ? over : wires).push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [x, B.y - 40] }, 'Financial crisis: deposits withdrawn, firm credit cut: click to plot')); }
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
@@ -309,7 +310,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       over.push(arrow(pts, PU, 'u' + i, name, 0.5));
     });
     inside = <>
-      <Block r={bs} label="Bank circuit" tone={o.bs ? 'sub-group' : 'sub-closed'} open={o.bs} toggle={() => set('bs')} z={1}>
+      <Block r={bs} label="Operations" tone={o.bs ? 'sub-group' : 'sub-closed'} open={o.bs} toggle={() => set('bs')} z={1}>
         {o.bs && circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - bs.x, top: circ.y - bs.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
       </Block>
       <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
