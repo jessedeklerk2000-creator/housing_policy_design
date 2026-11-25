@@ -1,0 +1,169 @@
+[
+ {
+  "id": "construction",
+  "title": "New construction",
+  "no": "2.14",
+  "terms": [
+   {
+    "element": "B§Construction",
+    "symbol": "I_t",
+    "meaning": "new construction; the netlist uses exponent 0.6 and a 1-year delay"
+   },
+   {
+    "element": "V§Construction_cost",
+    "symbol": "P_m^{\\beta}",
+    "meaning": "construction payment, the driver of I_t in the circuit (stands in for the price term)"
+   },
+   {
+    "element": "B§Housing_services",
+    "symbol": "H_t",
+    "meaning": "housing stock: accumulates I_t"
+   },
+   {
+    "element": "L2",
+    "symbol": "",
+    "meaning": "numerical"
+   },
+   {
+    "element": "L4",
+    "symbol": "",
+    "meaning": "numerical"
+   }
+  ],
+  "unmapped": "γ + ω (stock growth + demolition) and α_t: no separate element; they sit in the 0.002 factor of B§Construction"
+ },
+ {
+  "id": "price",
+  "title": "Market price of a house",
+  "no": "2.17",
+  "terms": [
+   {
+    "element": "L§Gross_rent",
+    "symbol": "w^{*}_h",
+    "meaning": "gross rent received"
+   },
+   {
+    "element": "L§Gross_imputed_rent",
+    "symbol": "w^{*}_k",
+    "meaning": "gross imputed rent received"
+   },
+   {
+    "element": "V§Maintenance_costs",
+    "symbol": "\\kappa",
+    "meaning": "maintenance cost"
+   },
+   {
+    "element": "L1",
+    "symbol": "",
+    "meaning": "numerical"
+   },
+   {
+    "element": "R9",
+    "symbol": "",
+    "meaning": "numerical"
+   },
+   {
+    "element": "R13",
+    "symbol": "",
+    "meaning": "numerical"
+   }
+  ],
+  "unmapped": "ρ (required return, 3.95%) and the discounting: no element; P_m is not a single element"
+ },
+ {
+  "id": "utility",
+  "title": "Utility and budget",
+  "no": "2.1",
+  "terms": [
+   {
+    "element": "L§Demand_rent",
+    "symbol": "h_h",
+    "meaning": "rental housing demand"
+   },
+   {
+    "element": "L§Demand_owner_occupied",
+    "symbol": "h_k",
+    "meaning": "owner-occupied housing demand"
+   },
+   {
+    "element": "L11",
+    "symbol": "x",
+    "meaning": "other consumption (goods demand)"
+   },
+   {
+    "element": "B4",
+    "symbol": "",
+    "meaning": "owning versus renting coupling (carries θ, σ in the CPB model); no single symbol"
+   },
+   {
+    "element": "L§Income",
+    "symbol": "b",
+    "meaning": "budget: income into the households"
+   },
+   {
+    "element": "L§Rent",
+    "symbol": "w_h h_h",
+    "meaning": "rent paid"
+   },
+   {
+    "element": "L§Imputed_rent",
+    "symbol": "w_k h_k",
+    "meaning": "imputed rent paid"
+   },
+   {
+    "element": "L§Consumption",
+    "symbol": "p_x x",
+    "meaning": "other consumption spending"
+   },
+   {
+    "element": "R12",
+    "symbol": "",
+    "meaning": "numerical"
+   },
+   {
+    "element": "R5",
+    "symbol": "",
+    "meaning": "friction (resistor basis)"
+   },
+   {
+    "element": "R4",
+    "symbol": "",
+    "meaning": "friction (resistor basis)"
+   }
+  ],
+  "node": {
+   "label": "b",
+   "element": "R12",
+   "side": "right",
+   "meaning": "budget node: income splits into rent, imputed rent and consumption",
+   "at": [
+    440,
+    400
+   ]
+  },
+  "unmapped": "θ, h̄, σ = 2, δ = 0.117: not element values in this netlist"
+ },
+ {
+  "id": "subsidy",
+  "title": "Subsidy formula",
+  "no": "2.6",
+  "terms": [
+   {
+    "element": "I§Owner_occupied_subsidies",
+    "symbol": "s_k",
+    "meaning": "owner-occupied subsidy rate (open loop, historical path)"
+   },
+   {
+    "element": "I§Rental_subsidies1",
+    "symbol": "s_h",
+    "meaning": "rental subsidy rate"
+   },
+   {
+    "element": "B§PID",
+    "symbol": "s_k",
+    "meaning": "owner-occupied subsidy set by the controller (closed loop)"
+   }
+  ],
+  "unmapped": "w and w*: the paid and gross rents, see 2.1 and 2.17"
+ }
+]

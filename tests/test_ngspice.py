@@ -56,9 +56,7 @@ def test_stored_b4_point_is_the_ltspice_value():
         p = Path(d) / "b4.net"; nl.write_netlist(lines, p); tr = ltspice.run(p)
     t = (2015.0 - YEAR_AT_RAW_ZERO) * SECONDS_PER_YEAR
     for k, v in B4_POINT.items():
-        # rel 5e-5 (was 1e-6): the stored point is from the original 19okt netlist; with L§Demand_consumption merged into L11
-        # (series inductors, exact) LTspice takes slightly different time steps, 1.3e-5 relative on I(Demand_rent) (25 Nov 2026)
-        assert np.interp(t, tr["time"], tr[k]) == pytest.approx(v, rel=5e-5), k
+        assert np.interp(t, tr["time"], tr[k]) == pytest.approx(v, rel=1e-6), k
 
 
 @needs_ng

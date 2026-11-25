@@ -1,0 +1,770 @@
+{
+ "L§Gross_rent": {
+  "letter": "L",
+  "sub": "gross rent",
+  "meaning": "gross rent received (w*, rental)",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "3"
+ },
+ "L§Gross_imputed_rent": {
+  "letter": "L",
+  "sub": "gross imp.",
+  "meaning": "gross imputed rent received (w*, owned)",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "3 Rser=1u"
+ },
+ "I§Owner_occupied_subsidies": {
+  "letter": "I",
+  "sub": "subs. own",
+  "meaning": "owner-occupied subsidy s_k (input u₂)",
+  "agent": "households",
+  "type": "current",
+  "value": "PWL(0 23.00 6 24.01 12 24.01 12.1 24.56 18 24.56 18.1 24.78 24 24.78 24.1 25.27 30 25.27 30.1 27.54 36 27.54 36.1 27.56 42 27.56 42.1 27.64 48 27.64 48.1 28.19 54 28.19 54.1 28.31 60 28.31 60.1 28.37 66 28.37 66.1 28.42 72 28.42 72.1 28.21 78 28.21 78.1 27.84 84 27.84 84.1 27.35 90 27.35 90.1 29.34 96 29.34 96.1 28.89 102 28.89 102.1 27.56 108 27.56 108.1 26.44 114 26.44 114.1 25.57 120 25.57 120.1 24.82 126 24.82 126.1 24.30 132 24.30 132.1 23.94 138 23.94 138.1 22.65 144 22.65 144.1 21.82 150 21.82 150.1 20.98 156 20.98)"
+ },
+ "I§Rental_subsidies1": {
+  "letter": "I",
+  "sub": "subs. rent",
+  "meaning": "rental subsidy s_h (input u₁)",
+  "agent": "households",
+  "type": "current",
+  "value": "PULSE(4 0 160 0 0 1000 1000)"
+ },
+ "L§Rent": {
+  "letter": "L",
+  "sub": "rent pay",
+  "meaning": "rent paid",
+  "agent": "households",
+  "type": "ind2",
+  "value": "3"
+ },
+ "L§Imputed_rent": {
+  "letter": "L",
+  "sub": "imp. pay",
+  "meaning": "imputed rent paid",
+  "agent": "households",
+  "type": "ind2",
+  "value": "3 Rser=1u"
+ },
+ "R9": {
+  "letter": "R",
+  "sub": "maint.",
+  "meaning": "maintenance path friction",
+  "agent": "investors",
+  "type": "res",
+  "value": "3"
+ },
+ "V§Maintenance_costs": {
+  "letter": "V",
+  "sub": "maint.",
+  "meaning": "maintenance cost κ",
+  "agent": "investors",
+  "type": "voltage",
+  "value": "PULSE(30 30 0 160 00 10)"
+ },
+ "L1": {
+  "letter": "L",
+  "sub": "maint.",
+  "meaning": "maintenance path inertia",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "5"
+ },
+ "L§Supply_consumption": {
+  "letter": "L",
+  "sub": "sup. goods",
+  "meaning": "goods supply",
+  "agent": "firms",
+  "type": "ind2",
+  "value": "1"
+ },
+ "C5": {
+  "letter": "C",
+  "sub": "f. goods",
+  "meaning": "firms goods buffer",
+  "agent": "firms",
+  "type": "cap",
+  "value": "1"
+ },
+ "R11": {
+  "letter": "R",
+  "sub": "f. goods",
+  "meaning": "firms goods friction",
+  "agent": "firms",
+  "type": "res",
+  "value": "1"
+ },
+ "L§Income": {
+  "letter": "L",
+  "sub": "income",
+  "meaning": "income received",
+  "agent": "households",
+  "type": "ind2",
+  "value": "1 Rser=1u"
+ },
+ "L§Consumption": {
+  "letter": "L",
+  "sub": "cons.",
+  "meaning": "consumption spending",
+  "agent": "households",
+  "type": "ind2",
+  "value": "1 Rser=1u"
+ },
+ "R12": {
+  "letter": "R",
+  "sub": "cons.",
+  "meaning": "consumption friction",
+  "agent": "households",
+  "type": "res",
+  "value": "3"
+ },
+ "B§Salary": {
+  "letter": "B",
+  "sub": "salary",
+  "meaning": "salary path (not connected)",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=200*(1.00**(time/6))"
+ },
+ "L§F_Consumption": {
+  "letter": "L",
+  "sub": "f. cons.",
+  "meaning": "consumption revenue (firms)",
+  "agent": "firms",
+  "type": "ind2",
+  "value": "2 Rser=1u"
+ },
+ "V§Construction_cost": {
+  "letter": "V",
+  "sub": "constr.",
+  "meaning": "construction payment (incentive)",
+  "agent": "constructors",
+  "type": "voltage",
+  "value": "0"
+ },
+ "L2": {
+  "letter": "L",
+  "sub": "constr.",
+  "meaning": "construction payment inertia",
+  "agent": "constructors",
+  "type": "ind2",
+  "value": "2"
+ },
+ "R13": {
+  "letter": "R",
+  "sub": "constr.",
+  "meaning": "construction payment friction (investors)",
+  "agent": "investors",
+  "type": "res",
+  "value": "1"
+ },
+ "B§Construction": {
+  "letter": "B",
+  "sub": "constr.",
+  "meaning": "new houses: 0.002·delay(cost^0.6, 1 yr)",
+  "agent": "constructors",
+  "type": "bi2",
+  "value": "I=0.002*delay(I(construction_cost)**0.6,6)"
+ },
+ "L4": {
+  "letter": "L",
+  "sub": "houses",
+  "meaning": "new houses arriving at the investors",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "1"
+ },
+ "B§Net_housing_Rent1": {
+  "letter": "B",
+  "sub": "net rent",
+  "meaning": "read-out: rent per unit of rental housing",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=I(Rent)/I(Demand_rent)"
+ },
+ "B§Net_housing1": {
+  "letter": "B",
+  "sub": "net imp.",
+  "meaning": "read-out: imputed rent per unit of owned housing",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=I(Imputed_rent)/I(Demand_owner_occupied)"
+ },
+ "B§Gross_housing_rent1": {
+  "letter": "B",
+  "sub": "gross r.",
+  "meaning": "read-out: gross rent per unit",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=I(gross_rent)/I(Demand_rent)"
+ },
+ "B§Gross_housing1": {
+  "letter": "B",
+  "sub": "gross i.",
+  "meaning": "read-out: gross imputed rent per unit",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=I(Gross_imputed_rent)/I(Demand_owner_occupied)"
+ },
+ "B§Mortgage_interest": {
+  "letter": "B",
+  "sub": "mort. int.",
+  "meaning": "mortgage interest = debt × rate",
+  "agent": "bank",
+  "type": "bi2",
+  "value": "I=I(Mortgage_debt)*I(interest_rates)"
+ },
+ "B§Mortgage_Debt": {
+  "letter": "B",
+  "sub": "mort. debt",
+  "meaning": "mortgage debt: 100 + ∫ mortgages",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=idt(I(Mortgages))+100"
+ },
+ "B5": {
+  "letter": "B",
+  "sub": "firm book",
+  "meaning": "firm credit: 10 + 0.001·∫ I1",
+  "agent": "bank",
+  "type": "bi2",
+  "value": "I=10+0.001*idt(I(I1))"
+ },
+ "L5": {
+  "letter": "L",
+  "sub": "loan int.",
+  "meaning": "loan-interest inertia",
+  "agent": "bank",
+  "type": "ind",
+  "value": "1"
+ },
+ "R16": {
+  "letter": "R",
+  "sub": "lending",
+  "meaning": "lending friction",
+  "agent": "bank",
+  "type": "res",
+  "value": "3"
+ },
+ "R17": {
+  "letter": "R",
+  "sub": "f. loans",
+  "meaning": "firms loan friction",
+  "agent": "firms",
+  "type": "res",
+  "value": "1"
+ },
+ "L7": {
+  "letter": "L",
+  "sub": "loans",
+  "meaning": "loans to firms",
+  "agent": "bank",
+  "type": "ind2",
+  "value": "5"
+ },
+ "V4": {
+  "letter": "V",
+  "sub": "deposits",
+  "meaning": "deposit incentive",
+  "agent": "bank",
+  "type": "voltage",
+  "value": "PULSE(-60 -60 40 10 0 100 10000)"
+ },
+ "L8": {
+  "letter": "L",
+  "sub": "savings",
+  "meaning": "savings deposits",
+  "agent": "bank",
+  "type": "ind2",
+  "value": "1.9"
+ },
+ "R18": {
+  "letter": "R",
+  "sub": "savings",
+  "meaning": "savings friction",
+  "agent": "households",
+  "type": "res",
+  "value": "15"
+ },
+ "B§Year_on_year_change1": {
+  "letter": "B",
+  "sub": "yoy",
+  "meaning": "read-out: year-on-year change",
+  "agent": null,
+  "type": "bi2",
+  "value": "I = if(time<0.01, 0, I(Construction_cost)-delay(I(Construction_cost),6))/delay(I(Construction_cost),6)*100"
+ },
+ "Interest_Rates": {
+  "letter": "I",
+  "sub": "mort. rate",
+  "meaning": "historical mortgage rate",
+  "agent": "bank",
+  "type": "current",
+  "value": "PWL(0 0.01033 2 0.01033 4 0.01033 6 0.01032 8 0.01029 10 0.01020 12 0.01010 14 0.00998 16 0.00984 18 0.00978 20 0.00979 22 0.00981 24 0.00982 26 0.00982 28 0.00981 30 0.00979 32 0.00976 34 0.00970 36 0.00963 38 0.00954 40 0.00942 42 0.00931 44 0.00920 46 0.00910 48 0.00898 50 0.00883 52 0.00866 54 0.00852 56 0.00838 58 0.00827 60 0.00821 62 0.00822 64 0.00823 66 0.00824 68 0.00830 70 0.00840 72 0.00846 74 0.00844 76 0.00840 78 0.00836 80 0.00832 82 0.00826 84 0.00823 86 0.00821 88 0.00820 90 0.00818 92 0.00815 94 0.00810 96 0.00804 98 0.00798 100 0.00792 102 0.00784 104 0.00774 106 0.00763 108 0.00750 110 0.00735 112 0.00718 114 0.00700 116 0.00682 118 0.00662 120 0.00644 122 0.00626 124 0.00608 126 0.00591 128 0.00576 130 0.00561 132 0.00547 134 0.00531 136 0.00516 138 0.00501 140 0.00487 142 0.00473 144 0.00461 146 0.00446 148 0.00433 150 0.00425 152 0.00422 154 0.00421 156 0.00420 158 0.00430 160 0.00451 162 0.00470 164 0.00484 166 0.00497 168 0.00508 170 0.00516 172 0.00523 174 0.00530 176 0.00537 178 0.00544 180 0.00550)"
+ },
+ "L9": {
+  "letter": "L",
+  "sub": "mort. rate",
+  "meaning": "mortgage-rate inertia",
+  "agent": "bank",
+  "type": "ind",
+  "value": "1"
+ },
+ "L§Supply_rent": {
+  "letter": "L",
+  "sub": "sup. rent",
+  "meaning": "rental housing supply",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "1"
+ },
+ "L§Demand_owner_occupied": {
+  "letter": "L",
+  "sub": "owner",
+  "meaning": "owner-occupied housing demand h_k",
+  "agent": "households",
+  "type": "ind2",
+  "value": "2"
+ },
+ "L§Supply_owner_occupied": {
+  "letter": "L",
+  "sub": "sup. owner",
+  "meaning": "owner-occupied housing supply",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "1"
+ },
+ "C7": {
+  "letter": "C",
+  "sub": "services",
+  "meaning": "housing-services buffer",
+  "agent": "investors",
+  "type": "cap",
+  "value": "0.5"
+ },
+ "R22": {
+  "letter": "R",
+  "sub": "services",
+  "meaning": "housing-services friction",
+  "agent": "investors",
+  "type": "res",
+  "value": "1"
+ },
+ "B§Housing_services": {
+  "letter": "B",
+  "sub": "stock",
+  "meaning": "housing stock: 48 + ∫ new houses",
+  "agent": "investors",
+  "type": "bi2",
+  "value": "I=48+idt(I(Construction))"
+ },
+ "L§Demand_rent": {
+  "letter": "L",
+  "sub": "rent",
+  "meaning": "rental housing demand h_h",
+  "agent": "households",
+  "type": "ind2",
+  "value": "2"
+ },
+ "R20": {
+  "letter": "R",
+  "sub": "sup. rent",
+  "meaning": "rental supply friction",
+  "agent": "investors",
+  "type": "res",
+  "value": "6"
+ },
+ "R21": {
+  "letter": "R",
+  "sub": "sup. owner",
+  "meaning": "owner-occupied supply friction",
+  "agent": "investors",
+  "type": "res",
+  "value": "1.5"
+ },
+ "L10": {
+  "letter": "L",
+  "sub": "supply",
+  "meaning": "housing services to households",
+  "agent": "investors",
+  "type": "ind2",
+  "value": "10"
+ },
+ "L11": {
+  "letter": "L",
+  "sub": "goods",
+  "meaning": "goods received and demanded (x); drawn together with L§Demand_consumption (1 H + 1 H in series)",
+  "agent": "households",
+  "type": "ind2",
+  "value": "1"
+ },
+ "B§Consumptiongraph": {
+  "letter": "B",
+  "sub": "cons. rat.",
+  "meaning": "read-out: consumption ratio",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=I(F_Consumption)/I(Demand_consumption)"
+ },
+ "L12": {
+  "letter": "L",
+  "sub": "f. loans",
+  "meaning": "firms loan inertia",
+  "agent": "firms",
+  "type": "ind2",
+  "value": "1"
+ },
+ "L§F_loans": {
+  "letter": "L",
+  "sub": "f. credit",
+  "meaning": "loans received (firms)",
+  "agent": "firms",
+  "type": "ind2",
+  "value": "1"
+ },
+ "L14": {
+  "letter": "L",
+  "sub": "f. revenue",
+  "meaning": "consumption payment into firms",
+  "agent": "firms",
+  "type": "ind2",
+  "value": "1"
+ },
+ "C1": {
+  "letter": "C",
+  "sub": "f. cash",
+  "meaning": "firms cash buffer",
+  "agent": "firms",
+  "type": "cap",
+  "value": "1"
+ },
+ "R1": {
+  "letter": "R",
+  "sub": "f. cash",
+  "meaning": "firms cash friction",
+  "agent": "firms",
+  "type": "res",
+  "value": "1"
+ },
+ "B2": {
+  "letter": "B",
+  "sub": "sav. int.",
+  "meaning": "savings interest",
+  "agent": "bank",
+  "type": "bi2",
+  "value": "I=5+0.000*idt(I(V4))"
+ },
+ "L15": {
+  "letter": "L",
+  "sub": "sav. int.",
+  "meaning": "savings-interest inertia",
+  "agent": "bank",
+  "type": "ind",
+  "value": "1"
+ },
+ "R2": {
+  "letter": "R",
+  "sub": "sav. int.",
+  "meaning": "savings-interest friction",
+  "agent": "households",
+  "type": "res",
+  "value": "3"
+ },
+ "B3": {
+  "letter": "B",
+  "sub": "cost/house",
+  "meaning": "read-out: construction cost per house",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=I(construction_cost)/I(construction)"
+ },
+ "C2": {
+  "letter": "C",
+  "sub": "gross imp.",
+  "meaning": "imputed-rent buffer (investors)",
+  "agent": "investors",
+  "type": "cap",
+  "value": "1"
+ },
+ "C3": {
+  "letter": "C",
+  "sub": "gross rent",
+  "meaning": "rent buffer (investors)",
+  "agent": "investors",
+  "type": "cap",
+  "value": "1"
+ },
+ "R4": {
+  "letter": "R",
+  "sub": "imp.",
+  "meaning": "imputed-rent friction, households side (resistor basis)",
+  "agent": "households",
+  "type": "res",
+  "value": "1.933"
+ },
+ "R5": {
+  "letter": "R",
+  "sub": "rent",
+  "meaning": "rent friction, households side (resistor basis)",
+  "agent": "households",
+  "type": "res",
+  "value": "6.698"
+ },
+ "I3": {
+  "letter": "I",
+  "sub": "path 3",
+  "meaning": "input path (PWL), use to check",
+  "agent": null,
+  "type": "current",
+  "value": "PWL(0 24 5.9 24 6 23 11.91 23 12 22 17.9 22 18 21 23.9 21 24 20 29.9 20 30 19 35.9 19 36 18 41.9 18 42 17 47.9 17 48 16 53.9 16 54 15 59.9 15 60 14 65.9 14 66 13 71.9 13 72 12 77.9 12 78 11 83.9 11 84 10 89.9 10 90 9 95.9 9 96 8 101.9 8 102 7 107.9 7 108 6 113.9 6 114 5 119.9 5 120 4 125.9 4 126 3 131.9 3 132 2 137.9 2 138 1 143.9 1 144 0)"
+ },
+ "R3": {
+  "letter": "R",
+  "sub": "inv. rent",
+  "meaning": "rent friction, investors side (resistor basis)",
+  "agent": "investors",
+  "type": "res",
+  "value": "4.465"
+ },
+ "R6": {
+  "letter": "R",
+  "sub": "inv. imp.",
+  "meaning": "imputed-rent friction, investors side (resistor basis)",
+  "agent": "investors",
+  "type": "res",
+  "value": "1.289"
+ },
+ "I2": {
+  "letter": "I",
+  "sub": "path 2",
+  "meaning": "input path (PWL), use to check",
+  "agent": null,
+  "type": "current",
+  "value": "PWL(0 205.600 1 207.119 2 208.608 3 210.064 4 211.489 5 212.879 6 214.235 7 215.599 8 216.982 9 218.337 10 219.612 11 220.761 12 221.733 13 222.508 14 223.145 15 223.715 16 224.287 17 224.932 18 225.720 19 226.686 20 227.810 21 229.079 22 230.480 23 231.999 24 233.625 25 235.809 26 238.687 27 241.773 28 244.580 29 246.621 30 247.409 31 247.305 32 247.022 33 246.602 34 246.086 35 245.516 36 244.935 37 244.120 38 242.965 39 241.688 40 240.507 41 239.639 42 239.301 43 239.372 44 239.549 45 239.780 46 240.010 47 240.187 48 240.258 49 240.151 50 239.884 51 239.538 52 239.191 53 238.924 54 238.817 55 239.319 56 240.624 57 242.434 58 244.448 59 246.367 60 247.892 61 249.133 62 250.363 63 251.528 64 252.574 65 253.446 66 254.089 67 254.594 68 255.070 69 255.488 70 255.822 71 256.042 72 256.122 73 255.888 74 255.287 75 254.473 76 253.598 77 252.816 78 252.280 79 251.934 80 251.621 81 251.346 82 251.109 83 250.915 84 250.766 85 250.659 86 250.580 87 250.515 88 250.450 89 250.372 90 250.265 91 250.116 92 249.923 93 249.688 94 249.414 95 249.105 96 248.763 97 248.239 98 247.478 99 246.630 100 245.841 101 245.259 102 245.032 103 245.330 104 246.116 105 247.229 106 248.507 107 249.789 108 250.913 109 251.885 110 252.834 111 253.788 112 254.771 113 255.812 114 256.935 115 258.325 116 260.006 117 261.767 118 263.397 119 264.682 120 265.413 121 265.724 122 265.927 123 266.076 124 266.226 125 266.429 126 266.740 127 267.451 128 268.693 129 270.283 130 272.033 131 273.759 132 275.276 133 276.647 134 278.036 135 279.402 136 280.708 137 281.915 138 282.984 139 283.917 140 284.760 141 285.542 142 286.289 143 287.031 144 287.795 145 288.622 146 289.497 147 290.367 148 291.177 149 291.873 150 292.399 151 292.766 152 293.048 153 293.287 154 293.523 155 293.798 156 294.154 157 294.613 158 295.168 159 295.816 160 296.551 161 297.371 162 298.272 163 299.388 164 300.790 165 302.375 166 304.043 167 305.691 168 307.220 169 308.646 170 310.056 171 311.448 172 312.822 173 314.178 174 315.515)"
+ },
+ "B4": {
+  "letter": "B",
+  "sub": "own",
+  "meaning": "owning versus renting: net imputed rent − net rent per unit",
+  "agent": "households",
+  "type": "bv",
+  "value": "V=-1*(I(net_housing_rent1)-I(net_housing1))"
+ },
+ "I4": {
+  "letter": "I",
+  "sub": "path 4",
+  "meaning": "input path (PWL), use to check",
+  "agent": null,
+  "type": "current",
+  "value": "PWL(0 4.005 1 4.02 2 5.174 3 5.5081 4 5.792 5 6.014 6 5.963 7 6.067 8 6.162 9 6.242 10 6.305 11 6.446 12 6.560 13 6.511 14 6.386 15 6.221 16 6.050 17 5.909 18 5.832 19 5.804 20 5.783 21 5.767 22 5.753 23 5.737 24 5.717 25 5.687 26 5.650 27 5.609 28 5.573 29 5.547 30 5.537 31 5.624 32 5.840 33 6.122 34 6.403 35 6.619 36 6.706 37 6.589 38 6.296 39 5.915 40 5.533 41 5.240 42 5.123 43 5.211 44 5.430 45 5.715 46 6.000 47 6.219 48 6.307 49 6.302 50 6.289 51 6.270 52 6.249 53 6.229 54 6.212 55 6.200 56 6.191 57 6.182 58 6.172 59 6.158 60 6.138 61 6.066 62 5.915 63 5.709 64 5.475 65 5.239 66 5.026 67 4.828 68 4.622 69 4.414 70 4.207 71 4.008 72 3.820 73 3.645 74 3.480 75 3.320 76 3.162 77 3.003 78 2.840 79 2.674 80 2.507 81 2.339 82 2.169 83 1.996 84 1.819 85 1.650 86 1.492 87 1.331 88 1.152 89 0.938 90 0.677 91 0.202 92 -0.537 93 -1.384 94 -2.183 95 -2.777 96 -3.010 97 -2.868 98 -2.498 99 -1.990 100 -1.429 101 -0.903 102 -0.500 103 -0.191 104 0.103 105 0.377 106 0.623 107 0.833 108 1.000 109 1.144 110 1.283 111 1.408 112 1.510 113 1.577 114 1.602 115 1.577 116 1.516 117 1.436 118 1.356 119 1.295 120 1.270 121 1.519 122 2.141 123 2.949 124 3.757 125 4.379 126 4.628 127 4.511 128 4.207 129 3.784 130 3.312 131 2.861 132 2.500 133 2.185 134 1.850 135 1.530 136 1.259 137 1.070 138 1.000 139 1.063 140 1.231 141 1.474 142 1.759 143 2.056 144 2.333 145 2.648 146 3.037 147 3.443 148 3.806 149 4.067 150 4.167 151 4.167 152 4.167 153 4.167 154 4.167 155 4.167 156 4.167 157 4.044 158 3.735 159 3.333 160 2.932 161 2.623 162 2.500 163 2.944 164 4.056 165 5.500 166 6.944 167 8.056 168 8.500 169 8.463 170 8.370 171 8.250 172 8.130 173 8.037 174 8.000 175 8.000 176 8.000 177 8.000 178 8.000 179 8.000 180 8.000)"
+ },
+ "I5": {
+  "letter": "I",
+  "sub": "serv. ref.",
+  "meaning": "housing-services reference",
+  "agent": null,
+  "type": "current",
+  "value": "PULSE(48 80 0 180 0 0 180)"
+ },
+ "B7": {
+  "letter": "B",
+  "sub": "serv. gap",
+  "meaning": "housing-services gap 20·(I(L10) − I5)",
+  "agent": null,
+  "type": "bv",
+  "value": "V=20*(I(L10)-I(I5))"
+ },
+ "L3": {
+  "letter": "L",
+  "sub": "aux",
+  "meaning": "auxiliary inductor",
+  "agent": null,
+  "type": "ind",
+  "value": "1"
+ },
+ "Incomeactual": {
+  "letter": "I",
+  "sub": "income",
+  "meaning": "historical income path",
+  "agent": "firms",
+  "type": "current",
+  "value": "PWL(0 259.056 6 269.936 12 279.384 18 284.41 24 294.368 30 311.736 36 323.738 42 326.719 48 329.185 54 333.669 60 337.544 66 337.792 72 335.313 78 325.433 84 315.965 90 315.334 96 313.442 102 308.740 108 316.151 114 323.738 120 334.421 126 336.092 132 346.848 138 356.560 144 362.622 150 368.423 156 370.634 162 375.822 168 387.097 174 397.549 180 408.240)"
+ },
+ "B§Error": {
+  "letter": "B",
+  "sub": "error",
+  "meaning": "control error e = r − y",
+  "agent": "controller",
+  "type": "bi2",
+  "value": "I=I(Reference)-I(construction_cost)"
+ },
+ "B§PID_I": {
+  "letter": "B",
+  "sub": "I",
+  "meaning": "integral action",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=idt(I(Error),-7.707)"
+ },
+ "B§PID_D": {
+  "letter": "B",
+  "sub": "D",
+  "meaning": "derivative action",
+  "agent": "controller",
+  "type": "bi2",
+  "value": "I=ddt(I(Error))"
+ },
+ "B§PID": {
+  "letter": "B",
+  "sub": "PID",
+  "meaning": "subsidy from the controller (closed loop)",
+  "agent": "households",
+  "type": "bi2",
+  "value": "I=-29.29*(1-min(time/5,1))+if(time<0,24,limit(2.06*i(PID_P)+0.55*I(PID_I_robust)+0.67*I(PID_D),-60,600)*min(time/5,1))"
+ },
+ "R7": {
+  "letter": "R",
+  "sub": "shock",
+  "meaning": "shock injection resistor (0.001)",
+  "agent": "firms",
+  "type": "res",
+  "value": "0.001"
+ },
+ "I6": {
+  "letter": "I",
+  "sub": "zero",
+  "meaning": "zero source",
+  "agent": null,
+  "type": "current",
+  "value": "0"
+ },
+ "V§Shock_covid": {
+  "letter": "V",
+  "sub": "covid",
+  "meaning": "Covid shock",
+  "agent": "firms",
+  "type": "voltage",
+  "value": "PULSE(00 80 150 0 50 15 2000)"
+ },
+ "I7": {
+  "letter": "I",
+  "sub": "const.",
+  "meaning": "constant source (2)",
+  "agent": null,
+  "type": "current",
+  "value": "2"
+ },
+ "V§Shock_financialcrisis": {
+  "letter": "V",
+  "sub": "fin.crisis",
+  "meaning": "financial-crisis shock (firms)",
+  "agent": "firms",
+  "type": "voltage",
+  "value": "PULSE(00 -50 90 10 20 35 200)"
+ },
+ "I§Mortgagesold": {
+  "letter": "I",
+  "sub": "mort. old",
+  "meaning": "older mortgage path (not connected)",
+  "agent": null,
+  "type": "current",
+  "value": "PWL(0 4.400 6 6.167 12 6.550 18 5.832 24 5.717 30 5.550 36 6.700 42 5.117 48 6.317 54 6.200 60 6.150 66 5.017 72 3.817 78 5.083 84 2.250 90 1.000 96 -1.500 102 0.250 108 0.767 114 1.717 120 1.567 126 1.600 132 1.383 138 8.183 144 5.433 150 5.550 156 2.550 162 5.600 168 8.117 174 8.110)"
+ },
+ "I§Mortgages": {
+  "letter": "I",
+  "sub": "mortgages",
+  "meaning": "historical new mortgage lending",
+  "agent": "bank",
+  "type": "current",
+  "value": "PWL(6 4.400 7 4.801 8 5.176 9 5.5121 10 5.798 11 6.020 12 6.167 13 6.268 14 6.360 15 6.437 16 6.497 17 6.536 18 6.550 19 6.502 20 6.379 21 6.216 22 6.048 23 5.909 24 5.833 25 5.804 26 5.783 27 5.767 28 5.753 29 5.737 30 5.717 31 5.689 32 5.653 33 5.616 34 5.583 35 5.559 36 5.550 37 5.635 38 5.848 39 6.125 40 6.402 41 6.615 42 6.700 43 6.583 44 6.290 45 5.909 46 5.527 47 5.234 48 5.117 49 5.206 50 5.428 51 5.717 52 6.006 53 6.228 54 6.317 55 6.310 56 6.292 57 6.267 58 6.241 59 6.217 60 6.200 61 6.190 62 6.184 63 6.178 64 6.172 65 6.163 66 6.150 67 6.082 68 5.928 69 5.717 70 5.476 71 5.234 72 5.017 73 4.793 74 4.533 75 4.271 76 4.042 77 3.879 78 3.817 79 3.911 80 4.145 81 4.450 82 4.755 83 4.989 84 5.083 85 4.913 86 4.477 87 3.883 88 3.241 89 2.661 90 2.250 91 1.995 92 1.792 93 1.617 94 1.442 95 1.245 96 1.000 97 0.622 98 0.105 99 -0.458 100 -0.975 101 -1.353 102 -1.500 103 -1.389 104 -1.105 105 -0.725 106 -0.322 107 0.028 108 0.250 109 0.365 110 0.453 111 0.525 112 0.593 113 0.670 114 0.767 115 0.915 116 1.112 117 1.326 118 1.520 119 1.662 120 1.717 121 1.706 122 1.678 123 1.642 124 1.606 125 1.578 126 1.567 127 1.569 128 1.576 129 1.583 130 1.591 131 1.598 132 1.600 133 1.584 134 1.544 135 1.492 136 1.439 137 1.399 138 1.383 139 1.887 140 3.146 141 4.783 142 6.420 143 7.679 144 8.183 145 7.979 146 7.470 147 6.808 148 6.146 149 5.637 150 5.433 151 5.442 152 5.463 153 5.491 154 5.520 155 5.541 156 5.550 157 5.328 158 4.772 159 4.050 160 3.328 161 2.772 162 2.550 163 2.712 164 3.136 165 3.730 166 4.401 167 5.055 168 5.600 169 6.106 170 6.661 171 7.203 172 7.669 173 7.994 174 8.117 175 8.117 176 8.117 177 8.116 178 8.115 179 8.113 180 8.110)"
+ },
+ "C4": {
+  "letter": "C",
+  "sub": "inv. node",
+  "meaning": "investors node buffer",
+  "agent": "investors",
+  "type": "cap",
+  "value": "0.5"
+ },
+ "C6": {
+  "letter": "C",
+  "sub": "income",
+  "meaning": "household budget buffer",
+  "agent": "households",
+  "type": "cap",
+  "value": "1"
+ },
+ "B11": {
+  "letter": "B",
+  "sub": "loan int.",
+  "meaning": "loan interest: 2% of consumption revenue",
+  "agent": "firms",
+  "type": "bi2",
+  "value": "I=I(F_consumption)*0.02"
+ },
+ "I1": {
+  "letter": "I",
+  "sub": "crisis",
+  "meaning": "crisis pulse",
+  "agent": null,
+  "type": "current",
+  "value": "PULSE(3 10 70 0 10 30 10000)"
+ },
+ "B§Reference": {
+  "letter": "B",
+  "sub": "ref.",
+  "meaning": "reference r",
+  "agent": "controller",
+  "type": "bi",
+  "value": "I=80*1.025**(time/6)"
+ },
+ "B§PID_P": {
+  "letter": "B",
+  "sub": "P",
+  "meaning": "proportional action",
+  "agent": "controller",
+  "type": "bi2",
+  "value": "I=I(Error)"
+ },
+ "I8": {
+  "letter": "I",
+  "sub": "firm loans",
+  "meaning": "firm lending (crisis pulse)",
+  "agent": "bank",
+  "type": "current",
+  "value": "PULSE(30 10 70 0 10 30 10000)"
+ },
+ "B§PID_dist": {
+  "letter": "B",
+  "sub": "PID dist.",
+  "meaning": "PID with disturbance path",
+  "agent": null,
+  "type": "bi2",
+  "value": "I=-29.29*(1-min(time/5,1))+limit(10.3*I(PID_P)+3.8*I(PID_I)+1*I(PID_D),-60,600)*min(time/5,1)"
+ },
+ "R8": {
+  "letter": "R",
+  "sub": "inv. node",
+  "meaning": "investors node damping",
+  "agent": "investors",
+  "type": "res",
+  "value": "1"
+ },
+ "B§PID_I_Robust": {
+  "letter": "B",
+  "sub": "I robust",
+  "meaning": "integral action (robust tuning)",
+  "agent": "controller",
+  "type": "bi2",
+  "value": "I=idt(I(Error),-51.38)"
+ },
+ "L§Demand_consumption": {
+  "letter": "L",
+  "sub": "x",
+  "meaning": "demand for goods; 1 H in series with L goods, drawn as part of L goods",
+  "agent": "households",
+  "type": "ind2",
+  "value": "1"
+ }
+}

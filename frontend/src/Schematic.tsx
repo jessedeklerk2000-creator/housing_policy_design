@@ -109,6 +109,7 @@ function traceFlow(segs: Seg[], start: number[], pins: { name: string; pins: num
   }
   return lit;
 }
+const DRAWN_AS_WIRE = new Set(['L§Demand_consumption']);  // Jesse, 25 Nov 2026: one inductor in the drawing, two in the netlist
 const SHOCK_RED = '#c5352a', SUBSIDY_BLUE = '#1f6fc4', POLICY_CYAN = '#38b2d3';  // POLICY_CYAN = COLOR.policy in ModelMap
 export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inputs = [], inputSide = 'left', outside = false, highlight = [], litFlows = [], trace = [] }: { outside?: boolean; highlight?: string[]; litFlows?: string[]; trace?: string[]; map: MapData; agent: string; scenario: Scenario; selection: Selection; pick: (s: Selection) => void; menu?: (s: Selection, ev: React.MouseEvent) => void; inputs?: { id: string; label: string; element?: string }[]; inputSide?: 'left' | 'top' }) {
   const layout = map.layouts[agent], [w, h] = layout.size;
@@ -239,7 +240,10 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     {nodesHere.map(nd => { const el = elements.find(x => x.name === nd.element); if (!el?.pins) return null;
       const p = nd.at ?? el.pins.reduce((a, b) => (nd.side === 'right' ? b[0] > a[0] : b[0] < a[0]) ? b : a);  // at: the junction itself
       return <g key={nd.label} className="formula-node"><title>{nd.meaning}</title><circle cx={p[0]} cy={p[1]} r={9}/><text x={p[0] + 4} y={p[1] - 16}>{nd.label}</text></g>; })}
-    {elements.map(e => <ElementView key={e.name} e={e} state={stateOf(e, scenario)} selected={(selection.kind === 'element' && selection.id === e.name) || highlight.includes(e.name) || chainLit.has(e.name)} pick={() => pick({ kind: 'element', id: e.name })} menu={menu && (ev => menu({ kind: 'element', id: e.name }, ev))}/>)}
+    {/* drawn as plain wire: in series with another inductor and shown as one (L goods = L11 + L§Demand_consumption) */}
+    {elements.filter(e => DRAWN_AS_WIRE.has(e.name) && e.pins).map(e => { const lit = chainLit.has(e.name) || highlight.includes(e.name), [[ax, ay], [bx, by]] = e.pins!;
+      return lit ? <path key={e.name} d={`M${ax} ${ay}L${bx} ${by}`} className="as-wire-lit" stroke={KIND_COLOR.real} strokeWidth={5} fill="none"/> : <g key={e.name} className="wires"><path d={`M${ax} ${ay}L${bx} ${by}`}/></g>; })}
+    {elements.filter(e => !DRAWN_AS_WIRE.has(e.name)).map(e => <ElementView key={e.name} e={e} state={stateOf(e, scenario)} selected={(selection.kind === 'element' && selection.id === e.name) || highlight.includes(e.name) || chainLit.has(e.name)} pick={() => pick({ kind: 'element', id: e.name })} menu={menu && (ev => menu({ kind: 'element', id: e.name }, ev))}/>)}
   </svg>;
 }
 
