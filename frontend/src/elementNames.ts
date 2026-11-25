@@ -10,7 +10,7 @@ import TERMS_JSON from './data/figure_terms.json';
 
 export type NameEntry = { letter: string; sub: string; meaning: string; agent: string | null; type: string; value: string };
 export type Term = { element: string; symbol: string; meaning: string };
-export type FormulaTerms = { id: string; title: string; no: string; terms: Term[]; node?: { label: string; element: string; side: 'left' | 'right'; meaning: string }; unmapped?: string };
+export type FormulaTerms = { id: string; title: string; no: string; terms: Term[]; node?: { label: string; element: string; side: 'left' | 'right'; meaning: string; at?: [number, number] }; unmapped?: string };
 export const NAMES = NAMES_JSON as Record<string, NameEntry>;
 export const TERMS = TERMS_JSON as FormulaTerms[];
 

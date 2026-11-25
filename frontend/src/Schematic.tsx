@@ -186,7 +186,7 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
         <title>{`${d.label} enters here`}</title><path d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-shock)`}/></g>; })}
     {/* formula nodes (Budget b): a marked node where the branch currents meet */}
     {nodesHere.map(nd => { const el = elements.find(x => x.name === nd.element); if (!el?.pins) return null;
-      const p = el.pins.reduce((a, b) => (nd.side === 'right' ? b[0] > a[0] : b[0] < a[0]) ? b : a);
+      const p = nd.at ?? el.pins.reduce((a, b) => (nd.side === 'right' ? b[0] > a[0] : b[0] < a[0]) ? b : a);  // at: the junction itself
       return <g key={nd.label} className="formula-node"><title>{nd.meaning}</title><circle cx={p[0]} cy={p[1]} r={9}/><text x={p[0] + 4} y={p[1] - 16}>{nd.label}</text></g>; })}
     {elements.map(e => <ElementView key={e.name} e={e} state={stateOf(e, scenario)} selected={(selection.kind === 'element' && selection.id === e.name) || highlight.includes(e.name) || chainLit.has(e.name)} pick={() => pick({ kind: 'element', id: e.name })} menu={menu && (ev => menu({ kind: 'element', id: e.name }, ev))}/>)}
   </svg>;
