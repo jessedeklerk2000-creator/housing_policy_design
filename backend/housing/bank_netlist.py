@@ -24,6 +24,7 @@ import math
 import numpy as np
 from scipy.stats import norm
 from . import ngspice
+from .bank_ledger import ledger as bank_ledger
 from .scenario import YEAR_AT_RAW_ZERO, Scenario, build, evaluate
 
 YR = 6.0
@@ -259,6 +260,12 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
             tt["Bank_target_nsfr"] = [round(100 * e["nsfr_ref"], 4)] * len(run_result["year"])
             if "I(Bk_nsfr_err)" in tt:
                 tt["Bank_dev_nsfr"] = list(tt["I(Bk_nsfr_err)"])
+            # ALM Reporting (25 Nov 2026): the statements on the canvas's own time grid, read by the Play cursor
+            yrs = np.asarray(run_result["year"], dtype=float) - YEAR_AT_RAW_ZERO
+            led = bank_ledger(tr, b, e, yrs, tr["time"] / YR, np.ones(yrs.size, dtype=bool))
+            for k, vals in led["values"].items():
+                tt["Ledger:" + k] = vals
+            run_result["ledger"] = {k: led[k] for k in ("version", "groups", "accounts", "links", "basis")}
             if "I(Bk_t1_err)" in tt and "I(Bk_ltf_err)" in tt:
                 tt["Bank_dev_t1"] = list(tt["I(Bk_t1_err)"])
                 tt["Bank_dev_ltd"] = [None if x is None else round(-x, 4) for x in tt["I(Bk_ltf_err)"]]
@@ -280,6 +287,7 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
     def arr(k): return np.array([x for x, keep in zip(out[k], valid) if keep], dtype=float)
     cr = np.array([c or 0 for c in out["crisis"]])
     on = grid[cr > 1]
+    out["ledger"] = bank_ledger(tr, b, e, grid, t, valid)  # ALM Reporting: the bank's statements and key figures
     out.update(
         result=run_result, year0=YEAR_AT_RAW_ZERO,
         ok=bool(ok), breakdown_year=None if ok else round(stop, 2),

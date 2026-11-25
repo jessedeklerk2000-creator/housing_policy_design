@@ -5,12 +5,14 @@
 // quadrants and financial sector, agent by agent), with the ALCO, the ALM Desk and ALM Reporting around it.
 // Backend: POST api/bank/simulate -> housing/bank_netlist.py (a separate copy of the housing netlist with the bank,
 // run in ngspice; the housing model elsewhere on the site is unchanged). Demo values are Claude's choices.
-import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { LoaderCircle, RotateCcw, Minus, Plus } from 'lucide-react';
 import { api } from './api';
 import type { Line } from './Chart';
 import { AtContext, BankCtx, ModelMap, readTrace, type BankVariant } from './ModelMap';
-import { BalanceBoard, DeskBoard } from './BankBoards';
+import { DeskBoard } from './BankBoards';
+import { BankStatements } from './BankStatements';
+import { BankBusView } from './BankBusView';
 import type { Design } from './Analysis';
 import type { MapData, Result, Scenario, Selection } from './types';
 
@@ -156,7 +158,6 @@ function useLive(): Record<string, number | null> {
   return { ftp: v('I(Bk_ftp)'), s: v('I(Bk_s)'), rm: v('I(Bk_rm)'), rs: v('I(Bk_rs)'), t1: v('I(Bk_t1)'), ltf: v('I(Bk_ltf)'), nsfr: v('I(Bk_nsfr)'), dep: v('I(Bk_dep)'), eq: v('I(Bk_e)') };
 }
 function LiveDesk({ p, alm }: { p: Params; alm: boolean }) { return <DeskBoard K={p} v={useLive()} alm={alm}/>; }
-function LiveSheet() { return <BalanceBoard v={useLive()}/>; }
 
 // The bank netlist on the same model map (bank_netlist.lines): its disturbances, the desk's control signals and the
 // components inside the netlist bank. The desk's rates enter the bank (Jesse, 20 Nov 2026): u1 ends on the mortgage-rate
@@ -217,12 +218,14 @@ const DESIGN: Design = { K: [0, 0, 0], filtered: true, settling: 4, overshoot: 2
 export function BankMode() {
   const [p, setP] = useState<Params>(DEF);
   const [alm, setAlm] = useState(true), [fb, setFb] = useState(true), [cmp, setCmp] = useState<Compare>('off');
+  const [view, setView] = useState<'bus' | 'loop'>(() => new URLSearchParams(location.search).get('view') === 'loop' ? 'loop' : 'bus');  // bus view (bank in the middle) or the control-loop view
+  const openLoop = useCallback(() => setView('loop'), []);
   const set = (k: Key, v: number) => setP(x => ({ ...x, [k]: v }));
   const { now, other, busy, error } = useRun(p, alm, fb, cmp);
   const dirty = JSON.stringify(p) !== JSON.stringify(DEF) || !alm || !fb;
   const panel = (part: Part) => <Panel part={part} p={p} set={set} alm={alm} setAlm={setAlm} fb={fb} setFb={setFb} run={now}/>;
   const variant: BankVariant = {
-    desk: <LiveDesk p={p} alm={alm}/>, sensor: <LiveSheet/>, patch: patchMap,
+    desk: <LiveDesk p={p} alm={alm}/>, sensor: <BankStatements/>, patch: patchMap,
     inspect: (s: Selection) => {
       // every loop line opens a bank panel (the housing inspector would show house price, construction, ...)
       const part: Part | null = s.kind === 'agent' && s.id === 'controller' ? 'desk' : s.kind === 'sensor' ? 'reporting' : s.kind === 'signal' && s.id === 'y_reference' ? 'board'
@@ -272,10 +275,15 @@ export function BankMode() {
     {error && <p className="notice bad">{error}</p>}
     {broken.length > 0 && <p className="notice bad">{broken.map(r => `${r === now ? 'This run' : 'The comparison'} runs away in ${((r.breakdown_year ?? 0) + YEAR0).toFixed(1)}`).join('; ')}: the desk raises rates, prices fall, Tier 1 falls further, the desk raises rates again. The model leaves its valid range there, so the lines stop.</p>}
 
-    <BankCtx.Provider value={variant}>
+    <div className="seg bank-view-switch" role="tablist" aria-label="View">
+      <button role="tab" aria-selected={view === 'bus'} className={view === 'bus' ? 'on' : ''} onClick={() => setView('bus')}>Bus view: the bank in the middle</button>
+      <button role="tab" aria-selected={view === 'loop'} className={view === 'loop' ? 'on' : ''} onClick={() => setView('loop')}>Control-loop view</button>
+    </div>
+    {view === 'bus' && (now?.result ? <BankBusView result={now.result} patch={patchMap} desk={<LiveDesk p={p} alm={alm}/>}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
+    {view === 'loop' && <BankCtx.Provider value={variant}>
       {scenario && now?.result ? <ModelMap key="bank" scenario={scenario} result={now.result} pinned={null} busy={busy} run={() => {}} setFeedback={setAlm} update={() => {}} design={DESIGN} setDesign={() => {}} lag={0} left={left}/>
         : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>}
-    </BankCtx.Provider>
+    </BankCtx.Provider>}
 
     {sentence && <p className="bank-sentence">{sentence}</p>}
     {charts && now && <section className="panel">

@@ -3,7 +3,7 @@ import { chromium } from 'playwright-core';
 const out = process.argv[2] ?? 'e2e/shots';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 2200, height: 1300 } }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
-await page.goto('http://127.0.0.1:8001/?mode=bank');
+await page.goto('http://127.0.0.1:8001/?mode=bank&view=loop');
 await page.waitForSelector('.map-canvas .react-flow__node', { timeout: 40000 }); await page.waitForTimeout(2500);
 await page.getByRole('button', { name: 'Whole model' }).click(); await page.waitForTimeout(1500);
 const marks = page.locator('.map-canvas svg text').filter({ hasText: /^(x₁|x₂|y₁|y₂)$/ }); const nm = await marks.count();

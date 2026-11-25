@@ -92,3 +92,20 @@ def test_historical_subsidy_is_a_disturbance():
     on, off = bn.simulate({"covid_scale": 0}, alm_on=False), bn.simulate({"covid_scale": 0, "hist_subsidy": 0}, alm_on=False)
     assert on["subsidy_hist"][0] == pytest.approx(24.0, abs=0.1) and max(abs(x) for x in off["subsidy_hist"]) == 0
     assert on["price_index"][0] == pytest.approx(100, abs=0.05) and off["price_index"][0] == pytest.approx(100, abs=0.05)
+
+
+def test_ledger_balances_and_gives_the_controlled_ratios():
+    """ALM Reporting (25 Nov 2026): the statements balance, equity reconciles with the income statement, and the key
+    figures on the sheet are the ratios the ALM Desk controls."""
+    r = bn.simulate()
+    L = r["ledger"]
+    V = L["values"]
+    assert max(abs(x) for x in V["balance_check"]) < 1e-6
+    assert max(abs(x) for x in V["equity_check"]) < 0.01
+    assert max(abs(a - b) for a, b in zip(V["tier1"], r["tier1_pct"])) < 1e-3
+    assert max(abs(a - b) for a, b in zip(V["nsfr"], r["nsfr_pct"])) < 1e-3
+    assert all(x == 0 for x in V["current_accounts"])  # on the sheet, not yet connected
+    for g in L["groups"]:
+        for s in g["sections"]:
+            for a in s["accounts"]:
+                assert a in L["accounts"] and a in V and all(i in L["accounts"] for i in L["accounts"][a]["inputs"])

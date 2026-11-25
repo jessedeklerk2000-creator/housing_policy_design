@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 const out = process.argv[2] ?? 'e2e/shots';
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
-await page.goto('http://127.0.0.1:8001/?mode=bank');
+await page.goto('http://127.0.0.1:8001/?mode=bank&view=loop');
 await page.waitForSelector('.map-canvas .react-flow__node', { timeout: 40000 }); await page.waitForTimeout(2500);
 const shot = async n => page.locator('.map-panel').screenshot({ path: `${out}/${n}.png` });
 await shot('map_closed');

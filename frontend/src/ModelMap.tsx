@@ -803,10 +803,12 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     const u1y = loopOnly ? gc + 24 : ctrl.y + ctrlHead + ctrlSize[1] * 5 / 6;
     const sum: Rect = { x: ctrl.x - (loopOnly ? 150 : 130) * lab, y: mainY - 22, w: 44, h: 44 }, parl: Rect = { x: sum.x - (loopOnly ? 170 : 80) * lab - 180 * lab, y: mainY - 60 * lab, w: 180 * lab, h: 120 * lab };
     const cbsS = 0.42, cbsHead = HEAD_FLOW * lab;
-    const sensor: Rect = view.cbs ? { x: group.x + group.w + 190 * lab, y: gc - cbsHead - CBS_Y.out * cbsS, w: CBS_SIZE[0] * cbsS, h: CBS_SIZE[1] * cbsS + cbsHead }
+    // Bank: the open ALM Reporting holds the financial statements (BankStatements), so it is larger than CBS's circuit.
+    const sensor: Rect = view.cbs && bv ? { x: group.x + group.w + 190 * lab, y: gc - cbsHead - 330, w: 1250, h: 660 + cbsHead }
+      : view.cbs ? { x: group.x + group.w + 190 * lab, y: gc - cbsHead - CBS_Y.out * cbsS, w: CBS_SIZE[0] * cbsS, h: CBS_SIZE[1] * cbsS + cbsHead }
       : { x: group.x + group.w + 190 * lab, y: gc - 60 * lab, w: 180 * lab, h: 120 * lab };
     // Open CBS: the two measurements enter where its drawing expects them.
-    const xIn = view.cbs ? { a: sensor.y + cbsHead + CBS_Y.x1 * cbsS - gc, b: sensor.y + cbsHead + CBS_Y.x2 * cbsS - gc } : { a: -26, b: 26 };
+    const xIn = view.cbs && !bv ? { a: sensor.y + cbsHead + CBS_Y.x1 * cbsS - gc, b: sensor.y + cbsHead + CBS_Y.x2 * cbsS - gc } : { a: -26, b: 26 };
     block('anchor', { x: group.x, y: group.y, w: 1, h: 1 }, { tone: 'anchor' }, 0);
     // Parliament can be removed from the drawing (right-click); the summing junction then shows only the feedback.
     if (!view.noParliament) block('parliament', parl, { icon: <Landmark/>, label: bv ? 'ALCO' : 'Parliament', tone: scenario.feedback ? 'reference' : 'reference loop-off', selected: on({ kind: 'signal', id: 'y_reference' }) });
@@ -916,7 +918,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     sig('x2', x2pts, { color: COLOR.real, letter: 'x₂', name: bv ? 'Liabilities & equity' : 'New construction', value: bv ? <>deposits, other banks, equity</> : value('I(Construction)'), markDist: 95 * lab, ...xMark, labelSide: 'below', selected: on({ kind: 'flow', id: 'houses' }), pick: card('x2') ?? (() => select({ kind: 'flow', id: 'houses' })), target: { kind: 'flow', id: 'houses' } });
     // y always leaves the sensor; the feedback branch is grey and dashed with the loop switch open.
     if (bv) {
-      const fbOn = scenario.feedback, fbY = group.y + group.h + 90, tap = sensor.x + sensor.w + 60;
+      const fbOn = scenario.feedback, fbY = Math.max(group.y + group.h, sensor.y + sensor.h) + 90, tap = sensor.x + sensor.w + 60;
       const ch = [{ k: 1, dy: -D, id: 'y_price', n: 'Tier 1 ratio', v: 'I(Bk_t1)', side: 'above' as const, sx: -dch },
                   { k: 2, dy: D, id: 'y_nsfr', n: 'NSFR', v: 'I(Bk_nsfr)', side: 'below' as const, sx: dch }];
       ch.forEach(c => {

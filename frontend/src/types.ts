@@ -9,7 +9,9 @@ export interface Scenario {
   share_control: boolean; skp: number; ski: number; skd: number; share_target_pct: number; income_path: 'historical' | 'stable'; mortgage_shift_yr: number; interest_shift_yr: number; interest_new_share: number; covid_on_yr: number; covid_fall_yr: number; rental_subsidy: boolean; crisis_start_yr: number; crisis_w: boolean; equilibrium_start: boolean; crisis_w_start_yr: number; crisis_w_scale: number; crisis_w_on_yr: number; crisis_w_recovery_yr: number; crisis_w_fall_yr: number; crisis_mortgage_cut: number; interest_path: 'historical' | 'flat'; crisis_w_floor: number; inflation_pct: number; income_growth_pct: number; bank: boolean;
 }
 export type Kpis = Record<'yoy_min' | 'yoy_max' | 'yoy_std' | 'yoy_mean_abs_gap' | 'price_final' | 'price_gap_final_pct' | 'subsidy_min' | 'subsidy_max' | 'subsidy_mean' | 'subsidy_total' | 'subsidy_max_change_per_year', number>;
-export interface Result { year: number[]; traces: Record<string, number[]>; series: Record<string, number[]>; kpis: Kpis; scenario: Scenario; engine: string; model_version: string; netlist_sha256: string; netlist: string }
+export interface LedgerAccount { id: string; label: string; formula: string; inputs: string[]; unit: string; source: string; note: string }
+export interface Ledger { version: string; groups: { id: string; label: string; sections: { label: string; side?: string; accounts: string[] }[] }[]; accounts: Record<string, LedgerAccount>; links: [string, string, string][]; basis: string }
+export interface Result { ledger?: Ledger; year: number[]; traces: Record<string, number[]>; series: Record<string, number[]>; kpis: Kpis; scenario: Scenario; engine: string; model_version: string; netlist_sha256: string; netlist: string }
 export interface Preset { label: string; kp: number; ki: number; kd: number; filtered: boolean }
 export interface Catalogue { defaults: Scenario; presets: Record<string, Preset>; model_version: string; time: { year_at_raw_zero: number } }
 export interface SavedRow { id: string; name: string; created_at: string; feedback: boolean; has_result: boolean }

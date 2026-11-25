@@ -1,0 +1,116 @@
+"""Financial statements of the bank (ALM Reporting), built from the bank netlist's traces (25 Nov 2026).
+
+Structure after Q. Emanuels' DynaBI statement ledger (groups -> sections -> accounts; every account has a label,
+formula, inputs, unit, source and note) and Menkveld (2025) Fig. 2-2/2-3: ALM Reporting turns the bank's balance sheet
+and income statement into the key figures the ALM Desk steers on. Nothing here feeds back into the model: the
+netlist is solved by ngspice, this layer only reports it. Values are in model units (mortgage book = 100 at the start);
+income-statement lines are flows per year.
+"""
+from __future__ import annotations
+
+import numpy as np
+
+BASEL_NSF = "Basel III NSFR (BCBS, NSF30)"
+BASEL_CRE = "Basel CRE20.43 (unrated corporates)"
+DNB_RW = "DNB minimum mortgage risk weight, Art. 458 CRR (EBA-Op-2020-03 par. 10-11)"
+MENKVELD = "Menkveld (2025)"
+NETLIST = "Bank netlist (ngspice)"
+
+
+def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.ndarray, valid: np.ndarray) -> dict:
+    """Statements on the output grid. tr: raw traces, b: parameters, e: equilibrium values."""
+    T = lambda k: np.interp(grid_years, sim_years, np.nan_to_num(np.asarray(tr[k], dtype=float)))
+    M, Lf, Dep, W, E, cash = T("I(Bk_m)"), T("I(Bk_lf)"), T("I(Bk_dep)"), T("I(Bk_w)"), T("I(Bk_e)"), T("I(Bk_cash)")
+    rm, rs, prem, uw, shape = T("I(Bk_rm)"), T("I(Bk_rs)"), T("I(Bk_prem)"), T("I(Bk_uw)"), T("I(Bk_shape)")
+    rw_m, rwa, ltv = T("I(Bk_rw_m)"), T("I(Bk_rwa)"), T("I(Bk_ltv)")
+    gap = b["gap_penalty_pp"] / 100
+    zero = 0 * M
+    v: dict[str, np.ndarray] = {}
+    defs: dict[str, dict] = {}
+
+    def acc(key, label, formula, value, inputs=(), unit="model units", source=NETLIST, note="", sign=1):
+        defs[key] = dict(id=key, label=label, formula=formula, inputs=list(inputs), unit=unit, source=source, note=note, sign=sign)
+        v[key] = np.asarray(value, dtype=float)
+
+    # Balance sheet: assets
+    acc("reserves", "Cash and central-bank reserves", "max(cash, 0)", np.maximum(cash, 0), note="Cash is the balancing item: savings + other banks + equity − mortgages − firm loans.")
+    acc("mortgages", "Mortgages (long)", "Mortgage book of the netlist (B§Mortgage_Debt)", M, source=NETLIST + ": households' mortgage port")
+    acc("firm_loans", "Loans to firms (short)", "Firm book: idt(new firm loans − repayments)", Lf, source=NETLIST + ": firms' loan port")
+    acc("assets", "Total assets", "reserves + mortgages + loans to firms", v["reserves"] + M + Lf, ["reserves", "mortgages", "firm_loans"])
+    # Balance sheet: liabilities and equity
+    acc("current_accounts", "Current accounts (no interest)", "not connected yet", zero, source=MENKVELD + " Fig. 2-3",
+        note="On Menkveld's balance sheet; no port in the housing netlist yet, so 0 here.")
+    acc("savings", "Savings deposits", "idt(deposit inflow): deposits follow the savings rate", Dep, source=NETLIST + ": households' savings port")
+    acc("interbank", "Deposits of other banks", "W0 × (1 − funding cut × crisis shape)", W, source="Crisis disturbance (other banks)")
+    acc("cb_borrowing", "Central-bank borrowing", "max(−cash, 0): a funding gap", np.maximum(-cash, 0))
+    acc("liabilities", "Total liabilities", "current accounts + savings + other banks + central bank",
+        v["current_accounts"] + Dep + W + v["cb_borrowing"], ["current_accounts", "savings", "interbank", "cb_borrowing"])
+    acc("equity", "Equity", "opening equity + retained profit", E, ["equity_open", "retained_cum"])
+    acc("liab_equity", "Total liabilities and equity", "total liabilities + equity", v["liabilities"] + E, ["liabilities", "equity"])
+    acc("balance_check", "Balance check", "total assets − total liabilities and equity", v["assets"] - v["liab_equity"], ["assets", "liab_equity"],
+        note="Zero at every point in time.", sign=1)
+
+    # Income statement (per year)
+    py = "model units / year"
+    acc("ii_mortgages", "Interest on mortgages", "loan rate × mortgages", rm * M, ["mortgages"], py, MENKVELD + " Fig. 2-3 (loan interest)")
+    acc("ii_firms", "Interest on loans to firms", "loan rate × loans to firms", rm * Lf, ["firm_loans"], py, MENKVELD + " Fig. 2-3 (loan interest)")
+    acc("ii_reserves", "Interest on reserves", "market rate × reserves", b["r_mkt"] * v["reserves"], ["reserves"], py)
+    acc("interest_income", "Interest income", "sum of the above", v["ii_mortgages"] + v["ii_firms"] + v["ii_reserves"], ["ii_mortgages", "ii_firms", "ii_reserves"], py)
+    acc("ie_savings", "Interest on savings", "savings rate × savings deposits", rs * Dep, ["savings"], py, MENKVELD + " Fig. 2-3 (deposit interest)")
+    acc("ie_interbank", "Interest to other banks", "(market rate + premium) × deposits of other banks", (b["r_mkt"] + prem) * W, ["interbank"], py)
+    acc("ie_cb", "Interest to the central bank", "(market rate + premium + penalty) × central-bank borrowing", (b["r_mkt"] + prem + gap) * v["cb_borrowing"], ["cb_borrowing"], py)
+    acc("interest_expense", "Interest expense", "sum of the above", v["ie_savings"] + v["ie_interbank"] + v["ie_cb"], ["ie_savings", "ie_interbank", "ie_cb"], py)
+    acc("nii", "Net interest income", "interest income − interest expense", v["interest_income"] - v["interest_expense"], ["interest_income", "interest_expense"], py, MENKVELD + " Fig. 2-3")
+    acc("imp_mortgages", "Impairments on mortgages", "loss rate × underwater share × mortgages", b["loss_uw"] * uw * M, ["mortgages"], py)
+    acc("imp_firms", "Impairments on loans to firms", "loss rate × crisis shape × loans to firms", b["loss_firm"] * shape * Lf, ["firm_loans"], py)
+    acc("impairments", "Impairments", "sum of the above", v["imp_mortgages"] + v["imp_firms"], ["imp_mortgages", "imp_firms"], py)
+    acc("net_profit", "Net profit", "net interest income − impairments", v["nii"] - v["impairments"], ["nii", "impairments"], py)
+    acc("dividend", "Dividend", "payout in proportion to equity (equity at rest at the start)", e["pay0"] * E / b["E0"], ["equity"], py)
+    acc("retained", "Retained profit", "net profit − dividend", v["net_profit"] - v["dividend"], ["net_profit", "dividend"], py)
+
+    # Equity statement (cumulative since the start)
+    dt = np.diff(grid_years, prepend=grid_years[0])
+    cum = lambda x: np.cumsum(np.r_[0, (x[1:] + x[:-1]) / 2 * dt[1:]])
+    acc("equity_open", "Opening equity", "equity at the start", zero + b["E0"])
+    acc("profit_cum", "Net profit since the start", "∫ net profit dt", cum(v["net_profit"]), ["net_profit"])
+    acc("dividend_cum", "Dividends since the start", "∫ dividend dt", cum(v["dividend"]), ["dividend"])
+    acc("retained_cum", "Retained profit since the start", "net profit − dividends since the start", v["profit_cum"] - v["dividend_cum"], ["profit_cum", "dividend_cum"])
+    acc("equity_check", "Equity check", "opening equity + retained profit − equity on the balance sheet", b["E0"] + v["retained_cum"] - E, ["equity_open", "retained_cum", "equity"],
+        note="Zero up to the accuracy of the time grid.")
+
+    # Key figures (Menkveld Fig. 2-2: ratios derived from the statements)
+    pct = "%"
+    acc("rw_mortgages", "Risk weight of mortgages", "12% up to 55% of the home's value, 45% above, averaged over the loans", 100 * rw_m, unit=pct, source=DNB_RW,
+        note=f"Book loan-to-value now {100 * ltv[0]:.0f}% at the start.")
+    acc("rwa", "Risk-weighted assets", "risk weight × mortgages + 100% × loans to firms", rwa, ["rw_mortgages", "mortgages", "firm_loans"], source=DNB_RW + "; " + BASEL_CRE)
+    acc("tier1", "Tier 1 capital ratio", "equity ÷ risk-weighted assets", 100 * E / rwa, ["equity", "rwa"], pct, MENKVELD + " eq. 3-7; Basel minimum 6%")
+    acc("asf", "Available stable funding", "90% × savings + 90% × current accounts + 100% × equity + 0% × other banks",
+        b["asf_dep"] * Dep + E + b["asf_w"] * W, ["savings", "current_accounts", "equity", "interbank"], source=BASEL_NSF + " 30.10, 30.12, 30.14")
+    acc("rsf", "Required stable funding", "65% × mortgages + 50% × loans to firms + 0% × reserves", b["rsf_m"] * M + b["rsf_f"] * Lf, ["mortgages", "firm_loans"], source=BASEL_NSF + " 30.25, 30.29, 30.30")
+    acc("nsfr", "Net stable funding ratio", "available ÷ required stable funding", 100 * v["asf"] / v["rsf"], ["asf", "rsf"], pct, MENKVELD + " eq. 3-3; Basel minimum 100%")
+    acc("ltd", "Loan-to-deposit ratio", "(mortgages + loans to firms) ÷ (savings + current accounts)", 100 * (M + Lf) / (Dep + v["current_accounts"]), ["mortgages", "firm_loans", "savings", "current_accounts"], pct, MENKVELD + " eq. 3-1")
+    acc("leverage", "Leverage ratio", "equity ÷ total assets", 100 * E / v["assets"], ["equity", "assets"], pct, "Basel LEV20.7: minimum 3%",
+        note="On-balance-sheet exposure only (no derivatives or off-balance items in the model).")
+    acc("roe", "Return on equity", "net profit ÷ equity", 100 * v["net_profit"] / E, ["net_profit", "equity"], "% a year", MENKVELD + " Fig. 2-2")
+
+    groups = [
+        dict(id="balance", label="Balance sheet", sections=[
+            dict(label="Assets", side="debit", accounts=["reserves", "mortgages", "firm_loans", "assets"]),
+            dict(label="Liabilities", side="credit", accounts=["current_accounts", "savings", "interbank", "cb_borrowing", "liabilities"]),
+            dict(label="Equity", side="credit", accounts=["equity", "liab_equity"]),
+            dict(label="Reconciliation", side="", accounts=["balance_check"])]),
+        dict(id="income", label="Income statement", sections=[
+            dict(label="Interest income", accounts=["ii_mortgages", "ii_firms", "ii_reserves", "interest_income"]),
+            dict(label="Interest expense", accounts=["ie_savings", "ie_interbank", "ie_cb", "interest_expense"]),
+            dict(label="Result", accounts=["nii", "impairments", "net_profit", "dividend", "retained"])]),
+        dict(id="equity", label="Equity statement", sections=[
+            dict(label="Equity since the start", accounts=["equity_open", "profit_cum", "dividend_cum", "retained_cum", "equity", "equity_check"])]),
+        dict(id="ratios", label="Key figures", sections=[
+            dict(label="Solvency (ALM Desk channel 1)", accounts=["rw_mortgages", "rwa", "tier1", "leverage"]),
+            dict(label="Liquidity (ALM Desk channel 2)", accounts=["asf", "rsf", "nsfr", "ltd"]),
+            dict(label="Profitability", accounts=["roe"])]),
+    ]
+    values = {k: [round(float(x), 4) if keep else None for x, keep in zip(a, valid)] for k, a in v.items()}
+    return dict(version="bank-ledger-1", groups=groups, accounts=defs, values=values,
+                links=[["income", "equity", "Retained profit"], ["equity", "balance", "Equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"]],
+                basis="Statements built from the bank netlist's stocks and flows. Cash is the balancing item; current accounts are on the sheet but not yet connected to the model.")
