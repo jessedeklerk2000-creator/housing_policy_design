@@ -6,7 +6,8 @@
 // Backend: POST api/bank/simulate -> housing/bank_netlist.py (a separate copy of the housing netlist with the bank,
 // run in ngspice; the housing model elsewhere on the site is unchanged). Demo values are Claude's choices.
 import { useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { ChevronDown, ChevronUp, LoaderCircle, RotateCcw, Minus, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LoaderCircle, RotateCcw, Minus, Plus } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { api } from './api';
 import type { Line } from './Chart';
 import { AtContext, BankCtx, ModelMap, readTrace, type BankVariant } from './ModelMap';
@@ -218,7 +219,13 @@ const DESIGN: Design = { K: [0, 0, 0], filtered: true, settling: 4, overshoot: 2
 export function BankMode() {
   const [p, setP] = useState<Params>(DEF);
   const [alm, setAlm] = useState(true), [fb, setFb] = useState(true), [cmp, setCmp] = useState<Compare>('off');
-  const [showPlots, setShowPlots] = useState(false);
+  const [scen, setScen] = useState(false), [side, setSide] = useState(true), [busSlot, setBusSlot] = useState<HTMLElement | null>(null);
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => { setSlot(document.getElementById('bank-top-slot'));
+    // the canvas starts right below the top bar, whatever its height
+    const bar = document.querySelector<HTMLElement>('.topbar'); if (!bar) return;
+    const fit = () => document.documentElement.style.setProperty('--top-h', `${bar.offsetHeight}px`); fit();
+    const ro = new ResizeObserver(fit); ro.observe(bar); return () => ro.disconnect(); }, []);
   const [view, setView] = useState<'bus' | 'loop'>(() => new URLSearchParams(location.search).get('view') === 'loop' ? 'loop' : 'bus');  // bus view (bank in the middle) or the control-loop view
   const openLoop = useCallback(() => setView('loop'), []);
   const set = (k: Key, v: number) => setP(x => ({ ...x, [k]: v }));
@@ -267,29 +274,35 @@ export function BankMode() {
     {panel('others')}{panel('covid')}{panel('gov')}{panel('economy')}
   </div>;
 
-  return <div className="bank-mode">
-    <div className="bank-top">
-      <div><h2>Bank controls <span className="tag-exp">experimental</span></h2>
-        <p className="muted small">The ALCO sets the financial targets, the ALM Desk controls the client rates, ALM Reporting measures (Menkveld, 2025); the government is only a disturbance. Illustrative bank: balance-sheet sizes are round numbers, not those of any real bank.</p></div>
-      <div className="bank-controls">{busy && <LoaderCircle className="spin" size={16} aria-label="Running"/>}</div>
+  // Full-window layout (Jesse, 25 Nov 2026): the canvas always fills the window, no page scroll. Controls in the top bar
+  // (portal into the app header), results and notes in a collapsible panel on the right.
+  const top = slot && createPortal(<>
+    <div className="seg bank-view-switch" role="tablist" aria-label="View">
+      <button role="tab" aria-selected={view === 'bus'} className={view === 'bus' ? 'on' : ''} onClick={() => setView('bus')}>Bus view</button>
+      <button role="tab" aria-selected={view === 'loop'} className={view === 'loop' ? 'on' : ''} onClick={() => setView('loop')}>Control-loop view</button>
     </div>
+    {view === 'bus' && <div ref={setBusSlot} className="bus-tools-slot"/>}
+    {busy && <LoaderCircle className="spin" size={16} aria-label="Running"/>}
+  </>, slot);
+  return <div className="bank-mode full">
+    {top}
+    {/* docks as in the Government controls tab: a handle on each side, a dock with a collapse button when open */}
+    {view === 'bus' && (scen ? <aside className="inspector left-dock bank-scen" aria-label="Scenario"><button className="dock-toggle" aria-label="Collapse scenario panel" title="Collapse" onClick={() => setScen(false)}><Minus size={14}/></button>{left}</aside>
+      : <button className="dock-handle bank-handle" aria-label="Open scenario panel" title="Open scenario panel" onClick={() => setScen(true)}><ChevronRight size={16}/><span>Scenario</span></button>)}
+    <div className="bank-main">
     {error && <p className="notice bad">{error}</p>}
     {broken.length > 0 && <p className="notice bad">{broken.map(r => `${r === now ? 'This run' : 'The comparison'} runs away in ${((r.breakdown_year ?? 0) + YEAR0).toFixed(1)}`).join('; ')}: the desk raises rates, prices fall, Tier 1 falls further, the desk raises rates again. The model leaves its valid range there, so the lines stop.</p>}
 
-    <div className="seg bank-view-switch" role="tablist" aria-label="View">
-      <button role="tab" aria-selected={view === 'bus'} className={view === 'bus' ? 'on' : ''} onClick={() => setView('bus')}>Bus view: the bank in the middle</button>
-      <button role="tab" aria-selected={view === 'loop'} className={view === 'loop' ? 'on' : ''} onClick={() => setView('loop')}>Control-loop view</button>
-    </div>
-    {view === 'bus' && (now?.result ? <BankBusView result={now.result} patch={patchMap} desk={<LiveDesk p={p} alm={alm}/>}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
+    {view === 'bus' && (now?.result ? <BankBusView result={now.result} patch={patchMap} desk={<LiveDesk p={p} alm={alm}/>} toolsSlot={busSlot}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
     {view === 'loop' && <BankCtx.Provider value={variant}>
       {scenario && now?.result ? <ModelMap key="bank" scenario={scenario} result={now.result} pinned={null} busy={busy} run={() => {}} setFeedback={setAlm} update={() => {}} design={DESIGN} setDesign={() => {}} lag={0} left={left}/>
         : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>}
     </BankCtx.Provider>}
 
+    </div>
+    {side ? <aside className="inspector bank-side" aria-label="Results"><button className="dock-toggle" aria-label="Collapse panel" title="Collapse panel" onClick={() => setSide(false)}><Minus size={14}/></button>
     {sentence && <p className="bank-sentence">{sentence}</p>}
-    {/* the result plots below the diagram: closed by default (Jesse: scrolling the page fought with zooming the model) */}
-    {charts && now && <button className="ghost bank-plots-toggle" aria-expanded={showPlots} onClick={() => setShowPlots(v => !v)}>{showPlots ? <ChevronUp size={14}/> : <ChevronDown size={14}/>} {showPlots ? 'Hide plots' : 'Show plots'}</button>}
-    {charts && now && showPlots && <section className="panel">
+      {charts && now && <section className="panel">
       <Key_ items={legend}/>
       <div className="bank-grid3">
         <BankChart title="House price index (100 = start)" unit="index" lines={charts.price} crisis={charts.crisis}/>
@@ -299,8 +312,7 @@ export function BankMode() {
         <div><BankChart title="Liquidity risk: NSFR" unit="%" lines={charts.ltf} crisis={charts.crisis}/><Key_ items={[{ name: 'target', color: C.target, dash: 'dash' }]}/></div>
         <div><BankChart title="Disturbances" unit="% of default size" lines={charts.dist} crisis={charts.crisis}/><Key_ items={[{ name: 'Deposits of other banks withdrawn (% of their deposits)', color: C.shock }, { name: 'Covid shock (% of its main-model size)', color: C.covid }, { name: 'Historical subsidy (% of its 1996 level)', color: C.savings }]}/></div>
       </div>
-    </section>}
-
+      </section>}
     <details className="panel more bank-how"><summary>How it works</summary>
       <ul>
         <li><b>Engine:</b> a separate copy of the housing netlist with the bank added, run in ngspice. The housing model on the rest of the site is unchanged.</li>
@@ -314,5 +326,7 @@ export function BankMode() {
       <p className="muted note">Changes from Menkveld's set-up: the bank lends long mortgages as well as short loans to firms, and the liquidity target is the NSFR (his eq. 3-3) rather than the loan-to-deposit ratio; the crisis enters as a withdrawal of other banks' deposits. Checked against the Netherlands 2008–2014: the desk raises the mortgage rate (Dutch rates stayed about 1 pp above neighbouring countries), protects capital, and house prices fall. The bank channel alone gives about −7%; the −21% fall of 2008–2013 also had other causes. NSFR factors from Basel III: the deposits of other banks are short-term interbank funding and count 0%. Any funding gap is borrowed from the central bank at the crisis premium plus a 2 pp penalty; "Rates frozen" means the bank keeps its rates and absorbs that cost. The gains and the rate-channel strength are demo choices, not estimates.</p>
     </details>
     <p className="muted note">ALM structure, names and rate definitions after B.S.R. Menkveld, <i>Economic Engineering for Proactive Asset and Liability Management: Managing Liquidity and Solvency Risk with Process Control</i>, MSc thesis, TU Delft, 2025.</p>
+    </aside>
+      : <button className="dock-handle bank-handle" aria-label="Open panel" title="Open panel" onClick={() => setSide(true)}><ChevronLeft size={16}/><span>Panel</span></button>}
   </div>;
 }

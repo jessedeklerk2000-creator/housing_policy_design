@@ -707,3 +707,20 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .stmt-plot-card .stmt-plot { margin:0; }
 .bank-plots-toggle { display:flex; align-items:center; gap:6px; margin:10px auto; }
 .figure-mode .circuit .lit-wires path:not(.ret) { stroke-width:8; }  /* as thick as the lit rails outside the agent */
+
+/* Bank mode, full window (Jesse): canvas fills the window under the top bar, results panel on the right, no page scroll */
+body:has(.bank-full) { overflow:hidden; }
+.workspace.wide.bank-full { position:fixed; inset:var(--top-h, 50px) 0 0 0; padding:0; max-width:none; }
+.bank-mode.full { flex-direction:row; height:100%; gap:0; }
+.bank-main { flex:1; min-width:0; display:flex; flex-direction:column; padding:8px; overflow:auto; }
+.bank-main > .bus-view { flex:1; min-height:0; display:flex; flex-direction:column; margin:0; padding:6px; }
+.bank-main > .bus-view .bus-canvas { flex:1; height:auto; min-height:0; }
+.bank-side { width:400px; flex:0 0 400px; overflow-y:auto; border-left:1px solid var(--line); background:var(--panel); padding:10px; }
+.bank-side .bank-grid3 { grid-template-columns:1fr; }
+.bank-top-slot { display:flex; align-items:center; gap:10px; flex:1; justify-content:flex-end; min-width:0; }
+.bank-top-slot .bank-view-switch { margin:0; }
+.bus-tools-slot { display:flex; align-items:center; min-width:0; }
+.bus-tools-slot .bus-time { margin:0; flex-wrap:nowrap; } .bus-tools-slot .bus-time input[type=range] { width:200px; min-width:120px; }
+.bus-diagram { user-select:none; }  /* dragging on the canvas does not select statement text */
+.bank-scen { width:340px; flex:0 0 340px; overflow-y:auto; border-right:1px solid var(--line); background:var(--panel); padding:10px; }
+.bank-handle { align-self:flex-start; margin:8px 4px; } .bank-scen, .bank-side { position:relative; max-height:none; }

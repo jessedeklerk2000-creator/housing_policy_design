@@ -6,9 +6,10 @@
 // the bank's breadboard (process), its financial statements (sensor), or the desk's op-amp breadboard. Numbers only in the accounts (Jesse).
 // Bus structure after Q. Emanuels' DynaBI bus canvas: one bus per kind of exchange, two rails each (flow f, incentive
 // u); here the rails carry each flow's port and return terminal. Values come from the same ngspice run.
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ReactFlow, ReactFlowProvider, Controls, useReactFlow, type Node, type NodeProps } from '@xyflow/react';
 import { Minus, Pause, Play, Plus } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { api } from './api';
 import { AtContext, readTrace } from './ModelMap';
 import { AgentCircuit, inputPath } from './Schematic';
@@ -73,7 +74,8 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     let acc: R = { x: bs.x + bs.w + 150, y: by + 90, w: 230, h: 110 }, sub: Record<string, R> | null = null;
     if (o.acc) {
       // sizes: dragged by the corner grip (Jesse)
-      const sz = (k: string): P => o[k] ? sizes[k] ?? STMT_OPEN[k] : [210, 72], x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
+      const sz = (k: string): P => { if (!o[k]) return [210, 72]; const base = sizes[k] ?? STMT_OPEN[k], fit = sizes['fit:' + k]?.[1];  // fit: measured content height (grows with an opened line)
+        return [base[0], fit ? Math.max(sizes[k] ? base[1] : 0, fit + HEAD + 16) : base[1]]; }, x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
       const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] }, eq: R = { x: x0, y: inc.y + inc.h + 70, w: sz('eq')[0], h: sz('eq')[1] };
       const bal: R = { x: x0 + Math.max(inc.w, eq.w) + 120, y: y0, w: sz('bal')[0], h: sz('bal')[1] };
       const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
@@ -133,10 +135,22 @@ function Block({ r, label, tone, open, toggle, children, z }: { r: R; label: str
   </div>;
 }
 
+// A statement box body that reports its content height, so the box grows or shrinks with opened lines (Jesse)
+function FitBody({ k, onH, style, children }: { k: string; onH: (k: string, h: number) => void; style: React.CSSProperties; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current?.querySelector('.stmt-block') as HTMLElement | null; if (!el) return;  // the statement itself, not its stretched wrapper
+    const report = () => onH(k, el.offsetHeight + 12); report();
+    const ro = new ResizeObserver(report); ro.observe(el); return () => ro.disconnect();
+  }, [k, onH]);
+  return <div ref={ref} className="bus-stmt-body nowheel" style={style}>{children}</div>;
+}
+
 type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const { result, at, o, set, map, scenario, desk, buses, sizes, resize } = data;
   const rf = useReactFlow();
+  const fitH = useCallback((k: string, h: number) => { if (Math.abs((sizes['fit:' + k]?.[1] ?? 0) - h) > 2) resize('fit:' + k, [0, h]); }, [sizes, resize]);
   STRAIGHT.on = !buses;
   const g = geometry(o, map, sizes), { R } = g, B = R.bank;
   // click a flow, a bus or a shock: a card with its plot over the run (as the plot cards in the control-loop view)
@@ -320,8 +334,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       </Block>
       <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
       {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3}>  {/* open: above the wires, so a dragged plot card stays on top */}
-        {o[k] && <div className="bus-stmt-body nowheel" style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6}}>
-          <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></div>}
+        {o[k] && <FitBody k={k} onH={fitH} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
+          <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></FitBody>}
         {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
           onDoubleClick={e => { e.stopPropagation(); resize(k, null); }}
           onPointerDown={e => { e.stopPropagation(); e.preventDefault(); const el = e.currentTarget, z = rf.getZoom(), x0 = e.clientX, y0 = e.clientY, s0 = sub[k]; el.setPointerCapture(e.pointerId);
@@ -379,7 +393,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
 
 const nodeTypes = { diagram: Diagram };
 
-function Inner({ result, desk, patch }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData }) {
+function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
   const n = result.year.length;
   const [buses, setBuses] = useState(false);
   const [sizes, setSizes] = useState<Record<string, P>>({});
@@ -409,18 +423,19 @@ function Inner({ result, desk, patch }: { result: Result; desk: ReactNode; patch
   }), [rf, map, sizes]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
     data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize]);
-  return <>
-    <div className="bus-time">
+  const tools = <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
       <input type="range" min={0} max={n - 1} value={Math.min(at, n - 1)} onChange={e => { setPlaying(false); setAt(+e.target.value); }}/>
       <div className="segmented small" role="group" aria-label="Connections"><button className={!buses ? 'active' : ''} aria-pressed={!buses} onClick={() => setBuses(false)}>Ports</button><button className={buses ? 'active' : ''} aria-pressed={buses} onClick={() => setBuses(true)}>Buses</button></div>
       <button className="ghost small" onClick={() => { setO({}); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 40); }}>Close all</button>
-    </div>
+    </div>;
+  return <>
+    {toolsSlot ? createPortal(tools, toolsSlot) : tools}
     <div className="bus-canvas">{map ? <ReactFlow nodes={nodes} edges={[]} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.04 }} minZoom={0.05} maxZoom={4} proOptions={{ hideAttribution: true }} nodesDraggable={false}><Controls showInteractive={false}/></ReactFlow> : <p className="muted">Loading the model…</p>}</div>
   </>;
 }
 
-export function BankBusView({ result, desk, patch }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData }) {
-  return <section className="panel bus-view"><ReactFlowProvider><Inner result={result} desk={desk} patch={patch}/></ReactFlowProvider></section>;
+export function BankBusView({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
+  return <section className="panel bus-view"><ReactFlowProvider><Inner result={result} desk={desk} patch={patch} toolsSlot={toolsSlot}/></ReactFlowProvider></section>;
 }
