@@ -6,7 +6,7 @@
 // Backend: POST api/bank/simulate -> housing/bank_netlist.py (a separate copy of the housing netlist with the bank,
 // run in ngspice; the housing model elsewhere on the site is unchanged). Demo values are Claude's choices.
 import { useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { LoaderCircle, RotateCcw, Minus, Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, LoaderCircle, RotateCcw, Minus, Plus } from 'lucide-react';
 import { api } from './api';
 import type { Line } from './Chart';
 import { AtContext, BankCtx, ModelMap, readTrace, type BankVariant } from './ModelMap';
@@ -218,6 +218,7 @@ const DESIGN: Design = { K: [0, 0, 0], filtered: true, settling: 4, overshoot: 2
 export function BankMode() {
   const [p, setP] = useState<Params>(DEF);
   const [alm, setAlm] = useState(true), [fb, setFb] = useState(true), [cmp, setCmp] = useState<Compare>('off');
+  const [showPlots, setShowPlots] = useState(false);
   const [view, setView] = useState<'bus' | 'loop'>(() => new URLSearchParams(location.search).get('view') === 'loop' ? 'loop' : 'bus');  // bus view (bank in the middle) or the control-loop view
   const openLoop = useCallback(() => setView('loop'), []);
   const set = (k: Key, v: number) => setP(x => ({ ...x, [k]: v }));
@@ -286,7 +287,9 @@ export function BankMode() {
     </BankCtx.Provider>}
 
     {sentence && <p className="bank-sentence">{sentence}</p>}
-    {charts && now && <section className="panel">
+    {/* the result plots below the diagram: closed by default (Jesse: scrolling the page fought with zooming the model) */}
+    {charts && now && <button className="ghost bank-plots-toggle" aria-expanded={showPlots} onClick={() => setShowPlots(v => !v)}>{showPlots ? <ChevronUp size={14}/> : <ChevronDown size={14}/>} {showPlots ? 'Hide plots' : 'Show plots'}</button>}
+    {charts && now && showPlots && <section className="panel">
       <Key_ items={legend}/>
       <div className="bank-grid3">
         <BankChart title="House price index (100 = start)" unit="index" lines={charts.price} crisis={charts.crisis}/>
