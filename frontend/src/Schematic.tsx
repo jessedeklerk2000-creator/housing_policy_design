@@ -152,8 +152,16 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     }
   };
   const geo = new Map<number, Seg>(), geoR = new Map<number, Seg>();
+  // every highlighted element connected (Jesse): the wires from its pins to the next highlighted element, the return
+  // rail or the ground, coloured like the flow it belongs to; loose ends are trimmed below
+  const lit = new Set([...highlight, ...chainLit, ...traceSet]), litEls = pinsOf.filter(e => lit.has(e.name));
+  if (litEls.length && (litW.size || traceSet.size)) {
+    const colOf = (n: string) => KIND_COLOR[flowsHere.find(f => f.chain.includes(n))?.kind ?? 'money'] ?? KIND_COLOR.money;
+    litEls.forEach(e => e.pins.forEach(p => traceFlow(layout.wires, p, pinsOf, lit).forEach(i => { if (!litW.has(i)) litW.set(i, colOf(e.name)); })));
+    const ends = [...layout.return_wires, ...layout.common_returns].flatMap(r => [[r[0], r[1]], [r[2], r[3]]]);
+    prune(litW, layout.wires as Seg[], [...litEls.flatMap(e => e.pins), ...flowsHere.map(f => layout.ports[f.id]), ...layout.grounds, ...ends], geo);
+  }
   if (traceSet.size) {
-    prune(litW, layout.wires as Seg[], [...pinsOf.filter(e => traceSet.has(e.name) || chainLit.has(e.name) || highlight.includes(e.name)).flatMap(e => e.pins), ...flowsHere.map(f => layout.ports[f.id])], geo);
     // the return side of the traced node (Jesse): the return wires that join the money flows' returns
     const money = flowsHere.filter(f => f.kind === 'money' && layout.returns[f.id]), net = new Map<number, string>();
     if (money.length > 1) {
