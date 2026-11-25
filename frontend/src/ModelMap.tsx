@@ -1092,9 +1092,9 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
   // Figure mode (?figure=1): a clean, white canvas for thesis figures; "keep highlight" keeps a clicked equation's flows lit
   const [figure, setFigure] = useState(() => { try { return new URLSearchParams(location.search).get('figure') === '1'; } catch { return false; } });
   // Labels: element names, formula symbols or both (normal view and figure mode); Hide faded: figure mode export
-  const [labelMode, setLabelMode] = useState<LabelMode>('names'), [hideFaded, setHideFaded] = useState(true);
+  const [labelMode, setLabelMode] = useState<LabelMode>('names'), [hideFaded, setHideFaded] = useState(false);  // off: the rest of the circuit stays faintly visible (Jesse)
   const labelState = useMemo<LabelState>(() => { const f = hl ? TERMS.find(t => t.id === hl.id) : undefined;
-    return { mode: labelMode, symbols: labelMode === 'names' ? {} : symbolsFor(hl?.id ?? null), nodes: TERMS.flatMap(t => t.node && (t === f || labelMode !== 'names') ? [t.node] : []) }; }, [labelMode, hl]);
+    return { mode: labelMode, symbols: labelMode === 'names' ? {} : symbolsFor(hl?.id ?? null), nodes: TERMS.flatMap(t => t.node && (t === f || labelMode !== 'names') ? [t.node] : []), figure }; }, [labelMode, hl, figure]);
   const download = (name: string, text: string, type: string) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click(); URL.revokeObjectURL(a.href); };
   const exportMapping = () => { download('figure_mapping.csv', mappingCsv(), 'text/csv'); download('figure_mapping.tex', mappingTex(), 'text/x-tex'); };
   const flipFigure = () => setFigure(f => { const n = !f; try { const u = new URL(location.href); if (n) u.searchParams.set('figure', '1'); else u.searchParams.delete('figure'); history.replaceState(null, '', u); } catch { /* ignore */ } return n; });

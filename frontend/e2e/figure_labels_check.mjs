@@ -15,6 +15,7 @@ const raw = await page.evaluate(() => [...document.querySelectorAll('.circuit .e
 if (raw.length) fail.push({ raw });
 // figure mode, Utility and budget highlighted, symbols as labels
 await page.getByRole('button', { name: 'Figure mode' }).click(); await page.waitForTimeout(600);
+await page.getByLabel('hide faded').check(); await page.waitForTimeout(300);
 await page.getByLabel('Highlight formula').selectOption('utility'); await page.getByLabel('Element labels').selectOption('symbols'); await page.waitForTimeout(1200);
 const r = await page.evaluate(() => {
   const vis = el => { for (let n = el; n && n.nodeType === 1; n = n.parentElement) { const s = getComputedStyle(n); if (s.visibility === 'hidden' || s.display === 'none') return false; } return true; };

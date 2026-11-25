@@ -28,7 +28,7 @@ export function symbolsFor(formulaId: string | null): Record<string, string> {
   order.forEach(f => f.terms.forEach(t => { if (t.symbol && !(t.element in out)) out[t.element] = t.symbol; }));
   return out;
 }
-export type LabelState = { mode: LabelMode; symbols: Record<string, string>; nodes: NonNullable<FormulaTerms['node']>[] };
+export type LabelState = { mode: LabelMode; symbols: Record<string, string>; nodes: NonNullable<FormulaTerms['node']>[]; figure?: boolean };
 export const LabelCtx = createContext<LabelState>({ mode: 'names', symbols: {}, nodes: [] });
 
 /** The mapping as CSV and as a booktabs table (Element | Symbol | Meaning | Equation), one block per agent. */
