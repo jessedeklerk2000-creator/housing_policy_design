@@ -14,7 +14,7 @@ export const FORMULAS: Record<string, Formula[]> = {
     { id: 'construction', title: 'New construction', no: '2.14', tex: 'I_t = (\\gamma+\\omega)\\,\\alpha_t\\,P_m^{\\beta}',
       note: 'γ growth of the stock, ω demolition, β = 0.65 price elasticity of supply',
       explain: 'New construction follows the house price: 1% higher price, about 0.65% more building. γ + ω is what keeps the stock growing and replaces demolished houses; α is calibrated to observed construction. In the circuit: a controlled source driven by the construction payments.',
-      flows: ['houses', 'construction_cost'], elements: ['B§Construction', 'V§Construction_cost', 'L2', 'L4', 'B§Housing_services'] },
+      flows: ['houses', 'construction_cost'], elements: ['B§Construction', 'V§Construction_cost', 'L2', 'L4'] },  // not B§Housing_services (Jesse, 25 Nov 2026)
   ],
   investors: [
     { id: 'price', title: 'Market price of a house', no: '2.17', tex: 'P_m = \\textstyle\\sum_{t=1}^{\\infty} \\displaystyle\\frac{w^{*}(t) - \\kappa(t)}{(1+\\rho)^{t}}',

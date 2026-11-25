@@ -15,7 +15,7 @@ export function stateOf(e: Element, s: Scenario): string {
 }
 const LABEL_OFFSET: Record<string, [number, number]> = {
   'B§Mortgage_rate_ALM': [-60, -62],  // bank view (Bank.tsx): above the source, clear of L9 and the u₁ arrow
-  'I§Rental_subsidies1': [-24, 56], 'I§Owner_occupied_subsidies': [-24, 56], 'B§PID': [-24, 56], 'L§Supply_owner_occupied': [-142, 0], 'C3': [-14, 62], 'C2': [-14, 62], 'R20': [-74, 0], 'L§Supply_rent': [-132, 0], 'B§Housing_services': [-30, 205], 'Interest_Rates': [-176, 0], 'V§Shock_covid': [0, -6], 'V§Shock_financialcrisis': [0, -6], 'L§F_Consumption': [18, -6], 'C7': [0, 0],
+  'I§Rental_subsidies1': [-24, 56], 'I§Owner_occupied_subsidies': [-24, 56], 'B§PID': [-24, 56], 'L§Supply_owner_occupied': [-142, 0], 'C3': [-14, 62], 'C2': [-14, 62], 'R20': [-74, 0], 'L§Supply_rent': [-132, 0], 'Interest_Rates': [-176, 0], 'V§Shock_covid': [0, -6], 'V§Shock_financialcrisis': [0, -6], 'L§F_Consumption': [18, -6], 'C7': [0, 0],
 };
 const DISPLAY: Record<string, string> = {
   'B§Mortgage_rate_ALM': 'Mortgage rate (ALM)', 'B§Deposit_flow': 'Inflow', 'B§Net_interest': 'NII', 'C§Deposits': 'Deposits', 'C§Equity': 'Equity', 'B§Loans_funding': 'NSFR', 'B§Firm_loans': 'New firm loans', 'B§Firm_book_flow': 'Lending', 'C§Firm_loans': 'Firm book',  // bank view
@@ -171,7 +171,7 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
       }
     }
   };
-  const geo = new Map<number, Seg>(), geoR = new Map<number, Seg>(), geoLR = new Map<number, Seg>();
+  const geo = new Map<number, Seg>(), geoR = new Map<number, Seg>(), geoLR = new Map<number, Seg>(), geoC = new Map<number, Seg>();
   // every highlighted element connected (Jesse): the wires from its pins to the next highlighted element, the return
   // rail or the ground, coloured like the flow it belongs to; loose ends are trimmed below
   const lit = new Set([...highlight, ...traceSet]), litEls = pinsOf.filter(e => lit.has(e.name) || chainLit.has(e.name));
@@ -182,6 +182,10 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     const ends = [...layout.return_wires, ...layout.common_returns].flatMap(r => [[r[0], r[1]], [r[2], r[3]]]);
     prune(litW, layout.wires as Seg[], [...litEls.flatMap(e => e.pins), ...flowsHere.map(f => layout.ports[f.id]), ...layout.grounds, ...ends], geo);
     // a lit return must end on something lit (a lit element, another lit return, a ground): no dangling return lines
+    // equation elements that sit on a (shared) return rail, e.g. V maint.: the return path to the lit flows' returns
+    const segsC = [...layout.return_wires, ...layout.common_returns] as Seg[], netC = new Map<number, string>();
+    own.forEach(e => e.pins.forEach(p => { if (segsC.some(w => onSeg(p, w))) traceFlow(segsC, p, [], new Set()).forEach(i => netC.set(i, colOf(e.name))); }));
+    if (netC.size) prune(netC, segsC, [...own.flatMap(e => e.pins), ...flowsHere.flatMap(f => layout.returns[f.id] ? [layout.returns[f.id]] : []), ...layout.grounds], geoC);
     const wireEnds = [...litW.keys()].flatMap(i => { const g = geo.get(i) ?? layout.wires[i]; return [[g[0], g[1]], [g[2], g[3]]]; });  // a return may end on a lit wire (L goods)
     prune(litR, layout.return_wires as Seg[], [...litEls.flatMap(e => e.pins), ...flowsHere.flatMap(f => layout.returns[f.id] ? [layout.returns[f.id]] : []), ...layout.grounds, ...wireEnds], geoLR);
   }
@@ -199,7 +203,7 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     <defs>{([['shock', SHOCK_RED], ['subsidy', SUBSIDY_BLUE]] as const).map(([k, c]) => <marker key={k} id={`in-${agent}-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="22" markerHeight="22" markerUnits="userSpaceOnUse" orient="auto"><path d="M0 0 10 5 0 10z" fill={c}/></marker>)}</defs>
     <g className="return-wires">{[...layout.return_wires, ...layout.common_returns].map((r, i) => <path key={i} d={line(r)}/>)}{layout.dots.map(([x, y], i) => <circle key={`d${i}`} className="return-dot" cx={x} cy={y} r={5}/>)}</g>
     <g className="wires">{layout.wires.map((r, i) => <path key={i} d={line(r)}/>)}</g>
-    {(litW.size > 0 || litR.size > 0 || geoR.size > 0) && <g className="lit-wires">{[...geoR].map(([i, g]) => <path key={'n' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...litR].map(([i, c]) => <path key={'r' + i} className="ret" stroke={c} d={line(geoLR.get(i) ?? layout.return_wires[i])}/>)}{[...litW].map(([i, c]) => <path key={'w' + i} stroke={c} d={line(geo.get(i) ?? layout.wires[i])}/>)}</g>}
+    {(litW.size > 0 || litR.size > 0 || geoR.size > 0 || geoC.size > 0) && <g className="lit-wires">{[...geoC].map(([i, g]) => <path key={'c' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...geoR].map(([i, g]) => <path key={'n' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...litR].map(([i, c]) => <path key={'r' + i} className="ret" stroke={c} d={line(geoLR.get(i) ?? layout.return_wires[i])}/>)}{[...litW].map(([i, c]) => <path key={'w' + i} stroke={c} d={line(geo.get(i) ?? layout.wires[i])}/>)}</g>}
     <g className="grounds">{layout.grounds.map(([x, y], i) => <path key={i} d={`M${x - 14} ${y}H${x + 14}L${x} ${y + 16}Z`}/>)}</g>
     {/* outside: the canvas draws the subsidy and shock arrows straight through to the element (one unbroken arrow) */}
     {outside && labelCtx.figure && layout.signals.filter(sig => litFlows.includes(sig.flow)).map(sig => <g key={'fig' + sig.flow} className="u-signal lit">
