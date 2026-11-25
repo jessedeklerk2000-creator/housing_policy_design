@@ -724,3 +724,4 @@ body:has(.bank-full) { overflow:hidden; }
 .bus-diagram { user-select:none; }  /* dragging on the canvas does not select statement text */
 .bank-scen { width:340px; flex:0 0 340px; overflow-y:auto; border-right:1px solid var(--line); background:var(--panel); padding:10px; }
 .bank-handle { align-self:flex-start; margin:8px 4px; } .bank-scen, .bank-side { position:relative; max-height:none; }
+.bus-diagram .map-node.bus-stmt:has(.stmt-plot-card) { z-index:7 !important; }  /* a box with an open plot card above its neighbours, so the card is never covered */
