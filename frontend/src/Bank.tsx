@@ -219,7 +219,7 @@ const DESIGN: Design = { K: [0, 0, 0], filtered: true, settling: 4, overshoot: 2
 export function BankMode() {
   const [p, setP] = useState<Params>(DEF);
   const [alm, setAlm] = useState(true), [fb, setFb] = useState(true), [cmp, setCmp] = useState<Compare>('off');
-  const [scen, setScen] = useState(false), [side, setSide] = useState(true), [busSlot, setBusSlot] = useState<HTMLElement | null>(null);
+  const [scen, setScen] = useState(false), [side, setSide] = useState(false), [busSlot, setBusSlot] = useState<HTMLElement | null>(null);
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   useEffect(() => { setSlot(document.getElementById('bank-top-slot'));
     // the canvas starts right below the top bar, whatever its height
