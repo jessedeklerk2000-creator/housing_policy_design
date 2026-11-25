@@ -206,9 +206,11 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
     {(litW.size > 0 || litR.size > 0 || geoR.size > 0 || geoC.size > 0) && <g className="lit-wires">{[...geoC].map(([i, g]) => <path key={'c' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...geoR].map(([i, g]) => <path key={'n' + i} className="ret" stroke={KIND_COLOR.money} d={line(g)}/>)}{[...litR].map(([i, c]) => <path key={'r' + i} className="ret" stroke={c} d={line(geoLR.get(i) ?? layout.return_wires[i])}/>)}{[...litW].map(([i, c]) => <path key={'w' + i} stroke={c} d={line(geo.get(i) ?? layout.wires[i])}/>)}</g>}
     <g className="grounds">{layout.grounds.map(([x, y], i) => <path key={i} d={`M${x - 14} ${y}H${x + 14}L${x} ${y + 16}Z`}/>)}</g>
     {/* outside: the canvas draws the subsidy and shock arrows straight through to the element (one unbroken arrow) */}
-    {outside && labelCtx.figure && layout.signals.filter(sig => litFlows.includes(sig.flow)).map(sig => <g key={'fig' + sig.flow} className="u-signal lit">
-      <path d={sig.path.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/>
-      <text className="u-sig-name" x={sig.path[0][0] + 10} y={24}>{sig.flow === 'rental_subsidy' ? 'u₁' : 'u₂'}</text></g>)}
+    {/* figure mode (Jesse): the subsidy signals enter from the left edge, each on its own lane, then down into the source */}
+    {outside && labelCtx.figure && layout.signals.filter(sig => litFlows.includes(sig.flow)).map((sig, i, all) => { const yIn = 70 + 26 * (all.length - 1 - i);
+      const pts = [[0, yIn], [sig.path[0][0], yIn], ...sig.path.slice(1)];
+      return <g key={'fig' + sig.flow} className="u-signal lit"><path d={pts.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/>
+        <text className="u-sig-name" x={14} y={yIn - 7}>{sig.flow === 'rental_subsidy' ? 'u₁' : 'u₂'}</text></g>; })}
     {!outside && layout.signals.filter(sig => sig.flow !== 'rental_subsidy' || scenario.rental_subsidy).map(sig => <g key={sig.flow} className={`u-signal${selection.kind === 'flow' && selection.id === sig.flow ? ' selected' : ''}`} role="button" tabIndex={0} aria-label={`Control signal ${flow(sig.flow).label}`} onClick={ev => { ev.stopPropagation(); pick({ kind: 'flow', id: sig.flow }); }} onContextMenu={ev => { if (menu) { ev.preventDefault(); ev.stopPropagation(); menu({ kind: 'flow', id: sig.flow }, ev); } }}>
       <path d={sig.path.map(([x, y], j) => `${j ? 'L' : 'M'}${x} ${y}`).join('')} markerEnd={`url(#in-${agent}-subsidy)`}/></g>)}
     {!outside && inputs.map((d, i) => { const e = d.element ? map.elements.find(x => x.name === d.element && x.agent === agent) : undefined; if (!e || !e.pins || e.pins.length < 2) return null;
