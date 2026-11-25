@@ -55,11 +55,13 @@ await cpbOn();
 await nodeBtn('households'); await page.waitForTimeout(1500);
 await page.getByRole('button', { name: 'Figure mode' }).click(); await page.waitForTimeout(800);
 r.url = page.url();
-await page.locator('.formulas .eq', { hasText: 'Utility' }).first().dispatchEvent('click'); await page.waitForTimeout(800);
-r.figure = await page.evaluate(() => { const on = document.querySelector('.formulas .eq.on'), vis = el => !!el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden';
-  return { canvas: document.querySelector('.map-canvas').className, explain: vis(document.querySelector('.map-canvas .eq-explain')),
-    onBorder: on && getComputedStyle(on).borderTopColor, key: vis(document.querySelector('.map-key')), toggles: [...document.querySelectorAll('.map-canvas .block-head .toggle')].filter(vis).length }; });
-if (!r.figure.canvas.includes('figure-mode') || r.figure.explain || r.figure.onBorder !== 'rgb(217, 201, 163)' || r.figure.key || r.figure.toggles) fail.push({ figure: r.figure });
+await page.getByLabel('Highlight formula').selectOption('utility'); await page.waitForTimeout(800);
+// figure mode: no formula cards (they go into the report), the picked formula's flows lit, no financial sector, no UI chrome
+r.figure = await page.evaluate(() => { const vis = el => !!el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden';
+  return { canvas: document.querySelector('.map-canvas').className, cards: document.querySelectorAll('.map-canvas .formulas').length, lit: !!document.querySelector('.map-canvas .react-flow.hl-on'),
+    finance: document.querySelectorAll('.react-flow__node[data-id="finance"], .react-flow__node[data-id="bank"]').length, others: [...document.querySelectorAll('.map-canvas .react-flow__node')].map(n => n.dataset.id).filter(i => !['anchor', 'cpb', 'constructors', 'investors', 'firms', 'households'].includes(i)),
+    key: vis(document.querySelector('.map-key')), toggles: [...document.querySelectorAll('.map-canvas .block-head .toggle')].filter(vis).length }; });
+if (!r.figure.canvas.includes('figure-mode') || r.figure.cards || !r.figure.lit || r.figure.finance || r.figure.others.length || r.figure.key || r.figure.toggles) fail.push({ figure: r.figure });
 await page.locator('.react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(1200);
 await page.locator('.map-canvas').screenshot({ path: out + '/figure_households.png', timeout: 60000 });
 console.log(JSON.stringify({ fail, utilityWidth: r.utilityWidth, figure: r.figure, url: r.url, sample: { closed: r['closed@1.3'], households: r['households@2.5'], side: r['constructors+investors@2.5'] }, errors })); process.exit(0);

@@ -77,6 +77,8 @@ const onSeg = (p: number[], w: Seg) => Math.abs((w[2] - w[0]) * (p[1] - w[1]) - 
   && p[0] >= Math.min(w[0], w[2]) - .5 && p[0] <= Math.max(w[0], w[2]) + .5 && p[1] >= Math.min(w[1], w[3]) - .5 && p[1] <= Math.max(w[1], w[3]) + .5;
 function traceFlow(segs: Seg[], start: number[], pins: { name: string; pins: number[][] }[], chain: Set<string>): Set<number> {
   const lit = new Set<number>(), seen: number[][] = [], todo: number[][] = [start];
+  // the flow ends at the last of its chain elements in this agent: past it the current is no longer this flow alone
+  const here = new Set(pins.filter(e => chain.has(e.name)).map(e => e.name)), passed = new Set<string>();
   while (todo.length) {
     const p = todo.pop()!;
     if (seen.some(q => near(q, p))) continue;
@@ -84,6 +86,8 @@ function traceFlow(segs: Seg[], start: number[], pins: { name: string; pins: num
     const el = pins.find(e => e.pins.some(q => near(q, p)));
     if (el && !near(p, start)) {
       if (!chain.has(el.name)) continue;                      // another element: the flow stops here
+      passed.add(el.name);
+      if (passed.size >= here.size) continue;                 // the last chain element here: stop at it
       el.pins.forEach(q => { if (!near(q, p)) todo.push(q); });  // through its own element to the other pin
     }
     segs.forEach((w, i) => {

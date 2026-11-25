@@ -644,8 +644,6 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .figure-mode .formulas .eq { cursor:default; }
 .figure-mode .formulas .eq:hover, .figure-mode .formulas .eq.on { border-color:#d9c9a3; box-shadow:none; background:#fffaf0; }
 .figure-mode .formulas .eq .eq-explain, .figure-mode .chip-wrap { display:none; }
-.figure-nohl .react-flow.hl-on .react-flow__edge, .figure-nohl .react-flow.hl-on .circuit *, .figure-nohl .react-flow.hl-on .map-node { opacity:1 !important; filter:none !important; }
-.figure-nohl .circuit .lit-wires { display:none; }
 .keep-hl { display:inline-flex; align-items:center; gap:4px; font-size:12px; }
 
 /* bus view: card of a clicked flow, bus or shock */
@@ -655,3 +653,5 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 
 /* bus view, Ports: e and f meters and flow names as in the control-loop view */
 .bus-meter { font-size:9px; font-weight:700; pointer-events:none; } .bus-flow-name { font-size:11px; font-weight:600; paint-order:stroke; stroke:#fafaf7; stroke-width:3px; }
+.figure-mode .react-flow__node:focus, .figure-mode .react-flow__node:focus-visible, .figure-mode .react-flow__node.selected, .figure-mode .map-node.selected { outline:none !important; box-shadow:none !important; }
+.figure-mode .react-flow__nodesselection-rect, .figure-mode .react-flow__selection { display:none; }

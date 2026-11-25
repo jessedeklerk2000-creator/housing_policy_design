@@ -667,8 +667,6 @@ const CPB_PORTS: Record<string, { p: Point; side: Side }> = {
 // so its four left ports line up with the CPB's four right ports.
 const AGENT_BOX: Point = [250, 160], FIN_BOX: Point = [250, 230];
 // Closed agents in the CPB backbone view: room for their equation cards (canvas units)
-// Figure mode (thesis screenshots): fixed formula scale, independent of the label slider. Claude's choice, to calibrate.
-const FIGURE_EQ = 1.3;
 const FORMULA_BOX: Record<string, Point> = { constructors: [600, 190], investors: [600, 230], households: [600, 360] };
 /** Port of a collapsed block: ports keep their side and order from the drawing, evenly spaced along that side. */
 function evenPort(l: MapData['layouts'][string], flow: string, [W, H]: Point): { p: Point; side: Side; ret: Point } {
@@ -683,6 +681,8 @@ function evenPort(l: MapData['layouts'][string], flow: string, [W, H]: Point): {
 function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string) => void, scenario: Scenario, result: Result | null, at: number, selection: Selection, select: (s: Selection) => void, menu: (s: Selection, e: React.MouseEvent) => void, flip?: () => void, probes?: ProbeState, step?: (k: GainKey, up: boolean) => void, lab = 1, hl: Formula | null = null, setHl: (f: Formula | null) => void = () => undefined, natW: Record<string, number> | null = null, figure = false) {
   const bv = useContext(BankCtx);
   return useMemo(() => {
+    // figure mode is for the chapter before the financial sector: drawn as with the bank off
+    const bankOn = scenario.bank && !figure;
     if (!map) return { nodes: [] as Node[], edges: [] as Edge[], pinDefault: {} as Record<string, XY>, lines: {} as Record<string, Point[]> };
     const value = (signal: string) => result && readTrace(result, signal) ? <Val signal={signal}/> : undefined;
     // bank loop: r, e, y and x in % with two decimals, so that e = r - y can be read off the canvas
@@ -697,17 +697,18 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     const GX = 640, GY = 300;
     const R: Record<string, Rect> = {}, scale: Record<string, number> = {};
     // CPB backbone view (tour): closed agents are larger and carry their CPB equations
-    const withEq = (id: string) => !!view.formulas && !!FORMULAS[id];
+    // figure mode: no formula cards (the equations go into the report); a picked formula still lights its flows
+    const withEq = (id: string) => !figure && !!view.formulas && !!FORMULAS[id];
     // Equations beside the circuit (wider, flatter figure for slides) on a side without ports: Constructors left;
     // Investors and Households right, where only the bank connects (so only with the bank off). Otherwise above/below.
     const SIDE: Record<string, 'L' | 'R'> = { constructors: 'L', investors: 'R', households: 'R' };
-    const sideOn = (id: string) => withEq(id) && view.agents.includes(id) && !!SIDE[id] && (SIDE[id] === 'L' || !scenario.bank);
+    const sideOn = (id: string) => withEq(id) && view.agents.includes(id) && !!SIDE[id] && (SIDE[id] === 'L' || !bankOn);
     // ONE formula scale for every card on the canvas: it follows the label-size slider (1.3x = the size the cards were
     // drawn for; fixed in figure mode) and is lowered until the widest formula fits the narrowest place it is shown.
     // Boxes and side columns are sized from this scale; a strip above/below an opened circuit has the circuit's width.
     const CARD_PAD = 26;  // strip padding + card border, canvas units
     const stripCap = (id: string) => map.layouts[id].size[0] * SCALE.expanded - CARD_PAD;
-    const eq = Math.floor(100 * Math.min(figure ? FIGURE_EQ : lab / 1.3,
+    const eq = Math.floor(100 * Math.min(lab / 1.3,
       ...CPB_AGENTS.filter(id => withEq(id) && view.agents.includes(id) && !sideOn(id) && natW?.[id]).map(id => stripCap(id) / natW![id]))) / 100;
     const cardW = (id: string) => (natW?.[id] ?? 0) + CARD_PAD;  // the widest card of an agent at scale 1
     const AB = (id: string): Point => withEq(id) && FORMULA_BOX[id] ? [Math.max(AGENT_BOX[0], Math.max(FORMULA_BOX[id][0], cardW(id) + 28) * eq), Math.max(AGENT_BOX[1], FORMULA_BOX[id][1] * eq)] : AGENT_BOX;
@@ -736,10 +737,10 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       return { p: [left + x * s, top + y * s], side: x === 0 ? 'L' : x === w ? 'R' : y === 0 ? 'T' : 'B', ret: [left + rx * s, top + ry * s] };
     };
     let group: Rect = { x: GX, y: GY, w: 250, h: 150 }, cpbRegion: Rect | null = null, finRegion: Rect | null = null;
-    const g12 = 340, rowGap = 340, g23 = 340, framePad = 34;
+    const g12 = 340, rowGap = figure ? 200 : 340, g23 = 340, framePad = 34;  // figure mode: the two rows closer together (report)
     // Which disturbances are drawn: a shock whose scale is 0 is not (the bank's inputs are all zero with the bank off).
     const SCALE_OF: Record<string, keyof Scenario> = { d_income: 'income_scale', d_covid: 'covid_scale', d_crisis: 'crisis_scale', d_mortgages: 'mortgage_scale', d_interest: 'interest_scale' };
-    const active = (d: { id: string; target?: string }) => (d.target !== 'bank' || scenario.bank) && !(SCALE_OF[d.id] && scenario[SCALE_OF[d.id]] === 0);
+    const active = (d: { id: string; target?: string }) => (d.target !== 'bank' || bankOn) && !(SCALE_OF[d.id] && scenario[SCALE_OF[d.id]] === 0);
     if (view.system) {
       // ---- CPB model
       if (view.cpb) {
@@ -771,7 +772,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       const minX = Math.min(...inside.map(i => R[i].x)), minY = Math.min(...inside.map(i => R[i].y));
       shift(GX + padL - minX, GY + padT - minY, inside);
       // Bank off: the financial sector is not drawn, so the frame closes around the CPB part only.
-      const framed = scenario.bank ? inside : inside.filter(i => i !== 'finance' && i !== 'bank');
+      const framed = bankOn ? inside : inside.filter(i => i !== 'finance' && i !== 'bank');
       const maxX = Math.max(...framed.map(i => R[i].x + R[i].w)), maxY = Math.max(...framed.map(i => R[i].y + R[i].h));
       group = { x: GX, y: GY, w: maxX + padR - GX, h: maxY + padB - GY };
       // ---- port pairs
@@ -827,7 +828,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
     else {
       block('system', group, { label: bv ? 'Economy' : 'Housing Market', tone: 'system-group', open: true, tab: 'tl', toggle: () => toggle('system') }, 0);
       block('cpb', R.cpb, view.cpb ? { label: 'CPB Four Quadrants', tone: 'sub-group', open: true, tab: 'tl', toggle: () => toggle('cpb') } : { label: 'CPB Four Quadrants', tone: 'sub-closed', toggle: () => toggle('cpb') }, view.cpb ? 1 : 2);
-      block('finance', R.finance, view.finance ? { label: scenario.bank ? 'Financial sector' : 'Financial sector · off', tone: scenario.bank ? 'sub-group' : 'sub-group bank-off', open: true, tab: 'tl', toggle: () => toggle('finance') } : { label: scenario.bank ? 'Financial sector' : 'Financial sector · off', tone: scenario.bank ? 'sub-closed' : 'sub-closed bank-off', toggle: () => toggle('finance') }, view.finance ? 1 : 2);
+      block('finance', R.finance, view.finance ? { label: bankOn ? 'Financial sector' : 'Financial sector · off', tone: bankOn ? 'sub-group' : 'sub-group bank-off', open: true, tab: 'tl', toggle: () => toggle('finance') } : { label: bankOn ? 'Financial sector' : 'Financial sector · off', tone: bankOn ? 'sub-closed' : 'sub-closed bank-off', toggle: () => toggle('finance') }, view.finance ? 1 : 2);
       const agentBlock = (id: string) => {
         const open = view.agents.includes(id), a = map.agents[id];
         const circuit = <AgentCircuit map={map} agent={id} scenario={bv ? { ...scenario, feedback: false } : scenario} selection={selection} pick={select} menu={menu} inputs={map.disturbances.filter(d => d.target === id && active(d))} inputSide={id === 'bank' ? 'top' : 'left'} outside highlight={hl?.elements} litFlows={hl?.flows} trace={hl?.trace}/>;
@@ -908,7 +909,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       const b1 = group.y + HEAD_FLOW * lab + 26, b2 = b1 + 22, vx1 = group.x + group.w - 22, vx2 = vx1 - 22, sx1 = r1[0] - 18, sx2 = r1[0] + 18;
       x1pts = [[sx1, r1[1]], [sx1, b1], [vx1, b1], [vx1, gc + xIn.a], [sensor.x, gc + xIn.a]];
       x2pts = [[sx2, r2[1]], [sx2, b2], [vx2, b2], [vx2, gc + xIn.b], [sensor.x, gc + xIn.b]];
-    } else if (view.system && !scenario.bank) {
+    } else if (view.system && !bankOn) {
       // No financial sector to the right: straight out of the right side of the CPB box.
       x1pts = [[R.cpb.x + R.cpb.w, gc + xIn.a], [sensor.x, gc + xIn.a]]; x2pts = [[R.cpb.x + R.cpb.w, gc + xIn.b], [sensor.x, gc + xIn.b]];
     } else if (view.system) {
@@ -917,7 +918,7 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       x1pts = [[sx1, src.y], [sx1, b1], [vx1, b1], [vx1, gc + xIn.a], [sensor.x, gc + xIn.a]];
       x2pts = [[sx2, src.y], [sx2, b2], [vx2, b2], [vx2, gc + xIn.b], [sensor.x, gc + xIn.b]];
     }
-    const xMark = view.system && (scenario.bank || (r1 && r2)) ? { markAt: 4, markDist: 22 + 95 * lab } : view.system ? { markDist: (sensor.x - R.cpb.x - R.cpb.w) / 2 } : {};
+    const xMark = view.system && (bankOn || (r1 && r2)) ? { markAt: 4, markDist: 22 + 95 * lab } : view.system ? { markDist: (sensor.x - R.cpb.x - R.cpb.w) / 2 } : {};
     lines.x1 = x1pts; lines.x2 = x2pts;
     sig('x1', x1pts, { color: COLOR.money, letter: 'x₁', name: bv ? 'Assets' : 'Construction payments', value: bv ? <>mortgages, firm loans, home value</> : value('I(Construction_cost)'), markDist: 95 * lab, ...xMark, labelSide: 'above', selected: on({ kind: 'signal', id: 'y_price' }), pick: card('x1') ?? (() => select({ kind: 'signal', id: 'y_price' })), target: { kind: 'signal', id: 'y_price' } });
     sig('x2', x2pts, { color: COLOR.real, letter: 'x₂', name: bv ? 'Liabilities & equity' : 'New construction', value: bv ? <>deposits, other banks, equity</> : value('I(Construction)'), markDist: 95 * lab, ...xMark, labelSide: 'below', selected: on({ kind: 'flow', id: 'houses' }), pick: card('x2') ?? (() => select({ kind: 'flow', id: 'houses' })), target: { kind: 'flow', id: 'houses' } });
@@ -1004,8 +1005,14 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
         sig(`probe-${probeKey(p)}`, [start, [start[0], lowY], [sx, lowY], [sx, sensor.y + sensor.h]], { color: '#6b4fa0', letter: p.q, dashed: true, markAt: 2, markDist: 40, name: info.f.short, pick: () => select({ kind: 'probe', id: probeKey(p) }) });
       });
     }
+    // Figure mode (report chapter on the CPB model): only the CPB Four Quadrants box with its agents and the flows between them
+    if (figure && view.cpb) {
+      const keep = new Set(['anchor', 'cpb', ...CPB_AGENTS]), inner = new Set(map.flows.filter(f => CPB_AGENTS.includes(f.source) && CPB_AGENTS.includes(f.target)).map(f => f.id));
+      for (let i = nodes.length - 1; i >= 0; i--) if (!keep.has(nodes[i].id)) nodes.splice(i, 1);
+      for (let i = edges.length - 1; i >= 0; i--) if (!inner.has(edges[i].id)) edges.splice(i, 1);
+    }
     // Bank off (the original CPB model): leave the financial sector out of the drawing altogether.
-    if (!scenario.bank) {
+    if (!bankOn) {
       const bankFlows = new Set(map.flows.filter(f => f.source === 'bank' || f.target === 'bank').map(f => f.id));
       const bankShocks = new Set(map.disturbances.filter(d => d.target === 'bank').map(d => d.id));
       for (let i = nodes.length - 1; i >= 0; i--) if (nodes[i].id === 'finance' || nodes[i].id === 'bank') nodes.splice(i, 1);
@@ -1083,7 +1090,6 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
   const [shooting, setShooting] = useState(false);
   // Figure mode (?figure=1): a clean, white canvas for thesis figures; "keep highlight" keeps a clicked equation's flows lit
   const [figure, setFigure] = useState(() => { try { return new URLSearchParams(location.search).get('figure') === '1'; } catch { return false; } });
-  const [keepHl, setKeepHl] = useState(true);
   const flipFigure = () => setFigure(f => { const n = !f; try { const u = new URL(location.href); if (n) u.searchParams.set('figure', '1'); else u.searchParams.delete('figure'); history.replaceState(null, '', u); } catch { /* ignore */ } return n; });
   const bodyRef = useRef<HTMLDivElement>(null);
   const shootCanvas = async () => {
@@ -1243,7 +1249,8 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
       <button className={view.formulas ? 'secondary' : 'ghost'} aria-pressed={!!view.formulas} title="Show the CPB equations on the agents (click one to light up its flows and elements)" onClick={() => { setView(view.formulas ? { ...view, formulas: false } : { ...view, system: true, cpb: true, formulas: true }); }}><Sigma size={14}/> CPB formulas</button></>}
       <button className="ghost" data-no-shot title="Save the canvas (and the open side panels) as a high-resolution PNG (3x)" disabled={shooting} onClick={shootCanvas}>{shooting ? <LoaderCircle className="spin" size={14}/> : <Camera size={14}/>} {figure ? 'Save figure' : 'Screenshot canvas'}</button>
       <button className={figure ? 'secondary' : 'ghost'} data-no-shot aria-pressed={figure} title="Figure mode: white background, no buttons or hints, fixed formula size; the screenshot is saved at 4x for the thesis" onClick={flipFigure}><ImageIcon size={14}/> Figure mode</button>
-      {figure && <label className="keep-hl" data-no-shot title="Keep the flows and elements of a clicked equation lit in the figure"><input type="checkbox" checked={keepHl} onChange={e => setKeepHl(e.target.checked)}/> keep highlight</label>}
+      {figure && <label className="keep-hl" data-no-shot title="Light up the flows and elements of one CPB equation in the figure (the equation itself goes into the report)">Highlight <select aria-label="Highlight formula" value={hl?.id ?? ''} onChange={e => setHl(Object.values(FORMULAS).flat().find(f => f.id === e.target.value) ?? null)}>
+        <option value="">none</option>{Object.values(FORMULAS).flat().map(f => <option key={f.id} value={f.id}>{f.title} ({f.no})</option>)}</select></label>}
       <label className="label-size" title="Size of block headers, signal names and the Parliament, Tax Authority and CBS blocks">Label size <output>{lab.toFixed(1)}×</output><input type="range" aria-label="Label size" min={1} max={2.5} step={0.1} value={lab} onChange={e => setLab(Number(e.target.value))}/></label>
     </div>
       {zn && tour?.compare && <button data-guide="zn-compare" className={showZn ? 'secondary' : 'ghost'} aria-pressed={showZn} title="Add the aggressive Ziegler–Nichols PID on the same inputs to the plot cards, dotted" onClick={() => setShowZn(v => !v)}>⋯ Ziegler–Nichols PID</button>}
@@ -1253,7 +1260,7 @@ export function ModelMap({ scenario, result, pinned, zn, shockShow, busy, run, s
     <div className="map-body" ref={bodyRef} style={{ gridTemplateColumns: `${left ? (leftOpen ? '290px ' : '34px ') : ''}minmax(0,1fr) ${!dock ? '34px' : selection.kind === 'ident' || selection.kind === 'robust' ? '520px' : selection.kind === 'agent' && selection.id === 'controller' ? '460px' : '340px'}` }}>
       {left && (leftOpen ? <aside className="inspector left-dock"><button className="dock-toggle" aria-label="Collapse scenario panel" title="Collapse" onClick={() => setLeftOpen(false)}><Minus size={14}/></button>{left}</aside>
         : <button className="dock-handle" data-no-shot aria-label="Open scenario panel" title="Open scenario panel" onClick={() => setLeftOpen(true)}><ChevronRight size={16}/><span>Scenario</span></button>)}
-      <div className={'map-canvas' + (playing ? ' playing' : '') + (figure ? ' figure-mode' : '') + (figure && !keepHl ? ' figure-nohl' : '')} ref={canvasRef} style={{ ['--lab' as string]: lab, ['--eq' as string]: lab / 1.3 }} onClick={() => setMenuAt(null)}><ReactFlowProvider><Canvas hl={hl} setHl={setHl} map={map} view={view} setView={setView} scenario={scenario} result={result} at={at} selection={selection} select={setSelection} focus={focus} menu={openMenu} flip={() => setFeedback(!scenario.feedback)} probes={probeState} step={stepGain} steps={stepping ? steps : null} lab={lab} figure={figure} chips={{ update, stepping, stepInput, setStepInput: pickStep, showCtrl: view.controller || tuning || !!forceChips?.ctrl, showMarket: view.system || (selection.kind === 'agent' && selection.id === 'system') || !!forceChips?.market }}/></ReactFlowProvider>
+      <div className={'map-canvas' + (playing ? ' playing' : '') + (figure ? ' figure-mode' : '')} ref={canvasRef} style={{ ['--lab' as string]: lab, ['--eq' as string]: lab / 1.3 }} onClick={() => setMenuAt(null)}><ReactFlowProvider><Canvas hl={hl} setHl={setHl} map={map} view={view} setView={setView} scenario={scenario} result={result} at={at} selection={selection} select={setSelection} focus={focus} menu={openMenu} flip={() => setFeedback(!scenario.feedback)} probes={probeState} step={stepGain} steps={stepping ? steps : null} lab={lab} figure={figure} chips={{ update, stepping, stepInput, setStepInput: pickStep, showCtrl: view.controller || tuning || !!forceChips?.ctrl, showMarket: view.system || (selection.kind === 'agent' && selection.id === 'system') || !!forceChips?.market }}/></ReactFlowProvider>
         {menuAt && <div className="ctx-menu" role="menu" style={{ left: menuAt.x, top: menuAt.y }} onClick={e => e.stopPropagation()}>
           {menuAt.target.kind === 'agent' && (menuAt.target.id === 'parliament' || menuAt.target.id === 'sum') ? <>
             <p>{menuAt.target.id === 'parliament' ? 'Parliament' : 'Summing junction'}</p>

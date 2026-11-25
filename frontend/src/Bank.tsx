@@ -210,7 +210,7 @@ function patchMap(m: MapData): MapData {
   const covid = m.disturbances.find(d => d.id === 'd_covid');
   return { ...m, flows, elements, layouts, loop: BANK_LOOP, controller: { label: 'ALM Desk', description: 'Your bank\'s ALM Desk: tracks the ALCO\'s targets with a PI controller on the FTP rate (liquidity risk) and one on the spread (solvency risk). Its two client rates enter the bank.' },
     disturbances: [...(covid ? [covid] : []),
-      { id: 'd_others', label: 'Other banks: deposits withdrawn, firm credit cut', signal: 'I(Bk_w)', unit: 'units', target: 'bank', element: 'B§Firm_loans' },
+      { id: 'd_others', label: 'Financial crisis: deposits withdrawn, firm credit cut', signal: 'I(Bk_w)', unit: 'units', target: 'bank', element: 'B§Firm_loans' },
       { id: 'd_gov', label: 'Government subsidy (historical + step)', signal: 'I(Owner_occupied_subsidies)', unit: 'model units', target: 'households', element: 'I§Owner_occupied_subsidies' }] };
 }
 const DESIGN: Design = { K: [0, 0, 0], filtered: true, settling: 4, overshoot: 25 };
