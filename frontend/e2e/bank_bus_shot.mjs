@@ -10,6 +10,11 @@ const shot = async n => { await page.waitForTimeout(1000); await page.locator('.
 const click = async name => { await page.getByRole('button', { name }).dispatchEvent('click'); };
 const titles = await page.locator('.bus-diagram .block-head strong').allTextContents();
 await shot('bus_0');
+// click a flow, a bus and a shock: a card with plots
+const clickHit = async t => { await page.locator('.bus-wires polyline', { has: page.locator('title', { hasText: t }) }).first().dispatchEvent('click'); await page.waitForTimeout(500);
+  const n = await page.locator('.bus-pick svg').count(), title = await page.locator('.bus-pick b').first().textContent(); return { t, title, plots: n }; };
+const picks = [await clickHit('Houses:'), await clickHit('Rent bus'), await clickHit('Covid'), await clickHit('Other banks')];
+await shot('bus_pick'); await page.getByRole('button', { name: 'Close' }).first().dispatchEvent('click');
 await click('Expand Households'); await shot('bus_hh');
 await click('Collapse Households'); await page.waitForTimeout(600);
 await click('Expand Bank'); await shot('bus_1');
@@ -29,4 +34,4 @@ await page.mouse.move(b.x + 20, b.y + b.height - 30); await page.mouse.down(); a
 await page.waitForTimeout(500); const panned = before !== await vp();
 await page.getByRole('tab', { name: 'Control-loop view' }).click(); await page.waitForTimeout(3000);
 const loop = await page.locator('.map-canvas .react-flow__node').count();
-console.log(JSON.stringify({ titles, plotted, panned, loop, errors })); process.exit(0);
+console.log(JSON.stringify({ titles, picks, plotted, panned, loop, errors })); process.exit(0);

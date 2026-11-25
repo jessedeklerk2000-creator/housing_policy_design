@@ -645,3 +645,8 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .figure-nohl .react-flow.hl-on .react-flow__edge, .figure-nohl .react-flow.hl-on .circuit *, .figure-nohl .react-flow.hl-on .map-node { opacity:1 !important; filter:none !important; }
 .figure-nohl .circuit .lit-wires { display:none; }
 .keep-hl { display:inline-flex; align-items:center; gap:4px; font-size:12px; }
+
+/* bus view: card of a clicked flow, bus or shock */
+.bus-pick { position:absolute; z-index:8; width:360px; background:#fff; border:1px solid #cfd8d3; border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,.15); padding:8px 10px; font-size:12px; }
+.bus-pick-head { display:flex; justify-content:space-between; align-items:center; gap:8px; } .bus-pick-head b { font-size:13px; }
+.bus-pick small { display:block; color:#5f6b67; margin:2px 0 4px; } .bus-pick-row { font-weight:600; margin-top:6px; color:#3c4a45; }

@@ -10,9 +10,9 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { ReactFlow, ReactFlowProvider, Controls, useReactFlow, type Node, type NodeProps } from '@xyflow/react';
 import { Minus, Pause, Play, Plus } from 'lucide-react';
 import { api } from './api';
-import { AtContext } from './ModelMap';
+import { AtContext, readTrace } from './ModelMap';
 import { AgentCircuit, inputPath } from './Schematic';
-import { BankStatements, KEY_INPUTS } from './BankStatements';
+import { BankStatements, KEY_INPUTS, StmtPlot } from './BankStatements';
 import type { MapData, Result, Scenario, Selection } from './types';
 
 type R = { x: number; y: number; w: number; h: number };
@@ -24,14 +24,22 @@ const NONE: Selection = { kind: 'none', id: '' };
 // the statement boxes inside Accounting: ledger group and opened size
 const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['eq', 'Equity statement', 'equity'], ['bal', 'Balance sheet', 'balance'], ['key', 'Key figures', 'ratios']];
 const STMT_OPEN: Record<string, P> = { inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [500, HEAD + 300], key: [380, HEAD + 270] };
-const BUSES = [
-  { id: 'construction', label: 'Construction bus', color: '#8a6d3b', a: 'constructors', b: 'investors', flows: ['construction_cost', 'houses'] },
-  { id: 'housing', label: 'Housing-services bus', color: '#b9770e', a: 'investors', b: 'households', flows: ['rental_services', 'owner_services', 'rent', 'imputed_rent'] },
-  { id: 'goods', label: 'Goods and labour bus', color: '#7a5aa6', a: 'firms', b: 'households', flows: ['consumption', 'income', 'goods'] },
-  { id: 'mortgage', label: 'Mortgage bus', color: '#b9851c', a: 'investors', b: 'bank', flows: ['mortgages', 'mortgage_interest'] },
-  { id: 'deposit', label: 'Deposit bus', color: '#1f6fc4', a: 'households', b: 'bank', flows: ['savings', 'savings_interest'] },
-  { id: 'firm', label: 'Firm-credit bus', color: '#2e7d32', a: 'firms', b: 'bank', flows: ['loans', 'loan_interest'] },
-] as const;
+// One bus per conserved quantity (Jesse, 25 Nov 2026): a bus is a node, so it carries one good only and its flows sum
+// to zero. A market with a good and a payment gets two buses side by side (k of n): brown = real goods, the others money.
+type Bus = { id: string; label: string; color: string; a: string; b: string; flows: string[]; k?: number; n?: number };
+const REAL = '#a8660c', MONEY = '#5b6a64';
+const BUSES: Bus[] = [
+  { id: 'houses', label: 'Houses bus (#)', color: REAL, a: 'constructors', b: 'investors', flows: ['houses'], k: 0, n: 2 },
+  { id: 'construction', label: 'Construction-payments bus (€)', color: MONEY, a: 'constructors', b: 'investors', flows: ['construction_cost'], k: 1, n: 2 },
+  { id: 'services', label: 'Housing-services bus (m²)', color: REAL, a: 'investors', b: 'households', flows: ['rental_services', 'owner_services'], k: 0, n: 2 },
+  { id: 'rent', label: 'Rent bus (€)', color: MONEY, a: 'investors', b: 'households', flows: ['rent', 'imputed_rent'], k: 1, n: 2 },
+  { id: 'goods', label: 'Goods bus (#)', color: REAL, a: 'firms', b: 'households', flows: ['goods'], k: 0, n: 2 },
+  { id: 'income', label: 'Consumption-and-income bus (€)', color: MONEY, a: 'firms', b: 'households', flows: ['consumption', 'income'], k: 1, n: 2 },
+  { id: 'mortgage', label: 'Mortgage bus (€)', color: '#b9851c', a: 'investors', b: 'bank', flows: ['mortgages', 'mortgage_interest'] },
+  { id: 'deposit', label: 'Deposit bus (€)', color: '#1f6fc4', a: 'households', b: 'bank', flows: ['savings', 'savings_interest'] },
+  { id: 'firm', label: 'Firm-credit bus (€)', color: '#2e7d32', a: 'firms', b: 'bank', flows: ['loans', 'loan_interest'] },
+];
+type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
 function geometry(o: Open, map: MapData) {
@@ -107,6 +115,11 @@ type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => vo
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const { result, at, o, set, map, scenario, desk } = data;
   const g = geometry(o, map), { R } = g, B = R.bank;
+  // click a flow, a bus or a shock: a card with its plot over the run (as the plot cards in the control-loop view)
+  const [pick, setPick] = useState<Pick | null>(null);
+  const hit = (pts: number[][], key: string, p: Pick, tip: string) => <polyline key={key + 'h'} points={pts.map(q => q.join(',')).join(' ')} fill="none" stroke="transparent" strokeWidth={14}
+    style={{ pointerEvents: 'stroke', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setPick(p); }}><title>{tip}</title></polyline>;
+  const flowOf = (id: string) => map.flows.find(f => f.id === id);
   const wires: ReactNode[] = [], over: ReactNode[] = [];  // over: drawn above the blocks (wires into an opened breadboard)
   const line = (pts: number[][], color: string, key: string, dash?: string, w = 2) =>
     <polyline key={key} points={pts.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={w} strokeDasharray={dash}/>;
@@ -124,39 +137,49 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     const vertical = ends.every(e => e.side === 'L' || e.side === 'R');
     const A = R[bus.a], Bb = R[bus.b];
     // rail position: in the gap between the two agents (vertical buses) or between / below them (horizontal)
-    const c = vertical ? (bus.id === 'mortgage' ? g.c2 + g.w2 + 90 : bus.id === 'deposit' ? g.c2 + g.w2 + 170 : (Math.min(A.x + A.w, Bb.x + Bb.w) + Math.max(A.x, Bb.x)) / 2 - LANE / 2)
-      : bus.id === 'firm' ? Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, Bb.y + Bb.h) + 70 : (A.y + A.h + Bb.y) / 2 - LANE / 2;
+    const off = ((bus.k ?? 0) - ((bus.n ?? 1) - 1) / 2) * 50;  // two buses of one market side by side
+    const c = vertical ? (bus.id === 'mortgage' ? g.c2 + g.w2 + 90 : bus.id === 'deposit' ? g.c2 + g.w2 + 170 : (Math.min(A.x + A.w, Bb.x + Bb.w) + Math.max(A.x, Bb.x)) / 2 - LANE / 2 + off)
+      : bus.id === 'firm' ? Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, Bb.y + Bb.h) + 70 : (A.y + A.h + Bb.y) / 2 - LANE / 2 + off;
     const taps: P[] = [];
-    const branch = (pt: P, k: number, key: string, dash?: string) => {
+    const branch = (pt: P, k: number, key: string, flow: string, dash?: string) => {
       const end: P = vertical ? [c + k, pt[1]] : [pt[0], c + k]; taps.push(end);
+      const f = flowOf(flow), ret = !!dash;
       wires.push(line([pt, end], bus.color, key, dash)); wires.push(dot(end, bus.color, key + 'd'));
+      wires.push(hit([pt, end], key, { kind: ret ? 'ret' : 'flow', id: flow, at: end }, `${f?.label ?? flow}${ret ? ' · incentive (return)' : ''}: click to plot`));
     };
-    ends.forEach((e, i) => { branch(e.p, 0, `${bus.id}${i}p`); branch(e.q, LANE, `${bus.id}${i}q`, '5 3'); });
+    ends.forEach((e, i) => { const f = bus.flows[Math.floor(i / 2)]; branch(e.p, 0, `${bus.id}${i}p`, f); branch(e.q, LANE, `${bus.id}${i}q`, f, '5 3'); });
     const along = taps.map(t => vertical ? t[1] : t[0]), lo = Math.min(...along) - 24, hi = Math.max(...along) + 24;
     wires.unshift(<g key={bus.id + 'rails'}>
       {[0, LANE].map(k => <line key={k} x1={vertical ? c + k : lo} x2={vertical ? c + k : hi} y1={vertical ? lo : c + k} y2={vertical ? hi : c + k} stroke={bus.color} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
-      <text x={vertical ? c + LANE / 2 : hi + 14} y={vertical ? lo - 12 : c + LANE} textAnchor={vertical ? 'middle' : 'start'} className="bus-name" fill={bus.color}>{bus.label}</text>
+      <text x={vertical ? c + LANE / 2 : hi + 14} y={vertical ? (bus.n ? Math.min(A.y, Bb.y) - 12 - 18 * (bus.n - 1 - (bus.k ?? 0)) : lo - 12) : c + LANE} textAnchor={vertical ? 'middle' : 'start'} className="bus-name" fill={bus.color}>{bus.label}</text>
+      {hit(vertical ? [[c + LANE / 2, lo], [c + LANE / 2, hi]] : [[lo, c + LANE / 2], [hi, c + LANE / 2]], bus.id + 'rail', { kind: 'bus', id: bus.id, at: vertical ? [c + LANE, lo + 40] : [lo + 40, c + LANE] }, `${bus.label}: click to plot its flows`)}
     </g>);
   }
-  // ---- the Financial sector (empty for now) and the interbank bus from the bank's bottom edge
-  const ib = terminal(map, g, o, 'bank', 'loan_interest'), fsX = ib.p[0] + 260, railY = B.y + B.h + 150;
-  const fs: R = { x: fsX - 40, y: railY + 90, w: TILE[0], h: TILE[1] }, ibx = ib.p[0] + 120, IB = '#c0392b';
-  wires.push(<g key="ib">
-    {[0, LANE].map(k => <line key={k} x1={ibx - 24} x2={fsX + LANE + 24} y1={railY + k} y2={railY + k} stroke={IB} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
-    {line([[ibx, B.y + B.h], [ibx, railY]], IB, 'ib1')}{line([[ibx + LANE, B.y + B.h], [ibx + LANE, railY + LANE]], IB, 'ib2', '5 3')}
-    {line([[fsX, railY], [fsX, fs.y]], IB, 'ib3')}{line([[fsX + LANE, railY + LANE], [fsX + LANE, fs.y]], IB, 'ib4', '5 3')}
-    <text x={fsX + LANE + 40} y={railY + LANE} className="bus-name" fill={IB}>Interbank bus</text>
-  </g>);
+  // ---- the bank in the middle: the real economy on its left, the Financial sector (empty for now) on its right,
+  // joined by the interbank bus (a money bus)
+  const IB = '#c0392b', ibY = B.y + B.h - 60, fs: R = { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
+  { const rx = B.x + B.w + 150, fy = fs.y + fs.h / 2 - LANE / 2, lo = Math.min(ibY, fy) - 24, hi = Math.max(ibY, fy) + LANE + 24;
+    wires.push(<g key="ib">
+      {[0, LANE].map(k => <line key={k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
+      {line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1')}{line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2', '5 3')}
+      {line([[rx, fy], [fs.x, fy]], IB, 'ib3')}{line([[rx + LANE, fy + LANE], [fs.x, fy + LANE]], IB, 'ib4', '5 3')}
+      {[[rx, ibY], [rx + LANE, ibY + LANE], [rx, fy], [rx + LANE, fy + LANE]].map((q, i) => dot(q as P, IB, 'ibd' + i))}
+      <text x={rx + LANE / 2} y={lo - 12} textAnchor="middle" className="bus-name" fill={IB}>Interbank bus (€)</text>
+    </g>); }
   // ---- disturbances d: Covid (and the other active shocks) into the firms' breadboard, the subsidy into households
   const D = '#c0392b', SCALE: Record<string, keyof Scenario> = { d_income: 'income_scale', d_covid: 'covid_scale', d_crisis: 'crisis_scale' };
   const firmIns = map.disturbances.filter(d => d.target === 'firms' && !(SCALE[d.id] && scenario[SCALE[d.id]] === 0));
   firmIns.forEach((d, i) => {
     const r = R.firms, e = map.elements.find(x => x.name === (d as { element?: string }).element && x.agent === 'firms');
     const y = o.firms && e?.pins ? r.y + HEAD + inputPath('left', i, firmIns.length, map.layouts.firms.size as P, e.pins)[0][1] * S : r.y + HEAD + (r.h - HEAD) * (i + 1) / (firmIns.length + 1);
-    wires.push(arrow([[r.x - 120, y], [r.x, y]], D, 'df' + d.id, 'd'));
+    wires.push(arrow([[r.x - 120, y], [r.x, y]], D, 'df' + d.id, 'd')); wires.push(hit([[r.x - 120, y], [r.x, y]], 'df' + d.id, { kind: 'd', id: d.id, at: [r.x - 60, y] }, d.label + ': click to plot'));
   });
   const govY = Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, B.y + B.h) + 150, gx = R.households.x + R.households.w * 0.8;
   wires.push(arrow([[gx, govY], [gx, R.households.y + R.households.h]], D, 'dgov', 'd', 0.9));
+  wires.push(hit([[gx, govY], [gx, R.households.y + R.households.h]], 'dgov', { kind: 'd', id: 'd_gov', at: [gx, govY - 60] }, 'Government subsidy: click to plot'));
+  // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
+  { const t = g.inner ? g.inner.bs : B, x = t.x + t.w / 2, pts = [[x, B.y - 90], [x, t.y]];
+    (g.inner ? over : wires).push(arrow(pts, D, 'dob', 'd', 0)); (g.inner ? over : wires).push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [x, B.y - 40] }, 'Other banks: deposits withdrawn, firm credit cut: click to plot')); }
   const gov: R = { x: gx - TILE[0] / 2, y: govY, w: TILE[0], h: TILE[1] };
   // ---- inside the bank
   let inside: ReactNode = null;
@@ -168,8 +191,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       const into = (p: P): P => t.side === 'L' ? [circ ? circ.x : bs.x, p[1]] : [p[0], circ ? circ.y + circ.h : bs.y + bs.h];
       const W2 = circ ? over : wires; W2.push(line([t.p, into(t.p)], col, 'in' + f)); W2.push(line([t.q, into(t.q)], col, 'iq' + f, '5 3'));
     }
-    { const t = terminal(map, g, o, 'bank', 'loan_interest'), x = t.p[0] + 120;
-      wires.push(line([[x, B.y + B.h], [x, circ ? circ.y + circ.h : bs.y + bs.h]], IB, 'in-ib')); wires.push(line([[x + LANE, B.y + B.h], [x + LANE, circ ? circ.y + circ.h : bs.y + bs.h]], IB, 'iq-ib', '5 3')); }
+    // the interbank bus enters on the bank's right edge and runs underneath the other blocks to the Bank circuit
+    { const t = terminal(map, g, o, 'bank', 'loan_interest'), x = t.p[0] + 120, bot = circ ? circ.y + circ.h : bs.y + bs.h;
+      wires.push(line([[B.x + B.w, ibY], [x, ibY], [x, bot]], IB, 'in-ib')); wires.push(line([[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]], IB, 'iq-ib', '5 3')); }
     // the breadboard's stocks and flows are read by Accounting; Accounting reports y to Σ
     { const ya = sub ? acc.y + HEAD + 30 : acc.y + 55;
       if (sub) over.push(arrow([[bs.x + bs.w, ya], [sub.bal.x + 40, ya], [sub.bal.x + 40, sub.bal.y]], G, 'x', 'stocks · flows', 0));
@@ -215,12 +239,35 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       </Block>
     </>;
   }
-  const W = Math.max(B.x + B.w, fs.x + fs.w + 200) + 80, H = Math.max(fs.y + fs.h, gov.y + gov.h, R.firms.y + R.firms.h) + 140;
+  const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, gov.y + gov.h, R.firms.y + R.firms.h, B.y + B.h) + 140;
+  // the card of a clicked flow, return, bus or shock
+  let card: ReactNode = null;
+  if (pick) {
+    const series = (signal: string) => readTrace(result, signal);
+    const rows: { label: string; unit: string; y?: number[] }[] = [];
+    let title = '', note = '';
+    if (pick.kind === 'flow' || pick.kind === 'ret') {
+      const f = flowOf(pick.id); title = f?.label ?? pick.id; note = f?.description ?? '';
+      if (f) rows.push({ label: 'f · flow', unit: f.unit, y: series(f.signal) });
+      if (f?.port) rows.push({ label: 'e · incentive at the port', unit: 'model units', y: series(`V(${f.port.node.toLowerCase()},${f.port.ret.toLowerCase()})`) });
+    } else if (pick.kind === 'bus') {
+      const b = BUSES.find(x => x.id === pick.id)!; title = b.label; note = 'One quantity on this bus: every flow below is in the same unit.';
+      b.flows.forEach(id => { const f = flowOf(id); if (f) rows.push({ label: f.label, unit: f.unit, y: series(f.signal) }); });
+    } else {
+      const d = map.disturbances.find(x => x.id === pick.id); title = d?.label ?? pick.id;
+      if (d) rows.push({ label: 'd · shock', unit: d.unit, y: series(d.signal) });
+    }
+    card = <div className="bus-pick nodrag nowheel" style={{ left: pick.at[0] + 14, top: pick.at[1] + 14 }} onClick={e => e.stopPropagation()}>
+      <div className="bus-pick-head"><b>{title}</b><button className="ghost small" aria-label="Close" onClick={() => setPick(null)}>×</button></div>
+      {note && <small>{note}</small>}
+      {rows.map(r => <div key={r.label}><div className="bus-pick-row">{r.label}</div>{r.y ? <StmtPlot y={r.y} at={at} years={result.year} unit={r.unit} label={r.label}/> : <small className="muted">Not in this run.</small>}</div>)}
+    </div>;
+  }
   const agent = (id: string) => <Block key={id} r={R[id]} label={map.agents[id]?.label ?? id} tone="agent" open={o[id]} toggle={() => set(id)}>
     {o[id] && <div className="bus-circuit" style={{ position: 'absolute', left: 0, top: HEAD, width: R[id].w, height: R[id].h - HEAD }}>
       <AgentCircuit map={map} agent={id} scenario={scenario} selection={NONE} pick={() => {}} outside={id !== 'firms'} inputs={id === 'firms' ? firmIns : []}/></div>}
   </Block>;
-  return <div className="bus-diagram nodrag" style={{ width: W, height: H }}>
+  return <div className="bus-diagram nodrag" style={{ width: W, height: H }} onClick={() => setPick(null)}>
     <svg width={W} height={H} className="bus-wires">{wires}</svg>
     {['constructors', 'investors', 'households', 'firms'].map(agent)}
     <Block r={gov} label="Government" tone="reference bus-gov-block"/>
@@ -228,6 +275,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <Block r={B} label="Bank" tone={o.bank ? 'sub-group' : 'sub-closed'} open={o.bank} toggle={() => set('bank')} z={0}/>
     {inside}
     <svg width={W} height={H} className="bus-wires bus-over">{over}</svg>
+    {card}
   </div>;
 }
 
