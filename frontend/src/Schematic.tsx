@@ -127,8 +127,9 @@ export function AgentCircuit({ map, agent, scenario, selection, pick, menu, inpu
       const x0 = (cpb.left + 12 - sr.left) * kx, rest = p.dataset.extend!.split(' ').map(q => 'L' + q.replace(',', ' ')).join(' ');
       // owner-occupied (i = 1, the farther source, higher lane) leaves the controller higher and turns later: no crossing
       let head = `M${x0} ${y} `, tx = x0 + 60, ty = y - 9;
-      if (ctrl) { const xc = (ctrl.right - sr.left) * kx, yc = (ctrl.top + ctrl.height * (0.6 - 0.2 * i) - sr.top) * ky, xb = x0 + 40 * i;
-        head = `M${xc} ${yc} L${xb} ${yc} L${xb} ${y} `; tx = xc + 24; ty = yc - 10; }
+      if (ctrl) { const xc = (ctrl.right - sr.left) * kx, ys = sr.top + y / ky;
+        if (ys > ctrl.top + 4 && ys < ctrl.bottom - 4) { head = `M${xc} ${y} `; tx = xc + 24; ty = i ? y - 10 : y + 30; }  // owner above its line, rental below  // level with the controller: one straight line
+        else { const yc = (ctrl.top + ctrl.height * (0.6 - 0.2 * i) - sr.top) * ky, xb = x0 + 40 * i; head = `M${xc} ${yc} L${xb} ${yc} L${xb} ${y} `; tx = xc + 24; ty = yc - 10; } }
       p.setAttribute('d', head + rest);
       const t = p.parentElement?.querySelector('text.u-fig-name'); if (t) { t.setAttribute('x', String(tx)); t.setAttribute('y', String(ty)); } });
     if (!labelCtx.figure) return;

@@ -1012,6 +1012,9 @@ function useModelGraph(map: MapData | undefined, view: View, toggle: (k: string)
       const keep = new Set(['anchor', 'cpb', ...CPB_AGENTS, ...(hl?.id === 'subsidy' ? ['controller'] : [])]), inner = new Set(map.flows.filter(f => CPB_AGENTS.includes(f.source) && CPB_AGENTS.includes(f.target)).map(f => f.id));
       for (let i = nodes.length - 1; i >= 0; i--) if (!keep.has(nodes[i].id)) nodes.splice(i, 1);
       for (let i = edges.length - 1; i >= 0; i--) if (!inner.has(edges[i].id)) edges.splice(i, 1);
+      // the controller level with the subsidy lanes in Households (svg y 70 and 96, half scale), so the signals run straight
+      const c = nodes.find(nd => nd.id === 'controller'), hh = R.households;
+      if (c && hh && view.agents.includes('households')) c.position = { x: c.position.x, y: hh.y + band('households') + 83 / 2 - ((c.data as BlockData).height ?? 150) / 2 };
     }
     // Bank off (the original CPB model): leave the financial sector out of the drawing altogether.
     if (!bankOn) {

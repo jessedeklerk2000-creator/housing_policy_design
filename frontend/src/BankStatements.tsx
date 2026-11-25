@@ -18,7 +18,7 @@ export const KEY_INPUTS: [string, string][] = [['equity', 'equity'], ['mortgages
 
 export function BankStatements({ part = 'all', only }: { part?: 'all' | 'statements' | 'ratios'; only?: string }) {
   const { result, at } = useContext(AtContext);
-  const [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set());
+  const [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set()), [drag, setDrag] = useState<Record<string, [number, number]>>({});
   const L: Ledger | undefined = result?.ledger;
   if (!result || !L) return <div className="stmt-empty">Run the simulation to see the statements.</div>;
   const val = (id: string) => { const t = readTrace(result, 'Ledger:' + id); return t ? t[at] : undefined; };
@@ -44,7 +44,15 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
         <b className={'stmt-val' + (ok === undefined ? '' : ok ? ' ok' : ' bad') + (plots.has(k) ? ' plotted' : '')} role="button" title="Click to plot over time" onClick={ev => { ev.stopPropagation(); togglePlot(k); }}>{show(id, x)}{ok !== undefined && (ok ? ' ✓' : ' ✗')}</b>
         <span className="stmt-fold">{isOpen ? '−' : '+'}</span>
       </button>
-      {plots.has(k) && <StmtPlot y={s} at={at} years={result.year} unit={a.unit} label={a.label}/>}</div>
+      {plots.has(k) && <div className="stmt-plot-card nodrag nopan" style={drag[k] ? { transform: `translate(${drag[k][0]}px, ${drag[k][1]}px)` } : undefined}>
+        {/* header: the item; drag it to move the card (Jesse) */}
+        <div className="stmt-plot-head" onPointerDown={ev => { ev.stopPropagation(); ev.preventDefault(); const el = ev.currentTarget, card = el.parentElement!, z = card.getBoundingClientRect().width / card.offsetWidth || 1;
+          const x0 = ev.clientX, y0 = ev.clientY, d0 = drag[k] ?? [0, 0]; el.setPointerCapture(ev.pointerId);
+          const move = (e: PointerEvent) => setDrag(o => ({ ...o, [k]: [d0[0] + (e.clientX - x0) / z, d0[1] + (e.clientY - y0) / z] }));
+          const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+          el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }}>
+          <b>{a.label}</b><button aria-label={`Close plot ${a.label}`} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); togglePlot(k); }}>×</button></div>
+        <StmtPlot y={s} at={at} years={result.year} unit={a.unit} label={a.label}/></div>}</div>
       {isOpen && <div className="stmt-drill">
         <div className="stmt-formula">{a.label} = {a.formula}</div>
         {a.inputs.filter(i => L.accounts[i]).map(i => row(i, k, depth + 1, RATIO_OVER[id] === i ? '÷' : MINUS[id]?.includes(i) ? '−' : '+'))}

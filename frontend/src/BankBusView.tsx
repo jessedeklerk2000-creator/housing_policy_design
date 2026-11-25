@@ -319,7 +319,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
         {o.bs && circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - bs.x, top: circ.y - bs.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
       </Block>
       <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
-      {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={3}>
+      {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3}>  {/* open: above the wires, so a dragged plot card stays on top */}
         {o[k] && <div className="bus-stmt-body nowheel" style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6}}>
           <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></div>}
         {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
