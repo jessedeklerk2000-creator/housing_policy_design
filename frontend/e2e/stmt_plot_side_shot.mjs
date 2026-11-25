@@ -6,6 +6,7 @@ const page = await browser.newPage({ viewport: { width: 1700, height: 1050 }, de
 await page.goto('http://127.0.0.1:8001/?mode=bank'); await page.waitForSelector('.bus-diagram', { timeout: 60000 }); await page.waitForTimeout(2000);
 const click = async name => { await page.getByRole('button', { name, exact: true }).dispatchEvent('click'); await page.waitForTimeout(900); };
 await click('Expand Bank'); await click('Expand Accounting'); await click('Expand Key figures'); await page.waitForTimeout(600);
+await page.locator('.bus-canvas .react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(900);  // no auto-zoom on Accounting any more
 const kf = page.locator('.bus-stmt-body').last();
 await kf.locator('.stmt-row', { hasText: 'Tier 1 capital ratio' }).locator('.stmt-val').dispatchEvent('click'); await page.waitForTimeout(600);
 const r = await page.evaluate(() => { const line = document.querySelector('.stmt-line.plotted'), row = line?.querySelector('.stmt-row')?.getBoundingClientRect(), plot = line?.querySelector('.stmt-plot-card')?.getBoundingClientRect();
