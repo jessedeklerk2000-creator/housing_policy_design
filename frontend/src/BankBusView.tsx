@@ -46,7 +46,7 @@ function geometry(o: Open, map: MapData) {
   const size = (id: string) => map.layouts[id].size as P;
   const box = (id: string): P => o[id] ? [size(id)[0] * S, size(id)[1] * S + HEAD] : TILE;
   const [cw, ch] = box('constructors'), [fw, fh] = box('firms'), [iw, ih] = box('investors'), [hw, hh] = box('households');
-  const c1 = 40, w1 = Math.max(cw, fw), c2 = c1 + w1 + 240, w2 = Math.max(iw, hw);
+  const c1 = 220, w1 = Math.max(cw, fw), c2 = c1 + w1 + 240, w2 = Math.max(iw, hw);
   const top = 120, row2 = top + Math.max(ch, ih) + 230;
   const R: Record<string, R> = {
     constructors: { x: c1 + w1 - cw, y: top, w: cw, h: ch }, investors: { x: c2, y: top, w: iw, h: ih },
@@ -120,6 +120,28 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const hit = (pts: number[][], key: string, p: Pick, tip: string) => <polyline key={key + 'h'} points={pts.map(q => q.join(',')).join(' ')} fill="none" stroke="transparent" strokeWidth={14}
     style={{ pointerEvents: 'stroke', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setPick(p); }}><title>{tip}</title></polyline>;
   const flowOf = (id: string) => map.flows.find(f => f.id === id);
+  // As in the control-loop view: at both ends of a port pair an effort meter e (across flow and return) and a flow
+  // meter f (on the flow line), open terminals, the flow's name and its direction. e and f open the flow's plot card.
+  const along = (a: P, b: P, d: number): P => { const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1; return [a[0] + (b[0] - a[0]) * d / L, a[1] + (b[1] - a[1]) * d / L]; };
+  const marks = (pf: P[], pq: P[], color: string, flow: string, key: string, reverse: boolean) => {
+    const f = flowOf(flow), n = pf.length;
+    let k = 1; for (let i = 2; i < n; i++) if (Math.hypot(pf[i][0] - pf[i - 1][0], pf[i][1] - pf[i - 1][1]) > Math.hypot(pf[k][0] - pf[k - 1][0], pf[k][1] - pf[k - 1][1])) k = i;
+    const [a, b] = reverse ? [pf[k], pf[k - 1]] : [pf[k - 1], pf[k]], m: P = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], vert = Math.abs(a[0] - b[0]) < 0.5;
+    const tri = along(a, b, Math.hypot(b[0] - a[0], b[1] - a[1]) * 0.7), ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+    const end = (A: P, B: P, RA: P, RB: P, j: number) => {
+      const e1 = along(A, B, 11), e2 = along(RA, RB, 11), em: P = [(e1[0] + e2[0]) / 2, (e1[1] + e2[1]) / 2], fm = along(A, B, 27), t1 = along(A, B, 39), t2 = along(RA, RB, 39);
+      const meter = (c: P, q: 'e' | 'f') => <g key={q} style={{ cursor: 'pointer', pointerEvents: 'all' }} onClick={ev => { ev.stopPropagation(); setPick({ kind: q === 'e' ? 'ret' : 'flow', id: flow, at: c }); }}>
+        <title>{q === 'e' ? 'Effort e: click to plot' : 'Flow f: click to plot'}</title>
+        <circle cx={c[0]} cy={c[1]} r={6.2} fill="#fff" stroke={color} strokeWidth={1.2}/><text x={c[0]} y={c[1] + 3} textAnchor="middle" className="bus-meter" fill={color}>{q}</text></g>;
+      return <g key={j}><line x1={e1[0]} y1={e1[1]} x2={e2[0]} y2={e2[1]} stroke={color} strokeWidth={1.2}/>
+        <circle cx={t1[0]} cy={t1[1]} r={2.6} fill="#fff" stroke={color}/><circle cx={t2[0]} cy={t2[1]} r={2.6} fill="#fff" stroke={color}/>{meter(em, 'e')}{meter(fm, 'f')}</g>;
+    };
+    return <g key={key + 'm'}>
+      {end(pf[0], pf[1], pq[0], pq[1], 0)}{end(pf[n - 1], pf[n - 2], pq[n - 1], pq[n - 2], 1)}
+      <path d="M-6 -5L5 0L-6 5Z" fill={color} transform={`translate(${tri[0]} ${tri[1]}) rotate(${ang})`}/>
+      <text className="bus-flow-name" fill={color} transform={`translate(${vert ? m[0] - 7 : m[0]} ${vert ? m[1] : m[1] - 7}) rotate(${vert ? -90 : 0})`} textAnchor="middle">{f?.short ?? flow}</text>
+    </g>;
+  };
   const wires: ReactNode[] = [], over: ReactNode[] = [];  // over: drawn above the blocks (wires into an opened breadboard)
   const line = (pts: number[][], color: string, key: string, dash?: string, w = 2) =>
     <polyline key={key} points={pts.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={w} strokeDasharray={dash}/>;
@@ -150,6 +172,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
         wires.push(line(pf, bus.color, `${bus.id}${j}p`)); wires.push(line(pq, bus.color, `${bus.id}${j}q`, '5 3'));
         wires.push(hit(pf, `${bus.id}${j}p`, { kind: 'flow', id: flow, at: pf[1] as P }, `${f?.label ?? flow}: click to plot`));
         wires.push(hit(pq, `${bus.id}${j}q`, { kind: 'ret', id: flow, at: pq[1] as P }, `${f?.label ?? flow} · incentive (return): click to plot`));
+        over.push(marks(pf as P[], pq as P[], bus.color, flow, `${bus.id}${j}`, f?.source === bus.b));
       });
       continue;
     }
@@ -188,14 +211,14 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   firmIns.forEach((d, i) => {
     const r = R.firms, e = map.elements.find(x => x.name === (d as { element?: string }).element && x.agent === 'firms');
     const y = o.firms && e?.pins ? r.y + HEAD + inputPath('left', i, firmIns.length, map.layouts.firms.size as P, e.pins)[0][1] * S : r.y + HEAD + (r.h - HEAD) * (i + 1) / (firmIns.length + 1);
-    wires.push(arrow([[r.x - 120, y], [r.x, y]], D, 'df' + d.id, 'd')); wires.push(hit([[r.x - 120, y], [r.x, y]], 'df' + d.id, { kind: 'd', id: d.id, at: [r.x - 60, y] }, d.label + ': click to plot'));
+    wires.push(arrow([[r.x - 120, y], [r.x, y]], D, 'df' + d.id, 'd · ' + d.label)); wires.push(hit([[r.x - 120, y], [r.x, y]], 'df' + d.id, { kind: 'd', id: d.id, at: [r.x - 60, y] }, d.label + ': click to plot'));
   });
   const govY = Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, B.y + B.h) + 150, gx = R.households.x + R.households.w * 0.8;
-  wires.push(arrow([[gx, govY], [gx, R.households.y + R.households.h]], D, 'dgov', 'd', 0.9));
+  wires.push(arrow([[gx, govY], [gx, R.households.y + R.households.h]], D, 'dgov')); wires.push(<text key="dgovt" x={gx + 8} y={govY - 12} className="bus-label" fill={D}>d · subsidy</text>);
   wires.push(hit([[gx, govY], [gx, R.households.y + R.households.h]], 'dgov', { kind: 'd', id: 'd_gov', at: [gx, govY - 60] }, 'Government subsidy: click to plot'));
   // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
   { const t = g.inner ? g.inner.bs : B, x = t.x + t.w / 2, pts = [[x, B.y - 90], [x, t.y]];
-    (g.inner ? over : wires).push(arrow(pts, D, 'dob', 'd', 0)); (g.inner ? over : wires).push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [x, B.y - 40] }, 'Other banks: deposits withdrawn, firm credit cut: click to plot')); }
+    (g.inner ? over : wires).push(arrow(pts, D, 'dob', 'd · other banks', 0)); (g.inner ? over : wires).push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [x, B.y - 40] }, 'Other banks: deposits withdrawn, firm credit cut: click to plot')); }
   const gov: R = { x: gx - TILE[0] / 2, y: govY, w: TILE[0], h: TILE[1] };
   // ---- inside the bank
   let inside: ReactNode = null;
