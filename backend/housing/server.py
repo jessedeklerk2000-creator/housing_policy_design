@@ -278,6 +278,12 @@ def create_app(database: Path | None = None) -> FastAPI:
         with SLOTS:
             return bank_run(r)
 
+    # Supervisory Outlier Test (26 Nov 2026): six rate shocks on My Bank's balance sheet (housing/sot.py)
+    @app.get("/api/bank/sot")
+    def bank_sot(margins: str = "excluded"):
+        from .sot import report
+        return report(margins == "included")
+
     @app.post("/api/scenarios", status_code=201)
     def save(request: SaveRequest):
         return store.save(request.scenario.name, request.scenario.model_dump(), request.result)

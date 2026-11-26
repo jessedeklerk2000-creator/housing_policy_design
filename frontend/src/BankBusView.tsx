@@ -214,11 +214,50 @@ function DotLayer({ W, H, paths, playing }: { W: number; H: number; paths: DotPa
   </g></svg>;
 }
 
+// ---- Supervisory Outlier Test (26 Nov 2026): six regulatory rate shocks on My Bank's balance sheet (backend housing/sot.py)
+type SotRow = { sizes: string; scenario: string; name: string; d_eve_pct_t1: number; eve_outlier: boolean; d_nii_pct_t1?: number; nii_outlier?: boolean };
+type SotPaths = { price: number[]; cpr: number[]; deposits: number[]; client_rate: number[]; mortgage_rate: number[] };
+export type SotReport = { margins: string; rows: SotRow[]; maturities: number[]; curves: Record<string, number[]>; t_years: number[]; paths: Record<string, SotPaths>; rules: string };
+const SOT_SC = ['parallel_up', 'parallel_down', 'steepener', 'flattener', 'short_up', 'short_down'];
+const SOT_EU = 'EU RTS 2024/856', SOT_RED = '#c0392b';
+function SotCard({ r, rep, sel, pick }: { r: R; rep: SotReport; sel: string; pick: (s: string) => void }) {
+  const eu = (sc: string) => rep.rows.find(x => x.sizes === SOT_EU && x.scenario === sc)!, bc = (sc: string) => rep.rows.find(x => x.sizes !== SOT_EU && x.scenario === sc)!;
+  const vals = rep.rows.map(x => x.d_eve_pct_t1), lo = Math.min(-20, ...vals) - 3, hi = Math.max(5, ...vals) + 3;
+  const W = r.w - 20, H = 170, L = 34, sy = (v: number) => 8 + (hi - v) / (hi - lo) * (H - 40), gw = (W - L) / 6;
+  const mini = (k: keyof SotPaths, label: string) => { const b = rep.paths.base[k], s2 = rep.paths[sel]?.[k] ?? b, all = [...b, ...s2], mn = Math.min(...all), mx = Math.max(...all), pad = (mx - mn) * 0.1 || 1;
+    const w = (W - 10) / 2, h = 64, px = (i: number) => 4 + i / (b.length - 1) * (w - 8), py = (v: number) => 4 + (mx + pad - v) / (mx - mn + 2 * pad) * (h - 18);
+    const pl = (a: number[]) => a.map((v, i) => `${px(i)},${py(v)}`).join(' ');
+    return <div key={k} className="sot-mini"><small>{label}</small><svg width={w} height={h}><polyline points={pl(b)} fill="none" stroke="#8a94a6" strokeWidth={1.5}/><polyline points={pl(s2)} fill="none" stroke={SOT_RED} strokeWidth={1.8}/>
+      <text x={w - 4} y={h - 3} textAnchor="end" className="mini-tick">15 yr</text><text x={4} y={h - 3} className="mini-tick">0</text></svg></div>; };
+  const s = eu(sel);
+  return <div className="sot-card nodrag nowheel" style={{ left: r.x, top: r.y, width: r.w }} onClick={e => e.stopPropagation()}>
+    <div className="sot-head"><b>Supervisory Outlier Test · My Bank</b><small>EU 2024/856 · margins {rep.margins} · ALM desk off</small></div>
+    <svg width={W} height={H} role="img" aria-label="Change in economic value of equity per scenario">
+      {[-15, 0].map(v => <g key={v}><line x1={L} x2={W} y1={sy(v)} y2={sy(v)} stroke={v ? SOT_RED : '#8a94a6'} strokeDasharray={v ? '4 3' : undefined}/>{v ? <text x={W} y={sy(v) - 3} textAnchor="end" className="mini-tick" fill={SOT_RED}>outlier: −15% of Tier 1</text> : null}</g>)}
+      {[lo, hi].map(v => <text key={v} x={L - 4} y={sy(v) + 3} textAnchor="end" className="mini-tick">{v.toFixed(0)}%</text>)}
+      {SOT_SC.map((sc, i) => { const a = eu(sc).d_eve_pct_t1, b = bc(sc).d_eve_pct_t1, x = L + i * gw + gw * 0.15, bw = gw * 0.32, on = sc === sel;
+        const bar = (v: number, xx: number, op: number) => <rect x={xx} y={Math.min(sy(0), sy(v))} width={bw} height={Math.abs(sy(v) - sy(0)) || 1} fill={v < -15 ? SOT_RED : '#4f7cac'} opacity={op}/>;
+        return <g key={sc} style={{ cursor: 'pointer' }} onClick={() => pick(sc)}><title>{`${eu(sc).name}: ΔEVE ${a.toFixed(1)}% (EU sizes), ${b.toFixed(1)}% (BCBS 2024 sizes) of Tier 1`}</title>
+          <rect x={L + i * gw} y={0} width={gw} height={H - 26} fill={on ? '#eef3f9' : 'transparent'}/>
+          {bar(a, x, on ? 1 : 0.75)}{bar(b, x + bw + 2, on ? 0.55 : 0.35)}
+          <text x={L + i * gw + gw / 2} y={H - 12} textAnchor="middle" className="mini-tick" fontWeight={on ? 700 : 400}>{eu(sc).name.replace('Parallel ', 'Par. ')}</text></g>; })}
+    </svg>
+    <div className="sot-legend"><i style={{ background: '#4f7cac' }}/>EU sizes (200/250/100 bp) <i style={{ background: '#4f7cac', opacity: 0.45 }}/>BCBS 2024 sizes (225/350/200 bp) <i style={{ background: SOT_RED }}/>outlier</div>
+    <div className="sot-sel"><b>{s.name}</b>: ΔEVE <b className={s.eve_outlier ? 'bad' : ''}>{s.d_eve_pct_t1.toFixed(1)}%</b> of Tier 1
+      {s.d_nii_pct_t1 !== undefined && <> · ΔNII (1 yr) <b className={s.nii_outlier ? 'bad' : ''}>{s.d_nii_pct_t1.toFixed(1)}%</b> (outlier below −5%)</>}</div>
+    <div className="sot-minis">{mini('price', 'House price index')}{mini('cpr', 'Prepayment rate (% a year)')}{mini('deposits', 'Savings deposits')}{mini('client_rate', 'Savings rate (%)')}</div>
+    <small className="sot-note">Grey: no shock; red: {s.name}. Behaviour from the multiport model: prepayment (movers, refinancing, house prices), savings rate and volume. {rep.rules}</small>
+  </div>;
+}
+
 // B2: the market's yield curve at the cursor (rate against maturity), with the bank's own rates: savings at the short
 // end, mortgages against the 10-year point (static curve: a parallel shift with r_mkt; term premia from the ECB AAA curve)
-function YieldCurve({ r, result, at }: { r: R; result: Result; at: number }) {
+function YieldCurve({ r, result, at, shock }: { r: R; result: Result; at: number; shock?: { m: number[]; dz: number[]; name: string } }) {
   const v = (k: string) => readTrace(result, k)?.[at] ?? null, pts = ([0, 5, 10] as const).map(T => [T, v('Yield:' + T)] as [number, number | null]);
-  const rm = v('I(Bk_rm)'), rs = v('I(Bk_rs)'), ys = [...pts.map(p => p[1]), rm, rs].filter((x): x is number => x != null);
+  // SOT shock: the regulatory shift dz(maturity) on top of the market curve (0-10 years shown)
+  const base = (T: number) => { const y0 = pts[0][1] ?? 0, y5 = pts[1][1] ?? y0, y10 = pts[2][1] ?? y5; return T <= 5 ? y0 + (y5 - y0) * T / 5 : y5 + (y10 - y5) * (T - 5) / 5; };
+  const sh = shock ? shock.m.map((T, i) => [T, base(T) + shock.dz[i]] as [number, number]).filter(p => p[0] <= 10) : [];
+  const rm = v('I(Bk_rm)'), rs = v('I(Bk_rs)'), ys = [...pts.map(p => p[1]), rm, rs, ...sh.map(p => p[1])].filter((x): x is number => x != null);
   if (!ys.length) return null;
   const lo = Math.floor(Math.min(...ys) * 2) / 2 - 0.5, hi = Math.ceil(Math.max(...ys) * 2) / 2 + 0.5, W = r.w - 16, H = r.h - 76, L = 34, Bm = 22;
   const sx = (T: number) => L + T / 10 * (W - L - 14), sy = (y: number) => 6 + (hi - y) / (hi - lo) * (H - 6 - Bm);
@@ -229,6 +268,8 @@ function YieldCurve({ r, result, at }: { r: R; result: Result; at: number }) {
       {[lo, (lo + hi) / 2, hi].map(y => <g key={y}><line x1={L} x2={W - 8} y1={sy(y)} y2={sy(y)} stroke="#e4e2ea"/><text x={L - 4} y={sy(y) + 3} textAnchor="end" className="mini-tick">{y.toFixed(1)}%</text></g>)}
       {[0, 5, 10].map(T => <text key={T} x={sx(T)} y={H - 6} textAnchor="middle" className="mini-tick">{T === 0 ? 'short' : T + ' yr'}</text>)}
       <polyline points={curve} fill="none" stroke="#7a7396" strokeWidth={2}/>
+      {sh.length > 0 && <polyline points={sh.map(p => `${sx(p[0])},${sy(p[1])}`).join(' ')} fill="none" stroke={SOT_RED} strokeWidth={2} strokeDasharray="5 3"/>}
+      {shock && <text x={W - 10} y={14} textAnchor="end" className="mini-tick" fill={SOT_RED}>{shock.name}</text>}
       {pts.map(p => p[1] != null && <circle key={p[0]} cx={sx(p[0])} cy={sy(p[1])} r={3.5} fill="#7a7396"/>)}
       {rm != null && <g><rect x={sx(10) - 4} y={sy(rm) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(10) - 8} y={sy(rm) + 3} textAnchor="end" className="mini-tick" fill="#2e4a6b">mortgage {rm.toFixed(2)}%</text></g>}
       {rs != null && <g><rect x={sx(0) - 4} y={sy(rs) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(0) + 8} y={sy(rs) + 3} className="mini-tick" fill="#2e4a6b">savings {rs.toFixed(2)}%</text></g>}
@@ -237,9 +278,9 @@ function YieldCurve({ r, result, at }: { r: R; result: Result; at: number }) {
   </div>;
 }
 
-type DiagramData = { result: Result; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
+type DiagramData = { result: Result; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void; sot: string; sotRep: SotReport | null; setSot: (s: string) => void };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
-  const { result, o, set, map, scenario, desk, buses, sizes, resize } = data;
+  const { result, o, set, map, scenario, desk, buses, sizes, resize, sot, sotRep, setSot } = data;
   const { at, playing } = useContext(Tick);
   const rf = useReactFlow();
   const fitH = useCallback((k: string, h: number) => { if (Math.abs((sizes['fit:' + k]?.[1] ?? 0) - h) > 2) resize('fit:' + k, [0, h]); }, [sizes, resize]);
@@ -422,6 +463,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // the financial crisis (Jesse): from outside into the Financial sector; it reaches the bank through the interbank link
   { const tgt = o.fs ? ob : fs, fx = tgt.x + tgt.w / 2, pts = [[fx, fs.y - 110], [fx, tgt.y]];  // open: into Other banks
     wires.push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); wires.push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [fx, fs.y - 50] }, 'Financial crisis at other banks: deposits withdrawn, premium up: click to plot')); dMeter(pts, 'd_others', 'ob'); }
+  // ---- SOT: the regulatory rate shock enters the Financial sector (the market rate is set outside the model)
+  const sotName = sot && sotRep ? sotRep.rows.find(x => x.scenario === sot)?.name ?? sot : '';
+  if (sotName) { const x = fs.x + fs.w - 40, pts = [[x, fs.y - 150], [x, fs.y]]; wires.push(arrow(pts, D, 'dsot', 'd · rate shock: ' + sotName, 0.35)); }
   // ---- B1: DNB (the supervisor) sends the regulatory thresholds to the ALCO: a signal with its values (CRR, DNB)
   { const th = result.ledger?.thresholds ?? [], txt = th.map(t => t.value == null ? `RW floor ${t.text ?? ''}`.replace(' up to 55% LTV, 45% above', '/45%') : `${t.label.replace(' minimum', '')} ≥ ${t.value}${t.unit}`).join(' · ');
     const src: P = o.fs ? [cbk.x + cbk.w, cbk.y + 30] : [fs.x + fs.w, fs.y + fs.h / 2], top = B.y - 100, xr = fs.x + fs.w + 40;
@@ -536,7 +580,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       {parts}
     </>;
   }
-  const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h, comp.y + comp.h) + 140;  // (y from 0: the Government sits above the Housing Market)
+  const sotR: R = { x: fs.x + fs.w + 60, y: fs.y, w: 460, h: 600 };  // the SOT card right of the Financial sector
+  const W = (sot ? sotR.x + sotR.w : fs.x + fs.w) + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h, comp.y + comp.h, sot ? sotR.y + sotR.h : 0) + 140;  // (y from 0: the Government sits above the Housing Market)
   // the card of a clicked flow, return, bus or shock
   let card: ReactNode = null;
   if (pick) {
@@ -575,7 +620,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · Central bank"/>
     {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
       <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)</div>
-      <YieldCurve r={{ x: fs.x + 20, y: cbk.y + cbk.h + 84, w: fs.w - 40, h: 250 }} result={result} at={at}/></>}
+      <YieldCurve r={{ x: fs.x + 20, y: cbk.y + cbk.h + 84, w: fs.w - 40, h: 250 }} result={result} at={at}
+        shock={sotName && sotRep ? { m: sotRep.maturities, dz: sotRep.curves[sot].map((z, i) => z - sotRep.curves.base[i]), name: sotName } : undefined}/></>}
+    {sotName && sotRep && <SotCard r={sotR} rep={sotRep} sel={sot} pick={setSot}/>}
     {(() => { const v = (k: string) => readTrace(result, k)?.[at] ?? null, t1 = v('I(Bk_t1c)'), row = (name: string, x: number | null, bad = false) =>
         <div className={'bus-kv' + (bad ? ' bad' : '')}><span>{name}</span><b>{x == null ? '–' : x.toFixed(1) + '%'}</b></div>;
       return <div onClick={e => { e.stopPropagation(); if (compOn) setPick({ kind: 'comp', id: 'comp', at: [comp.x + comp.w, comp.y] }); }} style={{ cursor: compOn ? 'pointer' : undefined }}>
@@ -595,7 +642,11 @@ const nodeTypes = { diagram: Diagram };
 
 function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
   const n = result.year.length;
-  const [buses, setBuses] = useState(true);  // buses on by default (M. Mendel, 26 Nov 2026)
+  const [buses, setBuses] = useState(true);
+  // Supervisory Outlier Test: '' = no rate shock; a scenario id shows it on the canvas (report fetched once)
+  const [sot, setSotRaw] = useState(''), [sotRep, setSotRep] = useState<SotReport | null>(null);
+  const setSot = useCallback((s: string) => { setSotRaw(s); if (s) setO(old => old.fs ? old : { ...old, fs: true }); }, []);
+  useEffect(() => { if (sot && !sotRep) api<SotReport>('/bank/sot').then(setSotRep).catch(() => setSotRaw('')); }, [sot, sotRep]);  // buses on by default (M. Mendel, 26 Nov 2026)
   const [sizes, setSizes] = useState<Record<string, P>>({}), playRef = useRef(false);
   // A1: no layout change while Play runs (a measured height is a 'fit:' size; dragged sizes come from the user)
   const resize = useCallback((k: string, s: P | null) => { if (playRef.current && k.startsWith('fit:')) return; setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }); }, []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
@@ -627,13 +678,15 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
     return next;
   }), [rf, map, sizes]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
-    data: { result, o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, o, set, map, scenario, desk, buses, sizes, resize]);
+    data: { result, o, set, map, scenario, desk, buses, sizes, resize, sot, sotRep, setSot } }] : [], [result, o, set, map, scenario, desk, buses, sizes, resize, sot, sotRep, setSot]);
   const tick = useMemo(() => ({ at: Math.min(at, n - 1), playing }), [at, n, playing]);
   const tools = <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
       <input type="range" min={0} max={n - 1} value={Math.min(at, n - 1)} onChange={e => { setPlaying(false); setAt(+e.target.value); }}/>
       <div className="segmented small" role="group" aria-label="Connections"><button className={!buses ? 'active' : ''} aria-pressed={!buses} onClick={() => setBuses(false)}>Ports</button><button className={buses ? 'active' : ''} aria-pressed={buses} onClick={() => setBuses(true)}>Buses</button></div>
+      <label className="sot-pick">Rate shock (SOT) <select aria-label="Rate shock (SOT)" value={sot} onChange={e => setSot(e.target.value)}>
+        <option value="">none</option>{SOT_SC.map(sc => <option key={sc} value={sc}>{sc.replace('_', ' ').replace(/^./, c => c.toUpperCase())}</option>)}</select></label>
       <button className="ghost small" onClick={() => { setO({}); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 40); }}>Close all</button>
     </div>;
   return <>

@@ -27,3 +27,8 @@ Answer with "1: yes, 2: …". Each line: question · assumption used · where it
 - 2: no Rebuild button (removed). 3: signals from the chiefs stay, but no dots on signals. 6: the corners were not meant; Banking Operations and Treasury are boxes, one level down. Colours: the whole bank on one blue ramp, lighter per level; statement bars green/red. Equity statement removed. No text in the boxes; smaller Bank and Housing Market tiles.
 - 4: Accounting stays under Treasury (Treasury opens into Accounting, ALCO, ALM Desk).
 - New, open: the full organisational chart (Banking Operations' sub-units; other divisions such as Risk / CRO, Finance / CFO) is to be decided with M. Mendel.
+
+## 26 Nov evening (Jesse's answers)
+- 1 org chart: loan / deposit / payments & settlement operations, yes; no CRO or CFO yet. 2: "My Bank". 3: control-loop view hidden (?view=loop). 4: "Central bank", no DNB; the threshold signal stays constant as a placeholder. 7: the competitor must not fail without a crisis: it now prices on its own (fixed rate). 9: funding cut stays 0.5. 10: no push yet.
+- SOT: on the 8001 canvas (top bar "Rate shock (SOT)"). 12 margins: unknown, headline excluded. 13: yes. 14: best estimates kept.
+- Open: 6 yield curve (suggestion given in chat).

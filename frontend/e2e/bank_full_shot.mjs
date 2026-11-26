@@ -8,5 +8,5 @@ const r = await page.evaluate(() => ({ pageScroll: document.documentElement.scro
   canvas: (() => { const c = document.querySelector('.bus-canvas').getBoundingClientRect(); return [Math.round(c.top), Math.round(c.bottom), innerHeight]; })() }));
 await page.getByRole('button', { name: 'Open scenario panel' }).click(); r.panelClosed = !(await page.locator('.bank-side').count()); r.panelOpens = 0; await page.getByRole('button', { name: 'Open panel' }).first().click(); await page.waitForTimeout(400); await page.waitForTimeout(600); r.scenario = await page.locator('.bank-scen .bank-left').count(); r.panelOpens = await page.locator('.bank-side .bank-grid3').count();
 await page.screenshot({ path: out + '/bank_full.png' });
-await page.getByRole('tab', { name: 'Control-loop view' }).click(); await page.waitForTimeout(2500); await page.screenshot({ path: out + '/bank_full_loop.png' });
+await page.goto('http://127.0.0.1:8001/?mode=bank&view=loop'); await page.waitForTimeout(4000); await page.screenshot({ path: out + '/bank_full_loop.png' });
 console.log(JSON.stringify({ ...r, errors })); process.exit(0);
