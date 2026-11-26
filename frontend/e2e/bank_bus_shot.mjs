@@ -21,7 +21,7 @@ picks.push(await clickHit('Mortgage bus')); await page.getByRole('button', { nam
 await shot('bus_pick'); await page.getByRole('button', { name: 'Close', exact: true }).first().dispatchEvent('click');
 await click('Expand Households'); await shot('bus_hh');
 await click('Collapse Households'); await page.waitForTimeout(600);
-await click('Expand My Bank'); await shot('bus_1');
+await click('Expand Bank'); await shot('bus_1');
 await click('Expand ALM Desk'); await shot('bus_2_desk');
 await click('Collapse ALM Desk'); await page.waitForTimeout(600);
 await click('Expand Operations'); await shot('bus_2_bs');

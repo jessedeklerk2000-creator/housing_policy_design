@@ -5,7 +5,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1700, height: 1050 }, deviceScaleFactor: 2 }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
 await page.goto('http://127.0.0.1:8001/?mode=bank'); await page.waitForSelector('.bus-diagram', { timeout: 60000 }); await page.waitForTimeout(2000);
 const click = async name => { await page.getByRole('button', { name, exact: true }).dispatchEvent('click'); await page.waitForTimeout(900); };
-await click('Expand My Bank'); await click('Expand Accounting'); await click('Expand Balance sheet'); await page.waitForTimeout(600);
+await click('Expand Bank'); await click('Expand Accounting'); await click('Expand Balance sheet'); await page.waitForTimeout(600);
 const body = page.locator('.bus-stmt-body').first();
 await body.locator('.stmt-row', { hasText: 'Mortgages' }).first().locator('.stmt-val').dispatchEvent('click'); await page.waitForTimeout(600);
 const r = await body.evaluate(b => { const box = b.getBoundingClientRect(), side = [...b.querySelectorAll('.stmt-side')].map(s => s.getBoundingClientRect()), plot = b.querySelector('.stmt-plot')?.getBoundingClientRect();

@@ -423,7 +423,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0}/>
     {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed"/><Block r={cbk} label="Central bank" tone="fin-closed"/>
       <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 24, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model</div></>}
-    <Block r={B} label="My Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0}/>
+    <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0}/>
     {inside}
     <svg width={W} height={H} className="bus-wires bus-over">{over}</svg>
     {card}
