@@ -14,3 +14,5 @@ Answer with "1: yes, 2: …". Each line: question · assumption used · where it
 10. B3 parameters (0.3 pp sharper, more wholesale, thinner buffer, 10% share per 0.1 pp) are Max's / the README's, not sourced. · Labelled as such on the page; not tuned. · `BANK_DEFAULTS`.
 11. Earlier: should the ALM desk see liquidity (cash or central-bank borrowing) so it raises rates in a run? · Not changed. · `bank_netlist.py` desk.
 12. Pushing: ad11711 and the round-2 commits stay local until you say push. · Local only.
+13. B1 LCR: with HQLA = cash only (the model bank holds no securities), the simplified LCR starts at about 77% (cash 8.5 ÷ 10% of savings 110), so it shows red against the 100% minimum from the start. Add a securities (HQLA) buffer to the balance sheet, or leave it? · Left as is, with a note on the line. · `bank_ledger.py` lcr.
+14. B1 thresholds: sourced from the CRR article texts as I know them (Art. 92(1)(b) and (d), 412(1), 428b(1); Delegated Reg. 2015/61 Art. 4(1)); not re-fetched online today. · Shown. · `bank_ledger.py` THRESHOLDS.

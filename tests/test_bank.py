@@ -159,3 +159,20 @@ def test_credit_channel_matches_dnb():
     dM = c["mortgage_book"][-1] / base["mortgage_book"][-1] - 1
     dP = c["price_index"][-1] / base["price_index"][-1] - 1
     assert dM < -0.08 and dP / dM == pytest.approx(0.75, abs=0.05)
+
+
+def test_dnb_thresholds_lcr_and_nim():
+    """Feedback round 2 B1: DNB thresholds with primary sources, the simplified LCR and the NIM in the metrics."""
+    r = bn.cached((), True, True)
+    led = r["ledger"]
+    th = {t["id"]: t for t in led["thresholds"]}
+    assert th["tier1"]["value"] == 6.0 and th["nsfr"]["value"] == 100.0 and th["leverage"]["value"] == 3.0 and th["lcr"]["value"] == 100.0
+    assert all(("CRR" in t["source"]) or ("DNB" in t["source"]) for t in th.values())
+    acc = led["accounts"]
+    assert acc["tier1"]["minimum"] == 6.0 and acc["lcr"]["minimum"] == 100.0 and "minimum" not in acc["roe"]
+    v = led["values"]
+    lcr0 = 100 * v["reserves"][0] / (0.10 * v["savings"][0])
+    assert v["lcr"][0] == pytest.approx(lcr0, abs=0.01)
+    assert v["nim"][0] == pytest.approx(100 * v["nii"][0] / v["assets"][0], abs=0.01)
+    ratios = next(g for g in led["groups"] if g["id"] == "ratios")
+    assert "lcr" in ratios["sections"][1]["accounts"] and "nim" in ratios["sections"][2]["accounts"]

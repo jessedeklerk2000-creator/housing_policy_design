@@ -320,9 +320,10 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // joined by the interbank bus (a money bus)
   const IB = MONEY, ibY = B.y + B.h - 60;
   // the Financial sector (M. Mendel, 26 Nov 2026: scaffolding only): open, the two counterparties the model already has
-  const fs: R = o.fs ? { x: B.x + B.w + 320, y: B.y + 40, w: 340, h: 430 } : { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
-  const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 40, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 90, w: 260, h: 90 };
-  { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
+  // open: shrunk to its content plus a fixed margin (A7); the central bank is DNB, also the supervisor (B1)
+  const fs: R = o.fs ? { x: B.x + B.w + 320, y: B.y + 40, w: 340, h: HEAD + 30 + 90 + 60 + 100 + 64 } : { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
+  const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 30, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 60, w: 260, h: 100 };
+  { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'DNB / central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
     const ys = [ibY, ...ends.map(e => e[1])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
     const g2: ReactNode[] = [line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1'), line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2', '5 3')];
     ends.forEach(([ex, ey, nm], k) => {
@@ -368,6 +369,11 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // the financial crisis (Jesse): from outside into the Financial sector; it reaches the bank through the interbank link
   { const tgt = o.fs ? ob : fs, fx = tgt.x + tgt.w / 2, pts = [[fx, fs.y - 110], [fx, tgt.y]];  // open: into Other banks
     wires.push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); wires.push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [fx, fs.y - 50] }, 'Financial crisis at other banks: deposits withdrawn, premium up: click to plot')); dMeter(pts, 'd_others', 'ob'); }
+  // ---- B1: DNB (the supervisor) sends the regulatory thresholds to the ALCO: a signal with its values (CRR, DNB)
+  { const th = result.ledger?.thresholds ?? [], txt = th.map(t => t.value == null ? `RW floor ${t.text ?? ''}`.replace(' up to 55% LTV, 45% above', '/45%') : `${t.label.replace(' minimum', '')} ≥ ${t.value}${t.unit}`).join(' · ');
+    const src: P = o.fs ? [cbk.x + cbk.w, cbk.y + 30] : [fs.x + fs.w, fs.y + fs.h / 2], top = B.y - 100, xr = fs.x + fs.w + 40;
+    const tgt: P = g.inner ? [g.inner.alco.x + g.inner.alco.w - 30, g.inner.alco.y] : [B.x + B.w - 50, B.y];
+    over.push(arrow([src, [xr, src[1]], [xr, top], [tgt[0], top], tgt], SIG, 'sig-dnb', 'DNB thresholds: ' + txt, 0.55)); }
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
@@ -507,9 +513,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <Block r={R.hm} label="Housing Market" tone={o.hm ? 'system-group' : 'system-closed'} open={o.hm} toggle={() => set('hm')} z={0} info="4 agents · 6 buses"/>
     {o.hm && CPB4.map(agent)}
     <Block r={R.gov} label="Government" tone="reference" info="owner-occupier subsidy (d)"/>
-    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · Central bank"/>
-    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info="reserves · lending at rate + 1 pp"/>
-      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 24, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model</div></>}
+    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · DNB / central bank"/>
+    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="DNB / central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
+      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)<br/>A large Dutch bank is supervised by the ECB (SSM) with DNB in the joint team</div></>}
     <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0} info="Treasury · Operations"/>
     {inside}
     <DotLayer W={W} H={H} paths={dots}/>

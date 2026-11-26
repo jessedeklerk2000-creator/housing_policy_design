@@ -15,6 +15,17 @@ BASEL_CRE = "Basel CRE20.43 (unrated corporates)"
 DNB_RW = "DNB minimum mortgage risk weight, Art. 458 CRR (EBA-Op-2020-03 par. 10-11)"
 MENKVELD = "Menkveld (2025)"
 NETLIST = "Bank netlist (ngspice)"
+# Regulatory thresholds that DNB (the supervisor) sends to the ALCO (M. Mendel, 26 Nov 2026, feedback round 2 B1). Primary
+# sources only; the ledger reports against them, the ALM Desk does not use them (yet).
+CRR = "Regulation (EU) No 575/2013 (CRR)"
+THRESHOLDS = [
+    dict(id="tier1", label="Tier 1 minimum", value=6.0, unit="%", source=CRR + " Art. 92(1)(b)"),
+    dict(id="nsfr", label="NSFR minimum", value=100.0, unit="%", source=CRR + " Art. 428b(1); " + BASEL_NSF),
+    dict(id="leverage", label="Leverage minimum", value=3.0, unit="%", source=CRR + " Art. 92(1)(d)"),
+    dict(id="lcr", label="LCR minimum", value=100.0, unit="%", source=CRR + " Art. 412(1); Delegated Regulation (EU) 2015/61 Art. 4(1)"),
+    dict(id="rw_mortgages", label="Mortgage risk-weight floor", value=None, unit="%", text="12% up to 55% LTV, 45% above", source=DNB_RW),
+]
+MIN = {t["id"]: t["value"] for t in THRESHOLDS if t["value"] is not None}
 
 
 def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.ndarray, valid: np.ndarray) -> dict:
@@ -30,6 +41,8 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
 
     def acc(key, label, formula, value, inputs=(), unit="model units", source=NETLIST, note="", sign=1):
         defs[key] = dict(id=key, label=label, formula=formula, inputs=list(inputs), unit=unit, source=source, note=note, sign=sign)
+        if key in MIN:
+            defs[key]["minimum"] = MIN[key]  # DNB threshold: a line in the plot, the value red below it
         v[key] = np.asarray(value, dtype=float)
 
     # Balance sheet: assets
@@ -91,7 +104,15 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     acc("ltd", "Loan-to-deposit ratio", "(mortgages + loans to firms) ÷ (savings + current accounts)", 100 * (M + Lf) / (Dep + v["current_accounts"]), ["mortgages", "firm_loans", "savings", "current_accounts"], pct, MENKVELD + " eq. 3-1")
     acc("leverage", "Leverage ratio", "equity ÷ total assets", 100 * E / v["assets"], ["equity", "assets"], pct, "Basel LEV20.7: minimum 3%",
         note="On-balance-sheet exposure only (no derivatives or off-balance items in the model).")
+    # LCR, simplified (feedback round 2 B1): Menkveld (2025) eq. 3-2 is HQLA / net cash outflow over 30 days; his p. 36 gives
+    # the 10% run-off factor for less stable retail deposits (after BCBS 2013). Here HQLA = reserves, outflow = 10% of savings.
+    acc("lcr", "LCR (simplified, after Menkveld)", "reserves ÷ (10% × savings deposits)", 100 * v["reserves"] / (0.10 * Dep), ["reserves", "savings"], pct,
+        MENKVELD + " eq. 3-2 and p. 36 (10% run-off, less stable retail deposits)",
+        note="Run-off rates are not modelled per deposit type; the 100% run-off of other banks' short deposits and any inflows are left out. "
+             "The model bank holds no securities, so its only liquid asset is cash.")
     acc("roe", "Return on equity", "net profit ÷ equity", 100 * v["net_profit"] / E, ["net_profit", "equity"], "% a year", MENKVELD + " Fig. 2-2")
+    acc("nim", "Net interest margin", "net interest income ÷ interest-earning assets (reserves + mortgages + loans to firms)", 100 * v["nii"] / v["assets"],
+        ["nii", "assets"], "% a year", "Definition (no regulatory minimum)")
 
     # Cash flow statement (M. Mendel, 26 Nov 2026), bank presentation of IAS 7: lending and deposit taking are operating
     # activities. Flows per year from the stocks: time derivatives on the output grid. Cash is the balancing item of the
@@ -140,11 +161,11 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
             dict(label="Result", accounts=["cf_net", "cf_check"])]),
         dict(id="ratios", label="Metrics", sections=[
             dict(label="Solvency (ALM Desk channel 1)", accounts=["rw_mortgages", "rwa", "tier1", "leverage"]),
-            dict(label="Liquidity (ALM Desk channel 2)", accounts=["asf", "rsf", "nsfr", "ltd"]),
-            dict(label="Profitability", accounts=["roe"])]),
+            dict(label="Liquidity (ALM Desk channel 2)", accounts=["asf", "rsf", "nsfr", "ltd", "lcr"]),
+            dict(label="Profitability", accounts=["roe", "nim"])]),
     ]
     values = {k: [round(float(x), 4) if keep else None for x, keep in zip(a, valid)] for k, a in v.items()}
-    return dict(version="bank-ledger-1", groups=groups, accounts=defs, values=values,
+    return dict(version="bank-ledger-1", groups=groups, accounts=defs, values=values, thresholds=THRESHOLDS,
                 links=[["income", "equity", "Retained profit"], ["equity", "balance", "Equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"],
                        ["balance", "cashflow", "Changes in stocks"], ["income", "cashflow", "Net profit"]],
                 basis="Statements built from the bank netlist's stocks and flows. Cash is the balancing item; current accounts are on the sheet but not yet connected to the model.")

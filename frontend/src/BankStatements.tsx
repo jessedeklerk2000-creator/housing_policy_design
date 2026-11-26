@@ -40,14 +40,15 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
     // bar moves twice as far for the same change
     const s = series(id), scale = Math.max(1e-9, ...s.map(v => Math.abs(v ?? 0))), both = s.some(v => (v ?? 0) < -1e-9) && s.some(v => (v ?? 0) > 1e-9);
     const half = both ? 50 : 100, w = check ? 0 : Math.min(half, Math.abs(x ?? 0) / scale * half), left = both ? ((x ?? 0) < 0 ? 50 - w : 50) : (x ?? 0) < 0 ? 100 - w : 0;
-    const ok = check ? Math.abs(x ?? 0) < 0.01 : undefined;
+    // B1: a DNB threshold: the value red below its minimum (ok = undefined: no verdict, as for normal lines)
+    const ok = check ? Math.abs(x ?? 0) < 0.01 : a.minimum !== undefined && x != null && x < a.minimum ? false : undefined;
     // a plotted value: the plot to the right of its line (Jesse, 25 Nov 2026)
     return <div key={k} className={'stmt-entry' + (depth ? ' sub' : '')}>
       <div className={'stmt-line' + (plots.has(k) ? ' plotted' : '')}><button className={'stmt-row' + (TOTALS.has(id) && !depth ? ' total' : '') + (check ? ' check' : '')} onClick={() => toggle(k)} title={a.formula}>
         <span className="stmt-op">{op}</span>
         <span className="stmt-label">{a.label}</span>
         <span className="stmt-bar">{depth === 0 && !check && <i className={(x ?? 0) < 0 ? 'neg' : ''} style={{ left: `${left}%`, width: `${w}%` }}/>}</span>
-        <b className={'stmt-val' + (ok === undefined ? '' : ok ? ' ok' : ' bad') + (plots.has(k) ? ' plotted' : '')} role="button" title="Click to plot over time" onClick={ev => { ev.stopPropagation(); togglePlot(k); }}>{show(id, x)}{ok !== undefined && (ok ? ' ✓' : ' ✗')}</b>
+        <b className={'stmt-val' + (ok === undefined ? '' : ok ? ' ok' : ' bad') + (plots.has(k) ? ' plotted' : '')} role="button" title="Click to plot over time" onClick={ev => { ev.stopPropagation(); togglePlot(k); }}>{show(id, x)}{check && ok !== undefined && (ok ? ' ✓' : ' ✗')}</b>
         <span className="stmt-fold">{isOpen ? '−' : '+'}</span>
       </button>
       {plots.has(k) && <div className="stmt-plot-card nodrag nopan" style={drag[k] ? { transform: `translate(${drag[k][0]}px, ${drag[k][1]}px)` } : undefined}>
@@ -58,11 +59,11 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
           const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
           el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }}>
           <b>{a.label}</b><button aria-label={`Close plot ${a.label}`} onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); togglePlot(k); }}>×</button></div>
-        <StmtPlot y={s} at={at} years={result.year} unit={a.unit} label={a.label}/></div>}</div>
+        <StmtPlot y={s} at={at} years={result.year} unit={a.unit} label={a.label} min={a.minimum}/></div>}</div>
       {isOpen && <div className="stmt-drill">
         <div className="stmt-formula">{a.label} = {a.formula}</div>
         {a.inputs.filter(i => L.accounts[i]).map(i => row(i, k, depth + 1, RATIO_OVER[id] === i ? '÷' : MINUS[id]?.includes(i) ? '−' : '+'))}
-        <div className="stmt-source">{a.unit} · {a.source}{a.note ? ` · ${a.note}` : ''}</div>
+        <div className="stmt-source">{a.unit} · {a.source}{a.minimum !== undefined ? ` · minimum ${a.minimum}% (DNB threshold)` : ''}{a.note ? ` · ${a.note}` : ''}</div>
       </div>}
     </div>;
   };
@@ -107,16 +108,17 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
 }
 
 /** A line over the run with the Play cursor (clicked number on a statement). */
-export function StmtPlot({ y, at, years, unit, label }: { y: (number | null)[]; at: number; years: number[]; unit: string; label: string }) {
+export function StmtPlot({ y, at, years, unit, label, min }: { y: (number | null)[]; at: number; years: number[]; unit: string; label: string; min?: number }) {
   const W = 330, H = 96, pad = 6, ok = y.map(v => v ?? NaN), fin = ok.filter(Number.isFinite);
   if (!fin.length) return null;
-  let lo = Math.min(...fin), hi = Math.max(...fin); if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  let lo = Math.min(...fin, ...(min !== undefined ? [min] : [])), hi = Math.max(...fin, ...(min !== undefined ? [min] : [])); if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
   const m = (hi - lo) * 0.1; lo -= m; hi += m;
   const sx = (i: number) => pad + i / (y.length - 1) * (W - 2 * pad), sy = (v: number) => H - 16 - (v - lo) / (hi - lo) * (H - 26);
   const pts = (a: number, b: number) => ok.slice(a, b).map((v, i) => Number.isFinite(v) ? `${sx(a + i)},${sy(v)}` : '').filter(Boolean).join(' ');
   const f = (v: number) => Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2);
   return <div className="stmt-plot"><svg width={W} height={H} role="img" aria-label={`${label} over time`}>
     {lo < 0 && hi > 0 && <line x1={pad} x2={W - pad} y1={sy(0)} y2={sy(0)} stroke="#d5dbd8"/>}
+    {min !== undefined && <g><line x1={pad} x2={W - pad} y1={sy(min)} y2={sy(min)} stroke="#c0392b" strokeDasharray="4 3"/><text x={pad + 2} y={sy(min) - 3} className="mini-tick" fill="#c0392b">minimum {min}%</text></g>}
     <polyline fill="none" style={{ stroke: "var(--plot, #3f9a1f)" }} strokeOpacity={0.25} strokeWidth={2} points={pts(0, y.length)}/>
     <polyline fill="none" style={{ stroke: "var(--plot, #3f9a1f)" }} strokeWidth={2} points={pts(0, at + 1)}/>
     {Number.isFinite(ok[at]) && <circle cx={sx(at)} cy={sy(ok[at])} r={3.5} style={{ fill: "var(--plot, #3f9a1f)" }}/>}

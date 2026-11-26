@@ -290,7 +290,7 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
             led = bank_ledger(tr, b, e, yrs, tr["time"] / YR, np.ones(yrs.size, dtype=bool))
             for k, vals in led["values"].items():
                 tt["Ledger:" + k] = vals
-            run_result["ledger"] = {k: led[k] for k in ("version", "groups", "accounts", "links", "basis")}
+            run_result["ledger"] = {k: led[k] for k in ("version", "groups", "accounts", "links", "basis", "thresholds")}
             if "I(Bk_t1_err)" in tt and "I(Bk_ltf_err)" in tt:
                 tt["Bank_dev_t1"] = list(tt["I(Bk_t1_err)"])
                 tt["Bank_dev_ltd"] = [None if x is None else round(-x, 4) for x in tt["I(Bk_ltf_err)"]]
