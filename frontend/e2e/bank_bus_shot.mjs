@@ -26,8 +26,8 @@ await click('Collapse ALM Desk'); await page.waitForTimeout(600);
 await click('Expand Operations'); await shot('bus_2_bs');
 await click('Collapse Operations'); await page.waitForTimeout(600);
 await click('Expand Accounting'); await shot('bus_2_acc');
-for (const b of ['Income statement', 'Equity statement', 'Balance sheet', 'Key figures']) await click('Expand ' + b);
-await page.waitForTimeout(600); await click('Collapse Key figures'); await click('Expand Key figures'); await shot('bus_3_stmts');
+for (const b of ['Income statement', 'Equity statement', 'Cash flow statement', 'Balance sheet', 'Metrics']) await click('Expand ' + b);
+await page.waitForTimeout(600); await click('Collapse Metrics'); await click('Expand Metrics'); await shot('bus_3_stmts');
 await page.locator('.bus-stmt-body .stmt-val').first().dispatchEvent('click'); await page.waitForTimeout(400);
 const plotted = await page.locator('.bus-stmt-body .stmt-plot').count();
 // drag-to-pan while the pointer starts on the opened Accounting block

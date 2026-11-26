@@ -5,7 +5,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 } }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
 await page.goto('http://127.0.0.1:8001/?mode=bank'); await page.waitForSelector('.bus-diagram', { timeout: 90000 }); await page.waitForTimeout(2000);
 const click = async name => { await page.getByRole('button', { name, exact: true }).dispatchEvent('click'); await page.waitForTimeout(800); };
-await click('Expand Bank'); await click('Expand Accounting'); await click('Expand Balance sheet'); await click('Expand Key figures');
+await click('Expand Bank'); await click('Expand Accounting'); await click('Expand Balance sheet'); await click('Expand Metrics');
 await page.locator('.bus-canvas .react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(900);
 const bal = page.locator('.bus-stmt-body').filter({ has: page.locator('.stmt-balance') });
 await bal.locator('.stmt-row', { hasText: 'Savings' }).first().locator('.stmt-val').dispatchEvent('click'); await page.waitForTimeout(600);

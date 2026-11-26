@@ -2,7 +2,7 @@
 
 Structure after Q. Emanuels' DynaBI statement ledger (groups -> sections -> accounts; every account has a label,
 formula, inputs, unit, source and note) and Menkveld (2025) Fig. 2-2/2-3: ALM Reporting turns the bank's balance sheet
-and income statement into the key figures the ALM Desk steers on. Nothing here feeds back into the model: the
+and income statement into the metrics the ALM Desk steers on. Nothing here feeds back into the model: the
 netlist is solved by ngspice, this layer only reports it. Values are in model units (mortgage book = 100 at the start);
 income-statement lines are flows per year.
 """
@@ -78,7 +78,7 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     acc("equity_check", "Equity check", "opening equity + retained profit − equity on the balance sheet", b["E0"] + v["retained_cum"] - E, ["equity_open", "retained_cum", "equity"],
         note="Zero up to the accuracy of the time grid.")
 
-    # Key figures (Menkveld Fig. 2-2: ratios derived from the statements)
+    # Metrics (Menkveld Fig. 2-2: ratios derived from the statements; "Metrics" after M. Mendel, 26 Nov 2026)
     pct = "%"
     acc("rw_mortgages", "Risk weight of mortgages", "12% up to 55% of the home's value, 45% above, averaged over the loans", 100 * rw_m, unit=pct, source=DNB_RW,
         note=f"Book loan-to-value now {100 * ltv[0]:.0f}% at the start.")
@@ -93,6 +93,34 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
         note="On-balance-sheet exposure only (no derivatives or off-balance items in the model).")
     acc("roe", "Return on equity", "net profit ÷ equity", 100 * v["net_profit"] / E, ["net_profit", "equity"], "% a year", MENKVELD + " Fig. 2-2")
 
+    # Cash flow statement (M. Mendel, 26 Nov 2026), bank presentation of IAS 7: lending and deposit taking are operating
+    # activities. Flows per year from the stocks: time derivatives on the output grid. Cash is the balancing item of the
+    # balance sheet, so the net change in cash equals d(reserves)/dt minus d(central-bank borrowing)/dt is financing.
+    # derivatives on the solver's own (fine) time steps, then sampled on the output grid: differencing on the 0.1-year
+    # grid misses the crisis ramps (up to 0.027 a year off)
+    sim = np.asarray(sim_years, dtype=float)
+    raw = lambda k: np.nan_to_num(np.asarray(tr[k], dtype=float))
+    dr = lambda y: np.interp(grid_years, sim, np.gradient(y, sim))
+    cash_raw = raw("I(Bk_cash)")
+    D = {"M": dr(raw("I(Bk_m)")), "Lf": dr(raw("I(Bk_lf)")), "Dep": dr(raw("I(Bk_dep)")), "W": dr(raw("I(Bk_w)")),
+         "res": dr(np.maximum(cash_raw, 0)), "cb": dr(np.maximum(-cash_raw, 0))}
+    acc("cf_profit", "Net profit", "net profit (income statement)", v["net_profit"], ["net_profit"], py,
+        note="Impairments are already inside net profit and are a real cash outflow here: the model does not write the mortgage book down (cash is the balancing item), so they are not added back.")
+    acc("cf_mortgages", "New mortgage lending, net", "− d(mortgages)/dt", -D["M"], ["mortgages"], py)
+    acc("cf_firm_loans", "New loans to firms, net", "− d(loans to firms)/dt", -D["Lf"], ["firm_loans"], py)
+    acc("cf_savings", "Savings deposits, net inflow", "+ d(savings deposits)/dt", D["Dep"], ["savings"], py)
+    acc("cf_interbank", "Deposits of other banks, net", "+ d(deposits of other banks)/dt", D["W"], ["interbank"], py)
+    acc("cf_operating", "Cash flow from operating activities", "sum of the above",
+        v["cf_profit"] + v["cf_mortgages"] + v["cf_firm_loans"] + v["cf_savings"] + v["cf_interbank"],
+        ["cf_profit", "cf_mortgages", "cf_firm_loans", "cf_savings", "cf_interbank"], py)
+    acc("cf_investing", "Cash flow from investing activities", "0", zero, unit=py, note="No securities or property in the model yet.")
+    acc("cf_cb", "Central-bank borrowing, net", "+ d(central-bank borrowing)/dt", D["cb"], ["cb_borrowing"], py)
+    acc("cf_dividend", "Dividend paid", "− dividend", -v["dividend"], ["dividend"], py)
+    acc("cf_financing", "Cash flow from financing activities", "central-bank borrowing + dividend paid", v["cf_cb"] + v["cf_dividend"], ["cf_cb", "cf_dividend"], py)
+    acc("cf_net", "Net change in cash", "operating + investing + financing", v["cf_operating"] + v["cf_investing"] + v["cf_financing"], ["cf_operating", "cf_investing", "cf_financing"], py)
+    acc("cf_check", "Cash check", "net change in cash − d(reserves)/dt", v["cf_net"] - D["res"], ["cf_net", "reserves"], py,
+        note="Zero up to the accuracy of the time grid.")
+
     groups = [
         dict(id="balance", label="Balance sheet", sections=[
             dict(label="Assets", side="debit", accounts=["reserves", "mortgages", "firm_loans", "assets"]),
@@ -105,12 +133,18 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
             dict(label="Result", accounts=["nii", "impairments", "net_profit", "dividend", "retained"])]),
         dict(id="equity", label="Equity statement", sections=[
             dict(label="Equity since the start", accounts=["equity_open", "profit_cum", "dividend_cum", "retained_cum", "equity", "equity_check"])]),
-        dict(id="ratios", label="Key figures", sections=[
+        dict(id="cashflow", label="Cash flow statement", sections=[
+            dict(label="Operating activities", accounts=["cf_profit", "cf_mortgages", "cf_firm_loans", "cf_savings", "cf_interbank", "cf_operating"]),
+            dict(label="Investing activities", accounts=["cf_investing"]),
+            dict(label="Financing activities", accounts=["cf_cb", "cf_dividend", "cf_financing"]),
+            dict(label="Result", accounts=["cf_net", "cf_check"])]),
+        dict(id="ratios", label="Metrics", sections=[
             dict(label="Solvency (ALM Desk channel 1)", accounts=["rw_mortgages", "rwa", "tier1", "leverage"]),
             dict(label="Liquidity (ALM Desk channel 2)", accounts=["asf", "rsf", "nsfr", "ltd"]),
             dict(label="Profitability", accounts=["roe"])]),
     ]
     values = {k: [round(float(x), 4) if keep else None for x, keep in zip(a, valid)] for k, a in v.items()}
     return dict(version="bank-ledger-1", groups=groups, accounts=defs, values=values,
-                links=[["income", "equity", "Retained profit"], ["equity", "balance", "Equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"]],
+                links=[["income", "equity", "Retained profit"], ["equity", "balance", "Equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"],
+                       ["balance", "cashflow", "Changes in stocks"], ["income", "cashflow", "Net profit"]],
                 basis="Statements built from the bank netlist's stocks and flows. Cash is the balancing item; current accounts are on the sheet but not yet connected to the model.")

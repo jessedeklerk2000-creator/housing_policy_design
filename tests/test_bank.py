@@ -109,3 +109,14 @@ def test_ledger_balances_and_gives_the_controlled_ratios():
         for s in g["sections"]:
             for a in s["accounts"]:
                 assert a in L["accounts"] and a in V and all(i in L["accounts"] for i in L["accounts"][a]["inputs"])
+
+
+@pytest.mark.parametrize("ov, alm, fb", [({}, True, True), ({}, False, True), ({}, True, False),
+                                         ({"funding_cut": 1.0, "premium_pp": 6.0}, True, True), ({"funding_cut": 1.0, "premium_pp": 6.0}, False, True)])
+def test_cash_flow_statement_reconciles(ov, alm, fb):
+    """Cash flow statement (M. Mendel, 26 Nov 2026): operating + investing + financing = the change in cash, also in a
+    severe financial crisis. The derivatives come from the solver's own time steps, so the check stays below 0.01 a year."""
+    r = bn.simulate(ov, alm, fb)
+    V = r["ledger"]["values"]
+    assert max(abs(x) for x in V["cf_check"] if x is not None) < 0.01
+    assert r["ledger"]["groups"][-1]["label"] == "Metrics"

@@ -23,8 +23,8 @@ type Side = 'L' | 'R' | 'T' | 'B';
 const LANE = 12, HEAD = 34, S = 0.5, TILE: P = [240, 140];
 const NONE: Selection = { kind: 'none', id: '' };
 // the statement boxes inside Accounting: ledger group and opened size
-const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['eq', 'Equity statement', 'equity'], ['bal', 'Balance sheet', 'balance'], ['key', 'Key figures', 'ratios']];
-const STMT_OPEN: Record<string, P> = { inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [500, HEAD + 360], key: [380, HEAD + 270] };
+const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['eq', 'Equity statement', 'equity'], ['bal', 'Balance sheet', 'balance'], ['cf', 'Cash flow statement', 'cashflow'], ['key', 'Metrics', 'ratios']];
+const STMT_OPEN: Record<string, P> = { cf: [380, HEAD + 330], inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [500, HEAD + 360], key: [380, HEAD + 270] };
 // One bus per conserved quantity (Jesse, 25 Nov 2026): a bus is a node, so it carries one good only and its flows sum
 // to zero. A market with a good and a payment gets two buses side by side (k of n): brown = real goods, green = money.
 type Bus = { id: string; label: string; color: string; a: string; b: string; flows: string[]; k?: number; n?: number };
@@ -79,8 +79,9 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
       const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] }, eq: R = { x: x0, y: inc.y + inc.h + 70, w: sz('eq')[0], h: sz('eq')[1] };
       const bal: R = { x: x0 + Math.max(inc.w, eq.w) + 120, y: y0, w: sz('bal')[0], h: sz('bal')[1] };
       const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
-      sub = { inc, eq, bal, key };
-      acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(eq.y + eq.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
+      const cf: R = { x: x0, y: eq.y + eq.h + 70, w: sz('cf')[0], h: sz('cf')[1] };  // cash flow statement under the equity statement (M. Mendel)
+      sub = { inc, eq, cf, bal, key };
+      acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(cf.y + cf.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
     }
     const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + 90, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
     const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
@@ -293,18 +294,22 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     { const ya = sub ? acc.y + HEAD + 30 : acc.y + 55;
       if (sub) {
         // what each statement is computed from (bank_ledger.py): stocks -> balance sheet, rates and flows -> income statement,
-        // the home value (LTV, for the DNB mortgage risk weight) -> key figures
+        // the home value (LTV, for the DNB mortgage risk weight) -> metrics
         over.push(arrow([[bs.x + bs.w, ya], [sub.bal.x + 40, ya], [sub.bal.x + 40, sub.bal.y]], G, 'x', 'stocks', 0));
         const yf = acc.y + HEAD + 44; over.push(arrow([[bs.x + bs.w, yf], [sub.inc.x + 40, yf], [sub.inc.x + 40, sub.inc.y]], G, 'xf', 'rates · flows', 0));
-        const yl = acc.y + acc.h - 16, ys = Math.min(yl, bs.y + bs.h - 20), kx = sub.key.x + sub.key.w / 2;
-        over.push(arrow([[bs.x + bs.w, ys], [acc.x + 12, ys], [acc.x + 12, yl], [kx, yl], [kx, sub.key.y + sub.key.h]], G, 'xl', 'home value (LTV)', 0.62));
+        // round underneath Accounting (the left edge inside it carries net profit into the cash flow statement)
+        const yl = acc.y + acc.h + 26, ys = bs.y + bs.h - 20, kx = sub.key.x + sub.key.w / 2, xg = acc.x - 40;
+        over.push(arrow([[bs.x + bs.w, ys], [xg, ys], [xg, yl], [kx, yl], [kx, sub.key.y + sub.key.h]], G, 'xl', 'home value (LTV)', 0.62));
       }
       else wires.push(arrow([[bs.x + bs.w, ya], [acc.x, ya]], G, 'x', 'stocks · flows', 0.5)); }
     { const k = sub?.key, yy = k ? k.y + Math.min(k.h / 2, 45) : acc.y + 55, xm = alco.x - 45;
       (k ? over : wires).push(arrow([[k ? k.x + k.w : acc.x + acc.w, yy], [xm, yy], [xm, sum[1]], [sum[0] - 17, sum[1]]], G, 'y', 'y₁ Tier 1 · y₂ NSFR', 0.15)); }
-    // inside Accounting: retained profit into equity, equity onto the balance sheet, balance-sheet items and net profit into the key figures
+    // inside Accounting: retained profit into equity, equity onto the balance sheet, balance-sheet items and net profit into the metrics
     if (sub) {
-      const { inc, eq, bal, key } = sub;
+      const { inc, eq, cf, bal, key } = sub;
+      // into the cash flow statement: net profit from the income statement, changes in stocks from the balance sheet
+      { const yi = inc.y + inc.h - 16, xl = inc.x - 10, yc = cf.y + 30; over.push(arrow([[inc.x, yi], [xl, yi], [xl, yc], [cf.x, yc]], G, 's-cfnp', 'net profit', 0.5)); }
+      { const xb = bal.x + 40, yc = cf.y + 46; over.push(arrow([[xb, bal.y + bal.h], [xb, yc], [cf.x + cf.w, yc]], G, 's-cfst', 'changes in stocks', 0.5)); }
       over.push(arrow([[inc.x + 60, inc.y + inc.h], [inc.x + 60, eq.y]], G, 's-ret', 'retained profit'));
       { const ey = eq.y + 45, mx = bal.x - 50; over.push(arrow([[eq.x + eq.w, ey], [mx, ey], [mx, bal.y + 45], [bal.x, bal.y + 45]], G, 's-eq', 'equity', 0)); }
       const items = KEY_INPUTS.filter(([id]) => id !== 'net_profit');

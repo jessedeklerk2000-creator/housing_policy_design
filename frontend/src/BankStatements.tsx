@@ -1,4 +1,4 @@
-// ALM Reporting (25 Nov 2026): the bank's financial statements and key figures, live at the canvas's time cursor.
+// ALM Reporting (25 Nov 2026): the bank's financial statements and metrics, live at the canvas's time cursor.
 // Structure after Q. Emanuels' DynaBI statement network (statement blocks of sections and accounts; each account opens
 // into its formula, inputs and source); content after Menkveld (2025) Fig. 2-2/2-3 and the bank netlist
 // (backend/housing/bank_ledger.py). Values in model units (mortgage book 100 at the start), flows per year.
@@ -6,14 +6,14 @@ import { useContext, useState, type ReactElement } from 'react';
 import { AtContext, readTrace } from './ModelMap';
 import type { Ledger } from './types';
 
-const TOTALS = new Set(['assets', 'liabilities', 'liab_equity', 'interest_income', 'interest_expense', 'nii', 'net_profit', 'retained', 'equity', 'tier1', 'nsfr']);
-const CHECKS = new Set(['balance_check', 'equity_check']);
+const TOTALS = new Set(['assets', 'liabilities', 'liab_equity', 'interest_income', 'interest_expense', 'nii', 'net_profit', 'retained', 'equity', 'tier1', 'nsfr', 'cf_operating', 'cf_financing', 'cf_net']);
+const CHECKS = new Set(['balance_check', 'equity_check', 'cf_check']);
 const MINUS: Record<string, string[]> = {
-  nii: ['interest_expense'], net_profit: ['impairments'], retained: ['dividend'], retained_cum: ['dividend_cum'], balance_check: ['liab_equity'], equity_check: ['equity'],
+  nii: ['interest_expense'], net_profit: ['impairments'], retained: ['dividend'], retained_cum: ['dividend_cum'], balance_check: ['liab_equity'], equity_check: ['equity'], cf_check: ['reserves'],
 };
 const RATIO_OVER: Record<string, string> = { tier1: 'rwa', nsfr: 'rsf', leverage: 'assets', roe: 'equity', ltd: 'savings' };
 
-// The signals from the statements into the key figures (what ALM Reporting reads off the sheet)
+// The signals from the statements into the metrics (what ALM Reporting reads off the sheet)
 export const KEY_INPUTS: [string, string][] = [['equity', 'equity'], ['mortgages', 'mortgages'], ['firm_loans', 'loans to firms'], ['savings', 'savings'], ['interbank', 'other banks'], ['assets', 'total assets'], ['net_profit', 'net profit']];
 
 export function BankStatements({ part = 'all', only }: { part?: 'all' | 'statements' | 'ratios'; only?: string }) {
@@ -81,13 +81,13 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
   const link = (from: string, to: string) => { const l = L.links.find(x => x[0] === from && x[1] === to); return l ? <div className="stmt-link">{l[2]} →</div> : null; };
   if (only) return <div className="bank-statements single nodrag">{block(only)}</div>;
   if (part === 'ratios') return <div className="bank-statements key-only nodrag nowheel">{block('ratios')}</div>;
-  const signals = <div className="stmt-signals" aria-label="Signals into the key figures">
+  const signals = <div className="stmt-signals" aria-label="Signals into the metrics">
     {KEY_INPUTS.map(([id, name]) => <div key={id} className="stmt-signal"><span>{name}</span><b>{show(id, val(id))}</b><i/></div>)}
   </div>;
   return <div className="bank-statements nodrag nowheel">
     <div className="stmt-head"><b>Financial statements · {year.toFixed(1)}</b><small>Model units (mortgage book 100 at the start). Click a line for its formula and source, a number to plot it. {L.basis}</small></div>
     <div className={'stmt-grid' + (part === 'statements' ? ' no-key' : '')}>
-      <div className="stmt-col">{block('income')}{link('income', 'equity')}{block('equity')}</div>
+      <div className="stmt-col">{block('income')}{link('income', 'equity')}{block('equity')}{L.groups.some(g => g.id === 'cashflow') && block('cashflow')}</div>
       <div className="stmt-col">{link('equity', 'balance')}{block('balance')}</div>
       {part === 'all' && <>{signals}<div className="stmt-col stmt-key">{block('ratios')}</div></>}
     </div>
