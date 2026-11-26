@@ -24,11 +24,13 @@ const LANE = 12, HEAD = 34, S = 0.5, TILE: P = [240, 140];
 const NONE: Selection = { kind: 'none', id: '' };
 // the statement boxes inside Accounting: ledger group and opened size
 const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['eq', 'Equity statement', 'equity'], ['bal', 'Balance sheet', 'balance'], ['cf', 'Cash flow statement', 'cashflow'], ['key', 'Metrics', 'ratios']];
-const STMT_OPEN: Record<string, P> = { cf: [380, HEAD + 330], inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [500, HEAD + 360], key: [380, HEAD + 270] };
+const STMT_OPEN: Record<string, P> = { cf: [380, HEAD + 330], inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [620, HEAD + 300], key: [380, HEAD + 270] };
 // One bus per conserved quantity (Jesse, 25 Nov 2026): a bus is a node, so it carries one good only and its flows sum
 // to zero. A market with a good and a payment gets two buses side by side (k of n): brown = real goods, green = money.
 type Bus = { id: string; label: string; color: string; a: string; b: string; flows: string[]; k?: number; n?: number };
-const REAL = '#a8660c', MONEY = '#3f8f4f';  // as the control-loop view: goods brown, money green
+// Feedback round 2 (A6, M. Mendel): no green or light blue in the bank view. Money a dark neutral (the moving dots show
+// what flows), real goods brown, every signal one accent violet.
+const REAL = '#a8660c', MONEY = '#3b3b46', SIG = '#5b3f8f';
 const BUSES: Bus[] = [
   { id: 'houses', label: 'Houses bus (#)', color: REAL, a: 'constructors', b: 'investors', flows: ['houses'], k: 0, n: 2 },
   { id: 'construction', label: 'Construction-payments bus (€)', color: MONEY, a: 'constructors', b: 'investors', flows: ['construction_cost'], k: 1, n: 2 },
@@ -89,7 +91,8 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + IN, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
     const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
     // My Bank (M. Mendel): two core divisions under the CEO. Banking Operations (COO) holds the breadboard; Finance &
-    // Treasury (CFO) holds Accounting & Reporting and ALM & Treasury (ALCO, Σ, ALM Desk)
+    // Treasury (CFO) holds Accounting & Reporting and ALM & Treasury (ALCO, Σ, ALM Desk). Round 2 (A5): the division is
+    // "Treasury", headed by the treasurer; Accounting & Reporting stays inside it (QUESTIONS_BANK_VIEW.md 4)
     const ops: R = { x: bx + 20, y: by + 90, w: bs.x + bs.w + 30 - (bx + 20), h: bs.y + bs.h + 80 - (by + 90) };
     const accF: R = { x: acc.x - 20, y: acc.y - 36, w: acc.w + 40, h: acc.h + 56 };
     const dr = Math.max(alco.x + alco.w, desk.x + desk.w), almF: R = { x: alco.x - 34, y: alco.y - 36, w: dr + 34 - (alco.x - 34), h: desk.y + desk.h + 24 - (alco.y - 36) };
@@ -138,9 +141,11 @@ function terminal(map: MapData, g: Geo, o: Open, agent: string, flow: string): {
   return { p, q: vertical ? [p[0], p[1] + 10 * sign] : [p[0] + 10 * sign, p[1]], side };
 }
 
-function Block({ r, label, tone, open, toggle, children, z }: { r: R; label: string; tone: string; open?: boolean; toggle?: () => void; children?: ReactNode; z?: number }) {
+// A7 (M. Mendel): a closed tile is never an empty box: a short content line under its title
+function Block({ r, label, tone, open, toggle, children, z, info }: { r: R; label: string; tone: string; open?: boolean; toggle?: () => void; children?: ReactNode; z?: number; info?: ReactNode }) {
   return <div className={`map-node ${tone}${open ? ' open bus-open-block' : ''}`} style={{ position: 'absolute', left: r.x, top: r.y, width: r.w, height: r.h, zIndex: z ?? 2 }}>
     <div className="block-head"><strong>{label}</strong>{toggle && <button className="toggle nodrag" aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`} onClick={e => { e.stopPropagation(); toggle(); }}>{open ? <Minus size={13}/> : <Plus size={13}/>}</button>}</div>
+    {!open && info && <div className="bus-tile-info">{info}</div>}
     {children}
   </div>;
 }
@@ -192,6 +197,10 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       <text className="bus-flow-name" fill={color} transform={`translate(${vert ? m[0] - 7 : m[0]} ${vert ? m[1] : m[1] - 7}) rotate(${vert ? -90 : 0})`} textAnchor="middle">{f?.short ?? flow}</text>
     </g>;
   };
+  // a closed statement box shows its headline line at the cursor (A7)
+  const HEADLINE: Record<string, [string, string]> = { inc: ['net_profit', 'net profit'], eq: ['equity', 'equity'], bal: ['assets', 'total assets'], cf: ['cf_net', 'net change in cash'], key: ['tier1', 'Tier 1'] };
+  const tileValue = (k: string) => { const [id, name] = HEADLINE[k], x = readTrace(result, 'Ledger:' + id)?.[at], u = result.ledger?.accounts[id]?.unit ?? '';
+    return <>{name} <b>{x == null ? '–' : u.startsWith('%') ? x.toFixed(1) + '%' : x.toFixed(1)}</b></>; };
   const wires: ReactNode[] = [], over: ReactNode[] = [];  // over: drawn above the blocks (wires into an opened breadboard)
   const line = (pts: number[][], color: string, key: string, dash?: string, w = 2) =>
     <polyline key={key} points={pts.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={w} strokeDasharray={dash}/>;
@@ -294,7 +303,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
-    const { bs, acc, alco, sum, desk: dk, circ, sub } = g.inner, G = '#3f9a1f', PU = '#6b4fa0', bankFlows = Object.keys(map.layouts.bank.ports);
+    const { bs, acc, alco, sum, desk: dk, circ, sub } = g.inner, G = SIG, PU = SIG, bankFlows = Object.keys(map.layouts.bank.ports);
     // the bank's ports into the Bank circuit (onto the breadboard's own terminals when it is open)
     for (const f of bankFlows) {
       const t = terminal(map, g, o, 'bank', f), col = BUSES.find(b => (b.flows as readonly string[]).includes(f))!.color;
@@ -334,14 +343,14 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       { const x1 = inc.x + inc.w - 40, ly = inc.y - 16, kx = key.x - 14, ky = key.y + key.h - 10;
         over.push(arrow([[x1, inc.y], [x1, ly], [kx, ly], [kx, ky], [key.x, ky]], G, 's-np', 'net profit', 0.3)); }
     }
-    wires.push(arrow([[sum[0], alco.y + alco.h], [sum[0], sum[1] - 17]], '#2b6599', 'r', 'r₁, r₂'));
+    wires.push(arrow([[sum[0], alco.y + alco.h], [sum[0], sum[1] - 17]], SIG, 'r', 'r₁, r₂'));
     // the desk's terminals in canvas units (open desk), from its breadboard coordinates
     const dt = (q: P): P => { const k = (dk.w - 16) / DESK_VB[0]; return [dk.x + 8 + q[0] * k, dk.y + HEAD + 6 + q[1] * k]; };
     if (o.desk) {
       const [e2, e1] = [dt(DESK_T.e2), dt(DESK_T.e1)], ly = dk.y - 28;
-      over.push(arrow([[sum[0], sum[1] + 17], [sum[0], ly], [dk.x - 30, ly], [dk.x - 30, e2[1]], e2], '#1f2a26', 'e2', 'e₂ NSFR', 0.6));
-      over.push(arrow([[dk.x - 30, e2[1]], [dk.x - 30, e1[1]], e1], '#1f2a26', 'e1', 'e₁ Tier 1', 0.5));
-    } else wires.push(arrow([[sum[0], sum[1] + 17], [sum[0], dk.y]], '#1f2a26', 'e', 'e₁, e₂'));
+      over.push(arrow([[sum[0], sum[1] + 17], [sum[0], ly], [dk.x - 30, ly], [dk.x - 30, e2[1]], e2], SIG, 'e2', 'e₂ NSFR', 0.6));
+      over.push(arrow([[dk.x - 30, e2[1]], [dk.x - 30, e1[1]], e1], SIG, 'e1', 'e₁ Tier 1', 0.5));
+    } else wires.push(arrow([[sum[0], sum[1] + 17], [sum[0], dk.y]], SIG, 'e', 'e₁, e₂'));
     // u: the desk's rates into the bank's rate sources (B§Mortgage_rate_ALM and B2 on the breadboard)
     const el = (name: string): P | null => { const e = map.elements.find(x => x.agent === 'bank' && x.name === name); if (!circ || !e?.pins) return null;
       const cx = e.pins.reduce((s, p) => s + p[0], 0) / e.pins.length, cy = e.pins.reduce((s, p) => s + p[1], 0) / e.pins.length; return [circ.x + cx * g.cs, circ.y + cy * g.cs]; };
@@ -366,13 +375,13 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     tag(B.x + B.w - 250, ibY - 10, 'Payment & deposit operations', 'tg4');
     const frame = (r: R, label: string, unit = false) => <div key={label} className={'bus-org-frame' + (unit ? ' unit' : '')} style={{ left: r.x, top: r.y, width: r.w, height: r.h }}><span>{label}</span></div>;
     inside = <>
-      {frame(fr.ops, 'Banking Operations (COO)')}{frame(fr.fin, 'Finance & Treasury (CFO)')}{frame(fr.accF, 'Accounting & Reporting', true)}{frame(fr.almF, 'ALM & Treasury', true)}
+      {frame(fr.ops, 'Banking Operations (COO)')}{frame(fr.fin, 'Treasury (treasurer)')}{frame(fr.accF, 'Accounting & Reporting', true)}{frame(fr.almF, 'ALM', true)}
       <div className="bus-ceo" style={{ left: ceo[0] - 40, top: ceo[1] - 12, width: 80 }}>CEO</div>
-      <Block r={bs} label="Operations" tone={o.bs ? 'bank-group' : 'bank-closed'} open={o.bs} toggle={() => set('bs')} z={1}>
+      <Block r={bs} label="Operations" tone={o.bs ? 'bank-group' : 'bank-closed'} open={o.bs} toggle={() => set('bs')} z={1} info="mortgages · firm loans · savings">
         {o.bs && circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - bs.x, top: circ.y - bs.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
       </Block>
-      <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
-      {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3}>  {/* open: above the wires, so a dragged plot card stays on top */}
+      <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1} info="5 statements · metrics"/>
+      {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3} info={tileValue(k)}>  {/* open: above the wires, so a dragged plot card stays on top */}
         {o[k] && <FitBody k={k} onH={fitH} build={build} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
           <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></FitBody>}
         {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
@@ -382,9 +391,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
             const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
             el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }}/>}
       </Block>)}
-      <Block r={alco} label="ALCO" tone="reference"/>
+      <Block r={alco} label="ALCO" tone="reference" info="targets: Tier 1 · NSFR"/>
       <div className="map-node summing" style={{ position: 'absolute', left: sum[0] - 17, top: sum[1] - 17, width: 34, height: 34, zIndex: 2 }}/>
-      <Block r={dk} label="ALM Desk" tone="controller" open={o.desk} toggle={() => set('desk')}>
+      <Block r={dk} label="ALM Desk" tone="controller" open={o.desk} toggle={() => set('desk')} info="PI on FTP · PI on spread">
         {o.desk && <div className="bus-breadboard" style={{ position: 'absolute', left: 8, right: 8, top: HEAD + 6, bottom: 8 }}><AtContext.Provider value={{ result, at }}>{desk}</AtContext.Provider></div>}
       </Block>
     </>;
@@ -413,19 +422,19 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       {rows.map(r => <div key={r.label}><div className="bus-pick-row">{r.label}</div>{r.y ? <StmtPlot y={r.y} at={at} years={result.year} unit={r.unit} label={r.label}/> : <small className="muted">Not in this run.</small>}</div>)}
     </div>;
   }
-  const agent = (id: string) => <Block key={id} r={R[id]} label={map.agents[id]?.label ?? id} tone="agent" open={o[id]} toggle={() => set(id)}>
+  const agent = (id: string) => <Block key={id} r={R[id]} label={map.agents[id]?.label ?? id} tone="agent" open={o[id]} toggle={() => set(id)} info={`${Object.keys(map.layouts[id]?.ports ?? {}).length} port pairs`}>
     {o[id] && <div className="bus-circuit" style={{ position: 'absolute', left: 0, top: HEAD, width: R[id].w, height: R[id].h - HEAD }}>
       <AgentCircuit map={map} agent={id} scenario={scenario} selection={NONE} pick={() => {}} outside={id !== 'firms'} inputs={id === 'firms' ? firmIns : []}/></div>}
   </Block>;
   return <div className="bus-diagram nodrag" style={{ width: W, height: H }} onClick={() => setPick(null)}>
     <svg width={W} height={H} className="bus-wires">{wires}</svg>
-    <Block r={R.hm} label="Housing Market" tone={o.hm ? 'system-group' : 'system-closed'} open={o.hm} toggle={() => set('hm')} z={0}/>
+    <Block r={R.hm} label="Housing Market" tone={o.hm ? 'system-group' : 'system-closed'} open={o.hm} toggle={() => set('hm')} z={0} info="4 agents · 6 buses"/>
     {o.hm && CPB4.map(agent)}
-    <Block r={R.gov} label="Government" tone="reference"/>
-    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0}/>
-    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed"/><Block r={cbk} label="Central bank" tone="fin-closed"/>
+    <Block r={R.gov} label="Government" tone="reference" info="owner-occupier subsidy (d)"/>
+    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · Central bank"/>
+    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info="reserves · lending at rate + 1 pp"/>
       <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 24, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model</div></>}
-    <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0}/>
+    <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0} info="Treasury · Operations"/>
     {inside}
     <svg width={W} height={H} className="bus-wires bus-over">{over}</svg>
     {card}

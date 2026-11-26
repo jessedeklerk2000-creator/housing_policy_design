@@ -692,7 +692,7 @@ button,input { font:inherit; } button { cursor:pointer; } button:disabled { opac
 .figure-mode .circuit { overflow:visible; }  /* the subsidy signals run on from the CPB box edge into Households */
 /* bus view: resize grip on an opened statement box (Jesse) */
 .bus-grip { position:absolute; right:0; bottom:0; width:20px; height:20px; cursor:nwse-resize; z-index:6; border-bottom-right-radius:inherit; opacity:.8;
-  background:linear-gradient(135deg, transparent 0 45%, #3f9a1f 45% 55%, transparent 55% 65%, #3f9a1f 65% 75%, transparent 75%); }
+  background:linear-gradient(135deg, transparent 0 45%, #6b6b75 45% 55%, transparent 55% 65%, #6b6b75 65% 75%, transparent 75%); }
 .bus-grip:hover { opacity:1; }
 .circuit .u-signal.fig-u .u-fig-name { fill:#38b2d3; font:600 calc(var(--fig-label, 12px) * 2) Inter,system-ui,sans-serif; paint-order:stroke; stroke:#fff; stroke-width:6px; }
 .circuit .u-signal.fig-u .u-fig-name { text-anchor:start; }
@@ -746,3 +746,26 @@ body:has(.bank-full) { overflow:hidden; }
 /* Feedback round 2, A1: the value column has a fixed width and never wraps, so a changing number cannot change a box's height */
 .stmt-row { grid-template-columns:12px 1fr 34px 70px 12px; }
 .stmt-val { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+/* ---- Feedback round 2 (M. Mendel, 26 Nov 2026), bank (bus) view only ---- */
+/* A7: closed tiles say what is inside */
+.bus-tile-info { padding:6px 10px; font-size:13px; line-height:1.35; color:inherit; opacity:.92; text-shadow:none; font-variant-numeric:tabular-nums; }
+.bus-tile-info b { font-weight:700; }
+.bus-diagram .map-node.system-closed .bus-tile-info, .bus-diagram .map-node.reference .bus-tile-info { color:#fff; }
+.stmt-more { display:block; margin:6px 0 0; padding:0; border:0; background:none; font:inherit; font-size:11px; color:#5b3f8f; text-decoration:underline; cursor:pointer; }
+/* A6: no green or light blue. Accounting and the statements a neutral grey-brown, the ALM Desk violet, signals violet */
+.bus-diagram { --plot:#5b3f8f; }
+.bus-pick { --plot:#5b3f8f; }
+.bus-diagram .map-node.sensor { background:#e9e7e2; border-color:#6b6b75; color:#2b2b33; text-shadow:none; }
+.bus-diagram .map-node.sensor .block-head { background:#d9d6cf; border-color:#6b6b75; } .bus-diagram .map-node.sensor .block-head strong { color:#2b2b33; text-shadow:none; }
+.bus-diagram .map-node.sensor-open { background:#f6f5f2; border-color:#6b6b75; }
+.bus-diagram .map-node.sensor-open > .block-head { background:#d9d6cf; border-color:#6b6b75; } .bus-diagram .map-node.sensor-open > .block-head strong { color:#2b2b33; }
+.bus-diagram .map-node.controller { background:#ece8f5; border-color:#5b3f8f; color:#2b2140; text-shadow:none; }
+.bus-diagram .map-node.controller .block-head { background:#dcd4ec; border-color:#5b3f8f; } .bus-diagram .map-node.controller .block-head strong { color:#2b2140; text-shadow:none; }
+.bus-diagram .map-node.controller.open { background:#f6f4fa; }
+.bus-diagram .stmt-block { border-color:#6b6b75; } .bus-diagram .stmt-block h4 { color:#2b2b33; }
+.bus-diagram .stmt-bar i { background:#8a8a96; } .bus-diagram .stmt-bar i.neg { background:#d08a80; }
+.bus-diagram .stmt-row:hover { background:#f0eef5; } .bus-diagram .stmt-val:hover { background:#e4def0; } .bus-diagram .stmt-val.plotted { background:#dcd4ec; }
+.bus-diagram .stmt-formula { color:#4a3a6b; }
+.bus-diagram .map-node.bus-stmt { border-color:#6b6b75; }
+/* A8: one corner style, square (radius 2), as in a circuit drawing */
+.bus-diagram .map-node, .bus-diagram .map-node .block-head, .bus-diagram .bus-org-frame, .bus-diagram .bus-ceo, .bus-diagram .stmt-block, .bus-diagram .bus-stmt-body, .bus-pick, .bus-diagram .stmt-plot-card { border-radius:2px !important; }

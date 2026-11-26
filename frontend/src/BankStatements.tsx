@@ -11,6 +11,9 @@ const CHECKS = new Set(['balance_check', 'equity_check', 'cf_check']);
 const MINUS: Record<string, string[]> = {
   nii: ['interest_expense'], net_profit: ['impairments'], retained: ['dividend'], retained_cum: ['dividend_cum'], balance_check: ['liab_equity'], equity_check: ['equity'], cf_check: ['reserves'],
 };
+// A9 (M. Mendel): calmer statements. Hidden until "show all lines": the checks, lines that are zero over the whole run,
+// and the intermediate metrics (each still reachable by opening the ratio it feeds)
+const DETAIL = new Set(['rw_mortgages', 'rwa', 'asf', 'rsf']);
 const RATIO_OVER: Record<string, string> = { tier1: 'rwa', nsfr: 'rsf', leverage: 'assets', roe: 'equity', ltd: 'savings' };
 
 // The signals from the statements into the metrics (what ALM Reporting reads off the sheet)
@@ -18,7 +21,7 @@ export const KEY_INPUTS: [string, string][] = [['equity', 'equity'], ['mortgages
 
 export function BankStatements({ part = 'all', only }: { part?: 'all' | 'statements' | 'ratios'; only?: string }) {
   const { result, at } = useContext(AtContext);
-  const [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set()), [drag, setDrag] = useState<Record<string, [number, number]>>({});
+  const [all, setAll] = useState(false), [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set()), [drag, setDrag] = useState<Record<string, [number, number]>>({});
   const L: Ledger | undefined = result?.ledger;
   if (!result || !L) return <div className="stmt-empty">Run the simulation to see the statements.</div>;
   const val = (id: string) => { const t = readTrace(result, 'Ledger:' + id); return t ? t[at] : undefined; };
@@ -63,22 +66,28 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
       </div>}
     </div>;
   };
+  const zeroRun = (id: string) => series(id).every(v => Math.abs(v ?? 0) < 1e-6);
+  const shown = (id: string) => all || !(CHECKS.has(id) || DETAIL.has(id) || zeroRun(id));
+  const more = (ids: string[]) => { const n = ids.filter(id => CHECKS.has(id) || DETAIL.has(id) || zeroRun(id)).length;
+    return n ? <button className="stmt-more" onClick={() => setAll(a => !a)}>{all ? 'Show fewer lines' : `Show all lines (${n} more)`}</button> : null; };
   const block = (gid: string) => {
-    const g = L.groups.find(x => x.id === gid)!;
+    const g = L.groups.find(x => x.id === gid)!, ids = g.sections.flatMap(x => x.accounts);
     if (gid === 'balance') {
       const side = (s: string) => g.sections.filter(x => x.side === s);
       return <article className="stmt-block stmt-balance" key={gid}>
         <h4>{g.label}</h4>
         <div className="stmt-cols">
-          <div><div className="stmt-side">Debit · assets</div>{side('debit').map(sec => <section key={sec.label}>{sec.accounts.map(a => row(a, gid, 0))}</section>)}</div>
-          <div><div className="stmt-side">Credit · liabilities and equity</div>{side('credit').map(sec => <section key={sec.label}><div className="stmt-sec">{sec.label}</div>{sec.accounts.map(a => row(a, gid, 0))}</section>)}</div>
+          <div><div className="stmt-side">Assets</div>{side('debit').map(sec => <section key={sec.label}>{sec.accounts.filter(shown).map(a => row(a, gid, 0))}</section>)}</div>
+          <div><div className="stmt-side">Liabilities and equity</div>{side('credit').map(sec => <section key={sec.label}>{sec.accounts.filter(shown).map(a => row(a, gid, 0))}</section>)}</div>
         </div>
-        {side('').map(sec => <section key={sec.label}>{sec.accounts.map(a => row(a, gid, 0))}</section>)}
+        {side('').map(sec => <section key={sec.label}>{sec.accounts.filter(shown).map(a => row(a, gid, 0))}</section>)}
+        {more(ids)}
       </article>;
     }
     return <article className={'stmt-block stmt-' + gid} key={gid}>
       <h4>{g.label}{gid === 'income' ? <small> · per year</small> : gid === 'equity' ? <small> · since the start</small> : null}</h4>
-      {g.sections.map(sec => <section key={sec.label}><div className="stmt-sec">{sec.label}</div>{sec.accounts.map(a => row(a, gid, 0))}</section>)}
+      {g.sections.map(sec => { const acc = sec.accounts.filter(shown); return acc.length ? <section key={sec.label}><div className="stmt-sec">{sec.label}</div>{acc.map(a => row(a, gid, 0))}</section> : null; })}
+      {more(ids)}
     </article>;
   };
   const link = (from: string, to: string) => { const l = L.links.find(x => x[0] === from && x[1] === to); return l ? <div className="stmt-link">{l[2]} →</div> : null; };
@@ -108,9 +117,9 @@ export function StmtPlot({ y, at, years, unit, label }: { y: (number | null)[]; 
   const f = (v: number) => Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(2);
   return <div className="stmt-plot"><svg width={W} height={H} role="img" aria-label={`${label} over time`}>
     {lo < 0 && hi > 0 && <line x1={pad} x2={W - pad} y1={sy(0)} y2={sy(0)} stroke="#d5dbd8"/>}
-    <polyline fill="none" stroke="#3f9a1f" strokeOpacity={0.25} strokeWidth={2} points={pts(0, y.length)}/>
-    <polyline fill="none" stroke="#3f9a1f" strokeWidth={2} points={pts(0, at + 1)}/>
-    {Number.isFinite(ok[at]) && <circle cx={sx(at)} cy={sy(ok[at])} r={3.5} fill="#3f9a1f"/>}
+    <polyline fill="none" style={{ stroke: "var(--plot, #3f9a1f)" }} strokeOpacity={0.25} strokeWidth={2} points={pts(0, y.length)}/>
+    <polyline fill="none" style={{ stroke: "var(--plot, #3f9a1f)" }} strokeWidth={2} points={pts(0, at + 1)}/>
+    {Number.isFinite(ok[at]) && <circle cx={sx(at)} cy={sy(ok[at])} r={3.5} style={{ fill: "var(--plot, #3f9a1f)" }}/>}
     <text x={W - pad} y={11} textAnchor="end" className="mini-tick">{f(hi - m)}</text><text x={W - pad} y={H - 18} textAnchor="end" className="mini-tick">{f(lo + m)}</text>
     <text x={pad} y={H - 3} className="mini-tick">{years[0].toFixed(0)}</text><text x={W - pad} y={H - 3} textAnchor="end" className="mini-tick">{years[years.length - 1].toFixed(0)}</text>
   </svg><small>{unit}</small></div>;
