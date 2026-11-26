@@ -725,3 +725,21 @@ body:has(.bank-full) { overflow:hidden; }
 .bank-scen { width:340px; flex:0 0 340px; overflow-y:auto; border-right:1px solid var(--line); background:var(--panel); padding:10px; }
 .bank-handle { align-self:flex-start; margin:8px 4px; } .bank-scen, .bank-side { position:relative; max-height:none; }
 .bus-diagram .map-node.bus-stmt:has(.stmt-plot-card) { z-index:7 !important; }  /* a box with an open plot card above its neighbours, so the card is never covered */
+
+/* M. Mendel feedback (26 Nov 2026): My Bank steel blue, Financial sector grey-violet (Housing Market stays orange, the
+   plant; Government keeps the reference blue). Not a deep navy, and lighter and greyer than the reference blue #2b6599. */
+.bus-diagram .map-node.bank-closed { background:#e6eef7; border:1.6px solid #4f7cac; border-radius:8px; }
+.bus-diagram .map-node.bank-group { background:rgba(230,238,247,.55); border:1.4px dashed #4f7cac; border-radius:8px; }
+.bus-diagram .map-node.bank-closed .block-head, .bus-diagram .map-node.bank-group .block-head { background:#d5e1ee; border-color:#4f7cac; }
+.bus-diagram .map-node.bank-closed .block-head strong, .bus-diagram .map-node.bank-group .block-head strong { color:#2e4a6b; }
+.bus-diagram .map-node.fin-closed { background:#ecebf3; border:1.6px solid #7a7396; border-radius:8px; }
+.bus-diagram .map-node.fin-group { background:rgba(236,235,243,.55); border:1.4px dashed #7a7396; border-radius:8px; }
+.bus-diagram .map-node.fin-closed .block-head, .bus-diagram .map-node.fin-group .block-head { background:#dddaea; border-color:#7a7396; }
+.bus-diagram .map-node.fin-closed .block-head strong, .bus-diagram .map-node.fin-group .block-head strong { color:#3f3a57; }
+.bus-fs-note { position:absolute; font-size:12px; color:#3f3a57; font-style:italic; text-align:center; }
+/* My Bank's organisation: CEO header, divisions and units (no behaviour) */
+.bus-org-frame { position:absolute; border:1.4px solid rgba(79,124,172,.55); border-radius:10px; pointer-events:none; z-index:0; }
+.bus-org-frame > span { position:absolute; top:-11px; left:14px; background:#f4f7fb; padding:0 6px; font-size:13px; font-weight:700; color:#2e4a6b; }
+.bus-org-frame.unit { border-style:dashed; border-color:rgba(79,124,172,.45); } .bus-org-frame.unit > span { font-size:12px; font-weight:600; }
+.bus-ceo { position:absolute; text-align:center; font-size:12px; font-weight:700; letter-spacing:.08em; color:#2e4a6b; background:#d5e1ee; border:1px solid #4f7cac; border-radius:6px; padding:3px 0; z-index:2; }
+.bus-unit-tag { font-size:11px; font-style:italic; fill:#4f7cac; }

@@ -54,7 +54,7 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
   const box = (id: string): P => o[id] ? [size(id)[0] * S, size(id)[1] * S + HEAD] : TILE;
   const [cw, ch] = box('constructors'), [fw, fh] = box('firms'), [iw, ih] = box('investors'), [hw, hh] = box('households');
   const c1 = 220, w1 = Math.max(cw, fw), c2 = c1 + w1 + 320, w2 = Math.max(iw, hw);
-  const top = 120, row2 = top + Math.max(ch, ih) + 230;
+  const top = 300, row2 = top + Math.max(ch, ih) + 230;
   const R: Record<string, R> = {
     constructors: { x: c1 + w1 - cw, y: top, w: cw, h: ch }, investors: { x: c2, y: top, w: iw, h: ih },
     firms: { x: c1 + w1 - fw, y: row2, w: fw, h: fh }, households: { x: c2, y: row2, w: hw, h: hh },
@@ -63,15 +63,18 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
   // and the Government (as the Housing Market block in the control-loop view)
   R.hm = o.hm ? { x: Math.min(R.constructors.x, R.firms.x) - 50, y: top - 50 - HEAD, w: c2 + w2 + 50 - Math.min(R.constructors.x, R.firms.x) + 50, h: Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h) + 50 - (top - 50 - HEAD) }
     : { x: c1, y: top, w: 300, h: 460 };
+  // the Government (M. Mendel, 26 Nov 2026): a top-level player above the Housing Market, outside its frame
+  R.gov = { x: R.hm.x, y: R.hm.y - 170, w: 220, h: 80 };
   // the bank: closed tile, or level 1/2 with Accounting (bank breadboard + statements), ALCO, Σ and ALM Desk
   const bx = R.hm.x + R.hm.w + 280, by = top;
+  const IN = 170;  // top of the bank's content: room for the CEO header and the division frames
   const [bw0, bh0] = size('bank'), cs = 0.9, circ: P = [bw0 * cs, bh0 * cs];
-  let inner: null | { bs: R; acc: R; circ: R | null; sub: Record<string, R> | null; alco: R; sum: P; desk: R } = null;
+  let inner: null | { bs: R; acc: R; circ: R | null; sub: Record<string, R> | null; alco: R; sum: P; desk: R; fr: Record<string, R> } = null;
   if (o.bank) {
     // Operations = the bank's breadboard (process; the banking book); Accounting = the financial statements (sensor)
-    const bs: R = o.bs ? { x: bx + 140, y: by + 90, w: circ[0] + 20, h: HEAD + circ[1] + 20 } : { x: bx + 140, y: by + 90, w: 280, h: 420 };
+    const bs: R = o.bs ? { x: bx + 140, y: by + IN, w: circ[0] + 20, h: HEAD + circ[1] + 20 } : { x: bx + 140, y: by + IN, w: 280, h: 420 };
     // Accounting holds one box per statement, each closed until its + is clicked
-    let acc: R = { x: bs.x + bs.w + 150, y: by + 90, w: 230, h: 110 }, sub: Record<string, R> | null = null;
+    let acc: R = { x: bs.x + bs.w + 150, y: by + IN, w: 230, h: 110 }, sub: Record<string, R> | null = null;
     if (o.acc) {
       // sizes: dragged by the corner grip (Jesse)
       const sz = (k: string): P => { if (!o[k]) return [210, 72]; const base = sizes[k] ?? STMT_OPEN[k], fit = sizes['fit:' + k]?.[1];  // fit: measured content height (grows with an opened line)
@@ -83,10 +86,16 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
       sub = { inc, eq, cf, bal, key };
       acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(cf.y + cf.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
     }
-    const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + 90, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
+    const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + IN, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
     const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
-    inner = { bs, acc, alco, sum, desk, circ: o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null, sub };
-    R.bank = { x: bx, y: by, w: Math.max(acc.x + acc.w, desk.x + desk.w, alco.x + alco.w) + 70 - bx, h: Math.max(bs.y + bs.h, acc.y + acc.h, desk.y + desk.h) + 120 - by };
+    // My Bank (M. Mendel): two core divisions under the CEO. Banking Operations (COO) holds the breadboard; Finance &
+    // Treasury (CFO) holds Accounting & Reporting and ALM & Treasury (ALCO, Σ, ALM Desk)
+    const ops: R = { x: bx + 20, y: by + 90, w: bs.x + bs.w + 30 - (bx + 20), h: bs.y + bs.h + 80 - (by + 90) };
+    const accF: R = { x: acc.x - 20, y: acc.y - 36, w: acc.w + 40, h: acc.h + 56 };
+    const dr = Math.max(alco.x + alco.w, desk.x + desk.w), almF: R = { x: alco.x - 34, y: alco.y - 36, w: dr + 34 - (alco.x - 34), h: desk.y + desk.h + 24 - (alco.y - 36) };
+    const fin: R = { x: accF.x - 24, y: by + 90, w: almF.x + almF.w + 24 - (accF.x - 24), h: Math.max(accF.y + accF.h, almF.y + almF.h) + 30 - (by + 90) };
+    inner = { bs, acc, alco, sum, desk, circ: o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null, sub, fr: { ops, fin, almF, accF } };
+    R.bank = { x: bx, y: by, w: fin.x + fin.w + 40 - bx, h: Math.max(ops.y + ops.h, fin.y + fin.h) + 40 - by };
   } else R.bank = { x: bx, y: by, w: 260, h: Math.max(420, (o.hm ? R.households.y + R.households.h : R.hm.y + R.hm.h) + 30 - by) };  // tall enough for straight lines
   return { R, inner, c2, w2, circ, cs };
 }
@@ -203,7 +212,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     const gapBank = o.hm ? null : (R.hm.x + R.hm.w + R.bank.x) / 2;  // closed Housing Market: the gap between its tile and the bank
     const c = vertical ? (bus.id === 'mortgage' ? gapBank !== null ? gapBank - 45 : g.c2 + g.w2 + 90 : bus.id === 'deposit' ? gapBank !== null ? gapBank + 35 : g.c2 + g.w2 + 170 : (Math.min(A.x + A.w, Bb.x + Bb.w) + Math.max(A.x, Bb.x)) / 2 - LANE / 2 + off)
       : bus.id === 'firm' ? Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, Bb.y + Bb.h) + 70 : (A.y + A.h + Bb.y) / 2 - LANE / 2 + off;
-    if (!buses) {
+    if (!buses || (CPB4.includes(bus.a) && CPB4.includes(bus.b))) {  // inside the Housing Market: always port to port (M. Mendel)
       // Ports view: the same port pairs, each flow wired straight from one agent's terminal to the other's (solid = flow
       // f, dashed = return), in its own lane through the gap where the bus would be
       // lanes: the flow that must turn first gets the lane nearest its start, and the return turns on the side that keeps
@@ -240,18 +249,21 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   }
   // ---- the bank in the middle: the real economy on its left, the Financial sector (empty for now) on its right,
   // joined by the interbank bus (a money bus)
-  const IB = MONEY, ibY = B.y + B.h - 60, fs: R = { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
-  { const rx = B.x + B.w + 150, fy = fs.y + fs.h / 2 - LANE / 2, lo = Math.min(ibY, fy) - 24, hi = Math.max(ibY, fy) + LANE + 24;
-    if (!buses) {
-      const pf = [[B.x + B.w, ibY], [rx, ibY], [rx, fy], [fs.x, fy]], pq = [[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE], [rx + LANE, fy + LANE], [fs.x, fy + LANE]];
-      wires.push(line(pf, IB, 'ibf')); wires.push(line(pq, IB, 'ibq', '5 3'));
-    } else wires.push(<g key="ib">
-      {[0, LANE].map(k => <line key={k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
-      {line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1')}{line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2', '5 3')}
-      {line([[rx, fy], [fs.x, fy]], IB, 'ib3')}{line([[rx + LANE, fy + LANE], [fs.x, fy + LANE]], IB, 'ib4', '5 3')}
-      {[[rx, ibY], [rx + LANE, ibY + LANE], [rx, fy], [rx + LANE, fy + LANE]].map((q, i) => dot(q as P, IB, 'ibd' + i))}
-      <text x={rx + LANE / 2} y={lo - 12} textAnchor="middle" className="bus-name" fill={IB}>Interbank bus (€)</text>
-    </g>); }
+  const IB = MONEY, ibY = B.y + B.h - 60;
+  // the Financial sector (M. Mendel, 26 Nov 2026: scaffolding only): open, the two counterparties the model already has
+  const fs: R = o.fs ? { x: B.x + B.w + 320, y: B.y + 40, w: 340, h: 430 } : { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
+  const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 40, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 90, w: 260, h: 90 };
+  { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
+    const ys = [ibY, ...ends.map(e => e[1])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
+    const g2: ReactNode[] = [line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1'), line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2', '5 3')];
+    ends.forEach(([ex, ey, nm], k) => {
+      if (buses) { g2.push(line([[rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k, '5 3')); }
+      else { g2.push(line([[rx, ibY], [rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ibY + LANE], [rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k, '5 3')); }
+      if (nm) g2.push(<text key={'ibn' + k} x={(rx + LANE + ex) / 2} y={ey - 8} textAnchor="middle" className="bus-label" fill={IB}>{nm}</text>);
+    });
+    if (buses) { g2.unshift(...[0, LANE].map(k => <line key={'ibr' + k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>));
+      g2.push(<text key="ibname" x={rx + LANE / 2} y={lo - 12} textAnchor="middle" className="bus-name" fill={IB}>Interbank bus (€)</text>); }
+    wires.push(<g key="ib">{g2}</g>); }
   // ---- disturbances d: Covid (and the other active shocks) into the firms' breadboard, the subsidy into households
   const D = '#c0392b', SCALE: Record<string, keyof Scenario> = { d_income: 'income_scale', d_covid: 'covid_scale', d_crisis: 'crisis_scale' };
   const firmIns = map.disturbances.filter(d => d.target === 'firms' && !(SCALE[d.id] && scenario[SCALE[d.id]] === 0));
@@ -264,18 +276,20 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     const y = o.firms && e?.pins ? r.y + HEAD + inputPath('left', i, firmIns.length, map.layouts.firms.size as P, e.pins)[0][1] * S : r.y + HEAD + (r.h - HEAD) * (i + 1) / (firmIns.length + 1);
     wires.push(arrow([[r.x - 120, y], [r.x, y]], D, 'df' + d.id, 'd · ' + d.label)); wires.push(hit([[r.x - 120, y], [r.x, y]], 'df' + d.id, { kind: 'd', id: d.id, at: [r.x - 60, y] }, d.label + ': click to plot'));
   });
-  // the Government in the middle of the four agents; its subsidy enters the households from the top-left
-  const hh = R.households, gcx = (R.firms.x + R.firms.w + hh.x) / 2, gcy = (R.investors.y + R.investors.h + hh.y) / 2;
-  const gov: R = { x: gcx - 100, y: gcy - 35, w: 200, h: 70 }, gx = hh.x + 26, gy = gcy;
-  if (o.hm) {
-    wires.push(arrow([[gov.x + gov.w, gy], [gx, gy], [gx, hh.y]], D, 'dgov')); wires.push(<text key="dgovt" x={gov.x + gov.w + 8} y={gy - 7} className="bus-label" fill={D}>d · subsidy</text>);
-    wires.push(hit([[gov.x + gov.w, gy], [gx, gy], [gx, hh.y]], 'dgov', { kind: 'd', id: 'd_gov', at: [gx, gy] }, 'Government subsidy: click to plot'));
-  } else { const r = R.hm, y = r.y + HEAD + (r.h - HEAD) * (firmIns.length + 1) / (firmIns.length + 2), pts = [[r.x - 120, y], [r.x, y]];
-    wires.push(arrow(pts, D, 'dgov', 'd · subsidy')); wires.push(hit(pts, 'dgov', { kind: 'd', id: 'd_gov', at: [r.x - 60, y] }, 'Government subsidy: click to plot')); }
+  // the Government (M. Mendel): a top-level player; the fiscal bus (€) carries the subsidy into the Housing Market
+  // (closed: onto its tile; open: into the households, through the gap between the two columns)
+  const gov = R.gov, gx = gov.x + gov.w / 2, laneY = R.hm.y - 72, hh = R.households, gapX = hh.x - 60;
+  const govPts: number[][] = o.hm ? [[gx, gov.y + gov.h], [gx, laneY], [gapX, laneY], [gapX, (R.investors.y + R.investors.h + hh.y) / 2], [hh.x + 26, (R.investors.y + R.investors.h + hh.y) / 2], [hh.x + 26, hh.y]]
+    : [[gx, gov.y + gov.h], [gx, R.hm.y]];
+  wires.push(arrow(govPts, MONEY, 'dgov', 'd · subsidy', o.hm ? 0.3 : 0.5));
+  if (buses) { const x2 = o.hm ? gapX + 30 : gx + 40;
+    wires.push(<g key="fiscal">{[0, LANE].map(k => <line key={k} x1={gx - 40} x2={x2} y1={laneY + k} y2={laneY + k} stroke={MONEY} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
+      <text x={gx - 52} y={laneY + LANE} textAnchor="end" className="bus-name" fill={MONEY}>Fiscal bus (€)</text></g>); }
+  wires.push(hit(govPts, 'dgov', { kind: 'd', id: 'd_gov', at: [gx, laneY] }, 'Government subsidy: click to plot'));
   // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
   // the financial crisis comes from the Financial sector (other banks withdraw deposits, cut credit)
   // the financial crisis (Jesse): from outside into the Financial sector; it reaches the bank through the interbank link
-  { const fx = fs.x + fs.w / 2, pts = [[fx, fs.y - 110], [fx, fs.y]];
+  { const tgt = o.fs ? ob : fs, fx = tgt.x + tgt.w / 2, pts = [[fx, fs.y - 110], [fx, tgt.y]];  // open: into Other banks
     wires.push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); wires.push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [fx, fs.y - 50] }, 'Financial crisis: deposits withdrawn, firm credit cut: click to plot')); }
   // ---- inside the bank
   let inside: ReactNode = null;
@@ -340,8 +354,19 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       const pts = straight ? [[dk.x, uy], [bs.x + bs.w, uy]] : circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
       over.push(arrow(pts, PU, 'u' + i, name, 0.5));
     });
+    // the bank's organisation: CEO header, two divisions, their units; the sub-units of Banking Operations tag their ports
+    const { fr } = g.inner, ceo: P = [B.x + B.w / 2, B.y + HEAD + 18];
+    for (const f of [fr.ops, fr.fin]) wires.push(line([[ceo[0], ceo[1] + 12], [ceo[0], ceo[1] + 22], [f.x + f.w / 2, ceo[1] + 22], [f.x + f.w / 2, f.y - 12]], '#4f7cac', 'org' + f.x, '4 3', 1.4));  // above the division labels
+    const tag = (x: number, y: number, t: string, k: string) => over.push(<text key={k} x={x} y={y} className="bus-unit-tag">{t}</text>);
+    tag(B.x + 30, terminal(map, g, o, 'bank', 'mortgages').p[1] - 22, 'Loan operations', 'tg1');
+    tag(B.x + 30, terminal(map, g, o, 'bank', 'savings').p[1] - 22, 'Payment & deposit operations', 'tg2');
+    tag(terminal(map, g, o, 'bank', 'loans').p[0] + 70, bs.y + bs.h + 26, 'Loan operations', 'tg3');
+    tag(B.x + B.w - 250, ibY - 10, 'Payment & deposit operations', 'tg4');
+    const frame = (r: R, label: string, unit = false) => <div key={label} className={'bus-org-frame' + (unit ? ' unit' : '')} style={{ left: r.x, top: r.y, width: r.w, height: r.h }}><span>{label}</span></div>;
     inside = <>
-      <Block r={bs} label="Operations" tone={o.bs ? 'sub-group' : 'sub-closed'} open={o.bs} toggle={() => set('bs')} z={1}>
+      {frame(fr.ops, 'Banking Operations (COO)')}{frame(fr.fin, 'Finance & Treasury (CFO)')}{frame(fr.accF, 'Accounting & Reporting', true)}{frame(fr.almF, 'ALM & Treasury', true)}
+      <div className="bus-ceo" style={{ left: ceo[0] - 40, top: ceo[1] - 12, width: 80 }}>CEO</div>
+      <Block r={bs} label="Operations" tone={o.bs ? 'bank-group' : 'bank-closed'} open={o.bs} toggle={() => set('bs')} z={1}>
         {o.bs && circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - bs.x, top: circ.y - bs.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
       </Block>
       <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
@@ -362,7 +387,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       </Block>
     </>;
   }
-  const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h) + 140;
+  const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h) + 140;  // (y from 0: the Government sits above the Housing Market)
   // the card of a clicked flow, return, bus or shock
   let card: ReactNode = null;
   if (pick) {
@@ -394,9 +419,11 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <svg width={W} height={H} className="bus-wires">{wires}</svg>
     <Block r={R.hm} label="Housing Market" tone={o.hm ? 'system-group' : 'system-closed'} open={o.hm} toggle={() => set('hm')} z={0}/>
     {o.hm && CPB4.map(agent)}
-    {o.hm && <Block r={gov} label="Government" tone="reference bus-gov-block"/>}
-    <Block r={fs} label="Financial sector" tone="sub-closed"/>
-    <Block r={B} label="Bank" tone={o.bank ? 'sub-group' : 'sub-closed'} open={o.bank} toggle={() => set('bank')} z={0}/>
+    <Block r={R.gov} label="Government" tone="reference"/>
+    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0}/>
+    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed"/><Block r={cbk} label="Central bank" tone="fin-closed"/>
+      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 24, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model</div></>}
+    <Block r={B} label="My Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0}/>
     {inside}
     <svg width={W} height={H} className="bus-wires bus-over">{over}</svg>
     {card}
@@ -407,7 +434,7 @@ const nodeTypes = { diagram: Diagram };
 
 function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
   const n = result.year.length;
-  const [buses, setBuses] = useState(false);
+  const [buses, setBuses] = useState(true);  // buses on by default (M. Mendel, 26 Nov 2026)
   const [sizes, setSizes] = useState<Record<string, P>>({});
   const resize = useCallback((k: string, s: P | null) => setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }), []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
   const [at, setAt] = useState(n - 1), [playing, setPlaying] = useState(false), [o, setO] = useState<Open>({});
@@ -430,7 +457,7 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
     if (!map) return next;
     const g = geometry(next, map, sizes), byId: Record<string, R | undefined> = { ...g.R, ...g.inner?.sub, bs: g.inner?.bs, acc: g.inner?.acc, desk: g.inner?.desk };
     const target = next[k] ? byId[k] : subs.includes(k) ? byId.acc : (k === 'bs' || k === 'acc' || k === 'desk') ? g.R.bank : undefined;
-    if (k === 'acc' || subs.includes(k)) return next;  // Accounting and its statements open in place, no zoom (Jesse)
+    if (k === 'acc' || k === 'fs' || subs.includes(k)) return next;  // Accounting and its statements open in place, no zoom (Jesse)
     window.setTimeout(() => { if (target) rf.fitBounds({ x: target.x - 40, y: target.y - 40, width: target.w + 80, height: target.h + 80 }, { duration: 450 }); else rf.fitView({ duration: 450, padding: 0.04 }); }, 40);
     return next;
   }), [rf, map, sizes]);

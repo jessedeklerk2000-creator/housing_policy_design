@@ -10,17 +10,18 @@ const shot = async n => { await page.waitForTimeout(1000); await page.locator('.
 const click = async name => { await page.getByRole('button', { name }).dispatchEvent('click'); };
 const titles = await page.locator('.bus-diagram .block-head strong').allTextContents();
 await shot('bus_0');
+await click('Expand Financial sector'); await page.waitForTimeout(600); await shot('bus_fs'); await click('Collapse Financial sector'); await page.waitForTimeout(400);
 await click('Expand Housing Market'); await shot('bus_hm');
 // click a flow, a bus and a shock: a card with plots
 const clickHit = async t => { await page.locator('.bus-wires polyline', { has: page.locator('title', { hasText: t }) }).first().dispatchEvent('click'); await page.waitForTimeout(500);
   const n = await page.locator('.bus-pick svg').count(), title = await page.locator('.bus-pick b').first().textContent(); return { t, title, plots: n }; };
 const picks = [await clickHit('Houses:'), await clickHit('Covid'), await clickHit('Financial crisis')];
 await page.getByRole('button', { name: 'Buses' }).click(); await page.waitForTimeout(800); await shot('bus_buses');
-picks.push(await clickHit('Rent bus')); await page.getByRole('button', { name: 'Ports' }).click(); await page.waitForTimeout(500);
+picks.push(await clickHit('Mortgage bus')); await page.getByRole('button', { name: 'Ports' }).click(); await page.waitForTimeout(500);
 await shot('bus_pick'); await page.getByRole('button', { name: 'Close', exact: true }).first().dispatchEvent('click');
 await click('Expand Households'); await shot('bus_hh');
 await click('Collapse Households'); await page.waitForTimeout(600);
-await click('Expand Bank'); await shot('bus_1');
+await click('Expand My Bank'); await shot('bus_1');
 await click('Expand ALM Desk'); await shot('bus_2_desk');
 await click('Collapse ALM Desk'); await page.waitForTimeout(600);
 await click('Expand Operations'); await shot('bus_2_bs');
