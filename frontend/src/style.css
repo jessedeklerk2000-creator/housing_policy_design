@@ -763,18 +763,32 @@ body:has(.bank-full) { overflow:hidden; }
 .bus-diagram .map-node.controller .block-head { background:#dcd4ec; border-color:#5b3f8f; } .bus-diagram .map-node.controller .block-head strong { color:#2b2140; text-shadow:none; }
 .bus-diagram .map-node.controller.open { background:#f6f4fa; }
 .bus-diagram .stmt-block { border-color:#6b6b75; } .bus-diagram .stmt-block h4 { color:#2b2b33; }
-.bus-diagram .stmt-bar i { background:#8a8a96; } .bus-diagram .stmt-bar i.neg { background:#d08a80; }
 .bus-diagram .stmt-row:hover { background:#f0eef5; } .bus-diagram .stmt-val:hover { background:#e4def0; } .bus-diagram .stmt-val.plotted { background:#dcd4ec; }
 .bus-diagram .stmt-formula { color:#4a3a6b; }
-.bus-diagram .map-node.bus-stmt { border-color:#6b6b75; }
-/* A8: one corner style, square (radius 2), as in a circuit drawing */
-.bus-diagram .map-node, .bus-diagram .map-node .block-head, .bus-diagram .bus-org-frame, .bus-diagram .bus-ceo, .bus-diagram .stmt-block, .bus-diagram .bus-stmt-body, .bus-pick, .bus-diagram .stmt-plot-card { border-radius:2px !important; }
 /* A3: live values beside the e/f/d meters; the moving dots sit above the wires, below the meters */
 .bus-meter-val { font-size:10px; font-weight:600; fill:#2b2b33; paint-order:stroke; stroke:#fafbf7; stroke-width:3px; font-variant-numeric:tabular-nums; pointer-events:none; }
 .bus-wires.bus-dots { z-index:3; pointer-events:none; }
 /* B2: yield curve inside the Financial sector */
-.bus-yield { position:absolute; z-index:2; background:#fff; border:1.2px solid #7a7396; border-radius:2px; padding:6px 8px; font-size:12px; color:#3f3a57; box-sizing:border-box; }
+.bus-yield { position:absolute; z-index:2; background:#fff; border:1.2px solid #7a7396; border-radius:8px; padding:6px 8px; font-size:12px; color:#3f3a57; box-sizing:border-box; }
 .bus-yield small { color:#6b6680; font-size:10.5px; }
 /* B3: competitor bank tile */
 .bus-comp-body { padding:6px 10px; font-size:13px; display:flex; flex-direction:column; gap:2px; }
 .bus-comp-body .bus-kv.bad b { color:#c0392b; }
+/* A1 follow-up (Jesse, 26 Nov 2026): the year beside a time slider has a fixed width and tabular digits, so the
+   slider and its bar never shift while Play runs (both views) */
+.bus-time > span, .year-slider output { display:inline-block; min-width:3.4em; text-align:right; font-variant-numeric:tabular-nums; }
+.bus-tools-slot { flex:none; }
+/* The bank's blue ramp (Jesse, 26 Nov 2026): one colour family, lighter per level down. Bank (bank-closed/-group) >
+   divisions (l1: Banking Operations, Treasury) > units (l2: Operations, Accounting, ALCO, ALM Desk) > statements (l3) */
+.bus-diagram .map-node.bank-l1 { background:#e9f0f8; border:1.6px solid #6a8fb8; border-radius:8px; color:#2e4a6b; text-shadow:none; }
+.bus-diagram .map-node.bank-l1.open { background:rgba(233,240,248,.55); border-style:dashed; }
+.bus-diagram .map-node.bank-l1 > .block-head { background:#d9e5f1; border-color:#6a8fb8; }
+.bus-diagram .map-node.bank-l2 { background:#f1f6fb; border:1.5px solid #86a6c8; border-radius:8px; color:#2e4a6b; text-shadow:none; }
+.bus-diagram .map-node.bank-l2.open { background:rgba(241,246,251,.7); }
+.bus-diagram .map-node.bank-l2 > .block-head { background:#e4ecf5; border-color:#86a6c8; }
+.bus-diagram .map-node.bank-l3 { background:#f8fafd; border:1.4px solid #a3bbd6; border-radius:8px; color:#2e4a6b; text-shadow:none; }
+.bus-diagram .map-node.bank-l3 > .block-head { background:#edf2f8; border-color:#a3bbd6; }
+.bus-diagram .map-node.bank-l1 > .block-head strong, .bus-diagram .map-node.bank-l2 > .block-head strong, .bus-diagram .map-node.bank-l3 > .block-head strong { color:#2e4a6b; text-shadow:none; -webkit-text-stroke:0; }
+.bus-diagram .map-node.bank-l2 .bus-tile-info, .bus-diagram .map-node.bank-l1 .bus-tile-info, .bus-diagram .map-node.bank-l3 .bus-tile-info { color:#2e4a6b; }
+.bus-diagram .map-node.bank-l3 .stmt-block { border-color:#a3bbd6; } .bus-diagram .map-node.bank-l3 .stmt-block h4 { color:#2e4a6b; }
+.bus-diagram .map-node.bank-l1.open { background:transparent; }

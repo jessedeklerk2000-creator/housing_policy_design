@@ -21,13 +21,13 @@ picks.push(await clickHit('Mortgage bus')); await page.getByRole('button', { nam
 await shot('bus_pick'); await page.getByRole('button', { name: 'Close', exact: true }).first().dispatchEvent('click');
 await click('Expand Households'); await shot('bus_hh');
 await click('Collapse Households'); await page.waitForTimeout(600);
-await click('Expand Bank'); await shot('bus_1');
+await click('Expand Bank'); await shot('bus_1'); await click('Expand Treasury (treasurer)'); await shot('bus_1t');
 await click('Expand ALM Desk'); await shot('bus_2_desk');
 await click('Collapse ALM Desk'); await page.waitForTimeout(600);
-await click('Expand Operations'); await shot('bus_2_bs');
+await click('Expand Banking Operations (COO)'); await shot('bus_1o'); await click('Expand Operations'); await shot('bus_2_bs');
 await click('Collapse Operations'); await page.waitForTimeout(600);
 await click('Expand Accounting'); await shot('bus_2_acc');
-for (const b of ['Income statement', 'Equity statement', 'Cash flow statement', 'Balance sheet', 'Metrics']) await click('Expand ' + b);
+for (const b of ['Income statement', 'Cash flow statement', 'Balance sheet', 'Metrics']) await click('Expand ' + b);
 await page.waitForTimeout(600); await click('Collapse Metrics'); await click('Expand Metrics'); await shot('bus_3_stmts');
 await page.locator('.bus-stmt-body .stmt-val').first().dispatchEvent('click'); await page.waitForTimeout(400);
 const plotted = await page.locator('.bus-stmt-body .stmt-plot').count();

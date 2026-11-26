@@ -5,7 +5,7 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width: 1700, height: 1050 } }); const errors = []; page.on('pageerror', e => errors.push(String(e)));
 await page.goto('http://127.0.0.1:8001/?mode=bank'); await page.waitForSelector('.bus-diagram', { timeout: 60000 }); await page.waitForTimeout(2000);
 const click = async name => { await page.getByRole('button', { name, exact: true }).dispatchEvent('click'); await page.waitForTimeout(900); };
-await click('Expand Bank'); await click('Expand Accounting'); await click('Expand Metrics'); await page.waitForTimeout(800);
+await click('Expand Bank'); await click('Expand Treasury (treasurer)'); await click('Expand Accounting'); await click('Expand Metrics'); await page.waitForTimeout(800);
 await page.locator('.bus-canvas .react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(900);  // no auto-zoom on Accounting
 const box = () => page.locator('.map-node', { has: page.locator('strong', { hasText: /^Metrics$/ }) }).boundingBox();
 const b0 = await box(), g = await page.getByLabel('Resize Metrics').boundingBox();

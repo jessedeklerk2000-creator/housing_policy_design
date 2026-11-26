@@ -72,7 +72,8 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
   const more = (ids: string[]) => { const n = ids.filter(id => CHECKS.has(id) || DETAIL.has(id) || zeroRun(id)).length;
     return n ? <button className="stmt-more" onClick={() => setAll(a => !a)}>{all ? 'Show fewer lines' : `Show all lines (${n} more)`}</button> : null; };
   const block = (gid: string) => {
-    const g = L.groups.find(x => x.id === gid)!, ids = g.sections.flatMap(x => x.accounts);
+    const g = L.groups.find(x => x.id === gid); if (!g) return null;  // e.g. the equity statement, removed 26 Nov 2026
+    const ids = g.sections.flatMap(x => x.accounts);
     if (gid === 'balance') {
       const side = (s: string) => g.sections.filter(x => x.side === s);
       return <article className="stmt-block stmt-balance" key={gid}>
@@ -100,8 +101,8 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
   return <div className="bank-statements nodrag nowheel">
     <div className="stmt-head"><b>Financial statements · {year.toFixed(1)}</b><small>Model units (mortgage book 100 at the start). Click a line for its formula and source, a number to plot it. {L.basis}</small></div>
     <div className={'stmt-grid' + (part === 'statements' ? ' no-key' : '')}>
-      <div className="stmt-col">{block('income')}{link('income', 'equity')}{block('equity')}{L.groups.some(g => g.id === 'cashflow') && block('cashflow')}</div>
-      <div className="stmt-col">{link('equity', 'balance')}{block('balance')}</div>
+      <div className="stmt-col">{block('income')}{block('equity')}{L.groups.some(g => g.id === 'cashflow') && block('cashflow')}</div>
+      <div className="stmt-col">{link('income', 'balance')}{block('balance')}</div>
       {part === 'all' && <>{signals}<div className="stmt-col stmt-key">{block('ratios')}</div></>}
     </div>
   </div>;

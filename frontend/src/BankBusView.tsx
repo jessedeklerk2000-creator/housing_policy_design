@@ -23,8 +23,9 @@ type Side = 'L' | 'R' | 'T' | 'B';
 const LANE = 12, HEAD = 34, S = 0.5, TILE: P = [240, 140];
 const NONE: Selection = { kind: 'none', id: '' };
 // the statement boxes inside Accounting: ledger group and opened size
-const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['eq', 'Equity statement', 'equity'], ['bal', 'Balance sheet', 'balance'], ['cf', 'Cash flow statement', 'cashflow'], ['key', 'Metrics', 'ratios']];
-const STMT_OPEN: Record<string, P> = { cf: [380, HEAD + 330], inc: [380, HEAD + 330], eq: [380, HEAD + 190], bal: [620, HEAD + 300], key: [380, HEAD + 270] };
+// (no equity statement since 26 Nov 2026, Jesse: retained profit goes straight into equity on the balance sheet)
+const STMT: [string, string, string][] = [['inc', 'Income statement', 'income'], ['bal', 'Balance sheet', 'balance'], ['cf', 'Cash flow statement', 'cashflow'], ['key', 'Metrics', 'ratios']];
+const STMT_OPEN: Record<string, P> = { cf: [380, HEAD + 330], inc: [380, HEAD + 330], bal: [620, HEAD + 300], key: [380, HEAD + 270] };
 // One bus per conserved quantity (Jesse, 25 Nov 2026): a bus is a node, so it carries one good only and its flows sum
 // to zero. A market with a good and a payment gets two buses side by side (k of n): brown = real goods, green = money.
 type Bus = { id: string; label: string; color: string; a: string; b: string; flows: string[]; k?: number; n?: number };
@@ -51,6 +52,8 @@ const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1:
 type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
+type Inner = { bs: R; ops: R; tre: R; opsOpen: boolean; treOpen: boolean; circ: R | null;
+  t: null | { acc: R; sub: Record<string, R> | null; alco: R; sum: P; desk: R; accF: R; almF: R } };
 function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
   const size = (id: string) => map.layouts[id].size as P;
   const box = (id: string): P => o[id] ? [size(id)[0] * S, size(id)[1] * S + HEAD] : TILE;
@@ -64,42 +67,51 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
   // the Housing Market: closed, one tile with only its connections to the bank; open, a frame around the four agents
   // and the Government (as the Housing Market block in the control-loop view)
   R.hm = o.hm ? { x: Math.min(R.constructors.x, R.firms.x) - 50, y: top - 50 - HEAD, w: c2 + w2 + 50 - Math.min(R.constructors.x, R.firms.x) + 50, h: Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h) + 50 - (top - 50 - HEAD) }
-    : { x: c1, y: top, w: 300, h: 460 };
+    : { x: c1, y: top, w: 240, h: 260 };
   // the Government (M. Mendel, 26 Nov 2026): a top-level player above the Housing Market, outside its frame
   R.gov = { x: R.hm.x, y: R.hm.y - 170, w: 220, h: 80 };
   // the bank: closed tile, or level 1/2 with Accounting (bank breadboard + statements), ALCO, Σ and ALM Desk
   const bx = R.hm.x + R.hm.w + 280, by = top;
-  const IN = 170;  // top of the bank's content: room for the CEO header and the division frames
+  const IN = 170;  // top of the bank's content: room for the CEO header and the division boxes
   const [bw0, bh0] = size('bank'), cs = 0.9, circ: P = [bw0 * cs, bh0 * cs];
-  let inner: null | { bs: R; acc: R; circ: R | null; sub: Record<string, R> | null; alco: R; sum: P; desk: R; fr: Record<string, R> } = null;
+  let inner: null | Inner = null;
   if (o.bank) {
-    // Operations = the bank's breadboard (process; the banking book); Accounting = the financial statements (sensor)
-    const bs: R = o.bs ? { x: bx + 140, y: by + IN, w: circ[0] + 20, h: HEAD + circ[1] + 20 } : { x: bx + 140, y: by + IN, w: 280, h: 420 };
-    // Accounting holds one box per statement, each closed until its + is clicked
-    let acc: R = { x: bs.x + bs.w + 150, y: by + IN, w: 230, h: 110 }, sub: Record<string, R> | null = null;
-    if (o.acc) {
-      // sizes: dragged by the corner grip (Jesse)
-      const sz = (k: string): P => { if (!o[k]) return [210, 72]; const base = sizes[k] ?? STMT_OPEN[k], fit = sizes['fit:' + k]?.[1];  // fit: measured content height (grows with an opened line)
-        return [base[0], fit ? Math.max(sizes[k] ? base[1] : 0, fit + HEAD + 16) : base[1]]; }, x0 = acc.x + 44, y0 = acc.y + HEAD + 70;  // left margin: the net-profit line into the cash flow statement runs there
-      const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] }, eq: R = { x: x0, y: inc.y + inc.h + 70, w: sz('eq')[0], h: sz('eq')[1] };
-      const bal: R = { x: x0 + Math.max(inc.w, eq.w, sz('cf')[0]) + 120,  /* clear of the widest box in the left column */ y: y0, w: sz('bal')[0], h: sz('bal')[1] };
-      const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
-      const cf: R = { x: x0, y: eq.y + eq.h + 70, w: sz('cf')[0], h: sz('cf')[1] };  // cash flow statement under the equity statement (M. Mendel)
-      sub = { inc, eq, cf, bal, key };
-      acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(cf.y + cf.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
-    }
-    const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + IN, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
-    const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
-    // My Bank (M. Mendel): two core divisions under the CEO. Banking Operations (COO) holds the breadboard; Finance &
-    // Treasury (CFO) holds Accounting & Reporting and ALM & Treasury (ALCO, Σ, ALM Desk). Round 2 (A5): the division is
-    // "Treasury", headed by the treasurer; Accounting & Reporting stays inside it (QUESTIONS_BANK_VIEW.md 4)
-    const ops: R = { x: bx + 20, y: by + 90, w: bs.x + bs.w + 30 - (bx + 20), h: bs.y + bs.h + 80 - (by + 90) };
-    const accF: R = { x: acc.x - 20, y: acc.y - 36, w: acc.w + 40, h: acc.h + 56 };
-    const dr = Math.max(alco.x + alco.w, desk.x + desk.w), almF: R = { x: alco.x - 34, y: alco.y - 36, w: dr + 34 - (alco.x - 34), h: desk.y + desk.h + 24 - (alco.y - 36) };
-    const fin: R = { x: accF.x - 24, y: by + 90, w: almF.x + almF.w + 24 - (accF.x - 24), h: Math.max(accF.y + accF.h, almF.y + almF.h) + 30 - (by + 90) };
-    inner = { bs, acc, alco, sum, desk, circ: o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null, sub, fr: { ops, fin, almF, accF } };
-    R.bank = { x: bx, y: by, w: fin.x + fin.w + 40 - bx, h: Math.max(ops.y + ops.h, fin.y + fin.h) + 40 - by };
-  } else R.bank = { x: bx, y: by, w: 260, h: Math.max(420, (o.hm ? R.households.y + R.households.h : R.hm.y + R.hm.h) + 30 - by) };  // tall enough for straight lines
+    // Two divisions under the CEO (M. Mendel; Jesse 26 Nov 2026: both are boxes one level down): Banking Operations (COO)
+    // opens into Operations (the bank's breadboard); Treasury (treasurer) opens into Accounting, ALCO, Σ and the ALM Desk.
+    const L1 = by + 90, opsOpen = !!o.bops, treOpen = !!o.tre;
+    let bs: R, ops: R;
+    if (opsOpen) {
+      bs = o.bs ? { x: bx + 60, y: by + IN, w: circ[0] + 20, h: HEAD + circ[1] + 20 } : { x: bx + 60, y: by + IN, w: 240, h: 240 };
+      ops = { x: bx + 20, y: L1, w: bs.w + 80, h: bs.y + bs.h + 60 - L1 };
+    } else { ops = { x: bx + 20, y: L1, w: 260, h: 240 }; bs = ops; }
+    const tx = ops.x + ops.w + 160;
+    let tre: R, t: Inner['t'] = null;
+    if (treOpen) {
+      // Accounting holds one box per statement, each closed until its + is clicked
+      let acc: R = { x: tx + 44, y: by + IN, w: 230, h: 110 }, sub: Record<string, R> | null = null;
+      if (o.acc) {
+        // sizes: dragged by the corner grip (Jesse)
+        const sz = (k: string): P => { if (!o[k]) return [210, 72]; const base = sizes[k] ?? STMT_OPEN[k], fit = sizes['fit:' + k]?.[1];  // fit: measured content height (grows with an opened line)
+          return [base[0], fit ? Math.max(sizes[k] ? base[1] : 0, fit + HEAD + 16) : base[1]]; }, x0 = acc.x + 44, y0 = acc.y + HEAD + 70;  // left margin: the net-profit line into the cash flow statement runs there
+        const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] };
+        const bal: R = { x: x0 + Math.max(inc.w, sz('cf')[0]) + 120,  /* clear of the widest box in the left column */ y: y0, w: sz('bal')[0], h: sz('bal')[1] };
+        const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
+        const cf: R = { x: x0, y: inc.y + inc.h + 70, w: sz('cf')[0], h: sz('cf')[1] };  // cash flow statement under the income statement
+        sub = { inc, cf, bal, key };
+        acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(cf.y + cf.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
+      }
+      const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + IN, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
+      const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
+      const accF: R = { x: acc.x - 20, y: acc.y - 36, w: acc.w + 40, h: acc.h + 56 };
+      const dr = Math.max(alco.x + alco.w, desk.x + desk.w), almF: R = { x: alco.x - 34, y: alco.y - 36, w: dr + 34 - (alco.x - 34), h: desk.y + desk.h + 24 - (alco.y - 36) };
+      tre = { x: tx, y: L1, w: almF.x + almF.w + 24 - tx, h: Math.max(accF.y + accF.h, almF.y + almF.h) + 30 - L1 };
+      t = { acc, sub, alco, sum, desk, accF, almF };
+    } else tre = { x: tx, y: L1, w: 260, h: 240 };
+    // a closed Banking Operations reaches below Accounting, so Operations' lines into Treasury and the rates u back run straight
+    if (!opsOpen && t) ops.h = Math.max(240, t.accF.y + t.accF.h + 100 - L1);
+    inner = { bs, ops, tre, opsOpen, treOpen, t, circ: opsOpen && o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null };
+    R.bank = { x: bx, y: by, w: tre.x + tre.w + 40 - bx, h: Math.max(ops.y + ops.h, tre.y + tre.h) + 40 - by };
+  } else R.bank = { x: bx, y: by, w: 240, h: o.hm ? Math.max(260, R.households.y + R.households.h + 30 - by) : R.hm.h };  // as tall as the closed Housing Market: straight lines
   return { R, inner, c2, w2, circ, cs };
 }
 
@@ -141,25 +153,24 @@ function terminal(map: MapData, g: Geo, o: Open, agent: string, flow: string): {
   return { p, q: vertical ? [p[0], p[1] + 10 * sign] : [p[0] + 10 * sign, p[1]], side };
 }
 
-// A7 (M. Mendel): a closed tile is never an empty box: a short content line under its title
+// (info: a content line under the title; not drawn since 26 Nov 2026, Jesse: no text in the boxes)
 function Block({ r, label, tone, open, toggle, children, z, info }: { r: R; label: string; tone: string; open?: boolean; toggle?: () => void; children?: ReactNode; z?: number; info?: ReactNode }) {
   return <div className={`map-node ${tone}${open ? ' open bus-open-block' : ''}`} style={{ position: 'absolute', left: r.x, top: r.y, width: r.w, height: r.h, zIndex: z ?? 2 }}>
     <div className="block-head"><strong>{label}</strong>{toggle && <button className="toggle nodrag" aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`} onClick={e => { e.stopPropagation(); toggle(); }}>{open ? <Minus size={13}/> : <Plus size={13}/>}</button>}</div>
-    {!open && info && <div className="bus-tile-info">{info}</div>}
     {children}
   </div>;
 }
 
 // A statement box body that reports its content height, so the box grows or shrinks with opened lines (Jesse)
 // Feedback round 2 (A1): the height follows opened and closed lines only, never a value. Value cells have a fixed width
-// (style.css), and while Play runs the measured height is frozen (Inner drops 'fit:' updates); build re-measures.
-function FitBody({ k, onH, style, build, children }: { k: string; onH: (k: string, h: number) => void; style: React.CSSProperties; build: number; children: ReactNode }) {
+// (style.css), and while Play runs the measured height is frozen (Inner drops 'fit:' updates).
+function FitBody({ k, onH, style, children }: { k: string; onH: (k: string, h: number) => void; style: React.CSSProperties; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current?.querySelector('.stmt-block') as HTMLElement | null; if (!el) return;  // the statement itself, not its stretched wrapper
     const report = () => onH(k, el.offsetHeight + 12); report();
     const ro = new ResizeObserver(report); ro.observe(el); return () => ro.disconnect();
-  }, [k, onH, build]);
+  }, [k, onH]);
   return <div ref={ref} className="bus-stmt-body nowheel" style={style}>{children}</div>;
 }
 
@@ -221,9 +232,9 @@ function YieldCurve({ r, result, at }: { r: R; result: Result; at: number }) {
   </div>;
 }
 
-type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void; build: number };
+type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
-  const { result, at, o, set, map, scenario, desk, buses, sizes, resize, build } = data;
+  const { result, at, o, set, map, scenario, desk, buses, sizes, resize } = data;
   const rf = useReactFlow();
   const fitH = useCallback((k: string, h: number) => { if (Math.abs((sizes['fit:' + k]?.[1] ?? 0) - h) > 2) resize('fit:' + k, [0, h]); }, [sizes, resize]);
   STRAIGHT.on = !buses;
@@ -271,7 +282,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     </g>;
   };
   // a closed statement box shows its headline line at the cursor (A7)
-  const HEADLINE: Record<string, [string, string]> = { inc: ['net_profit', 'net profit'], eq: ['equity', 'equity'], bal: ['assets', 'total assets'], cf: ['cf_net', 'net change in cash'], key: ['tier1', 'Tier 1'] };
+  const HEADLINE: Record<string, [string, string]> = { inc: ['net_profit', 'net profit'], bal: ['assets', 'total assets'], cf: ['cf_net', 'net change in cash'], key: ['tier1', 'Tier 1'] };
   const tileValue = (k: string) => { const [id, name] = HEADLINE[k], x = readTrace(result, 'Ledger:' + id)?.[at], u = result.ledger?.accounts[id]?.unit ?? '';
     return <>{name} <b>{x == null ? '–' : u.startsWith('%') ? x.toFixed(1) + '%' : x.toFixed(1)}</b></>; };
   const wires: ReactNode[] = [], over: ReactNode[] = [], rails: Record<string, { c: number; vertical: boolean; hi: number }> = {};  // over: drawn above the blocks (wires into an opened breadboard)
@@ -281,7 +292,6 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     const a = pts[pts.length - 2], b = pts[pts.length - 1], ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
     const h = [[b[0] - 10 * Math.cos(ang - 0.4), b[1] - 10 * Math.sin(ang - 0.4)], b, [b[0] - 10 * Math.cos(ang + 0.4), b[1] - 10 * Math.sin(ang + 0.4)]];
     const i = Math.min(pts.length - 2, Math.floor(at2 * (pts.length - 1))), m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2], vert = pts[i][0] === pts[i + 1][0];
-    if (color === SIG) dots.push({ key: 'sig' + key, pts, v: label && / · 0 \(/.test(label) ? 0 : 0.5, color });  // A3: signal dots, none on a 0 signal
     return <g key={key}>{line(pts, color, key + 'l')}<polyline points={h.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={2}/>
       {label && <text x={m[0] + (vert ? 10 : 0)} y={m[1] + (vert ? 4 : -7)} textAnchor={vert ? 'start' : 'middle'} className="bus-label" fill={color}>{label}</text>}</g>;
   };
@@ -310,7 +320,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
         const [lo, hi] = ax(ea) < ax(eb) ? [ea, eb] : [eb, ea], down = ay(hi) >= ay(lo), qs = Math.sign(ay({ p: lo.q }) - ay(lo)) || 1;
         const via = (a: P, b: P, x: number): number[][] => vertical ? [a, [x, a[1]], [x, b[1]], b] : [a, [a[0], x], [b[0], x], b];
         const pf = via(ea.p, eb.p, lane), pq = via(ea.q, eb.q, lane + (down === (qs > 0) ? -9 : 9));
-        wires.push(line(pf, bus.color, `${bus.id}${j}p`)); wires.push(line(pq, bus.color, `${bus.id}${j}q`, '5 3'));
+        wires.push(line(pf, bus.color, `${bus.id}${j}p`)); wires.push(line(pq, bus.color, `${bus.id}${j}q`));
         flowDots(pf, flow, bus.a, bus.color, `${bus.id}${j}p`); flowDots(pq, flow, bus.a, bus.color, `${bus.id}${j}q`, true);
         wires.push(hit(pf, `${bus.id}${j}p`, { kind: 'flow', id: flow, at: pf[1] as P }, `${f?.label ?? flow}: click to plot`));
         wires.push(hit(pq, `${bus.id}${j}q`, { kind: 'ret', id: flow, at: pq[1] as P }, `${f?.label ?? flow} · incentive (return): click to plot`));
@@ -325,7 +335,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       wires.push(line([pt, end], bus.color, key, dash)); wires.push(dot(end, bus.color, key + 'd'));
       wires.push(hit([pt, end], key, { kind: ret ? 'ret' : 'flow', id: flow, at: end }, `${f?.label ?? flow}${ret ? ' · incentive (return)' : ''}: click to plot`));
     };
-    ends.forEach((e, i) => { const f = bus.flows[Math.floor(i / 2)], who = i % 2 ? bus.b : bus.a; branch(e.p, 0, `${bus.id}${i}p`, f); branch(e.q, LANE, `${bus.id}${i}q`, f, '5 3');
+    ends.forEach((e, i) => { const f = bus.flows[Math.floor(i / 2)], who = i % 2 ? bus.b : bus.a; branch(e.p, 0, `${bus.id}${i}p`, f); branch(e.q, LANE, `${bus.id}${i}q`, f);
       flowDots([e.p, taps[taps.length - 2]], f, who, bus.color, `${bus.id}${i}p`); flowDots([e.q, taps[taps.length - 1]], f, who, bus.color, `${bus.id}${i}q`, true);
       // A3: e and f meters at the boundary port, on the branch just outside the block
       const t = taps[taps.length - 2], dl = Math.hypot(t[0] - e.p[0], t[1] - e.p[1]) || 1, u: P = [(t[0] - e.p[0]) / dl, (t[1] - e.p[1]) / dl], dd = Math.min(30, dl / 2.5);
@@ -334,8 +344,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       over.push(meterAt(em, 'e', raw(effSig(f)), bus.color, `${bus.id}${i}me`, () => setPick({ kind: 'ret', id: f, at: em }), vertical ? 'b' : 'r')); });
     const along = taps.map(t => vertical ? t[1] : t[0]), lo = Math.min(...along) - 24, hi = Math.max(...along) + 24; rails[bus.id] = { c, vertical, hi };
     wires.unshift(<g key={bus.id + 'rails'}>
-      {[0, LANE].map(k => <line key={k} x1={vertical ? c + k : lo} x2={vertical ? c + k : hi} y1={vertical ? lo : c + k} y2={vertical ? hi : c + k} stroke={bus.color} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
-      <text x={vertical ? c + LANE / 2 : hi + 14} y={vertical ? (bus.n ? Math.min(A.y, Bb.y) - 12 - 18 * (bus.n - 1 - (bus.k ?? 0)) : lo - 12) : c + LANE} textAnchor={vertical ? 'middle' : 'start'} className="bus-name" fill={bus.color}>{bus.label}</text>
+      {[0, LANE].map(k => <line key={k} x1={vertical ? c + k : lo} x2={vertical ? c + k : hi} y1={vertical ? lo : c + k} y2={vertical ? hi : c + k} stroke={bus.color} strokeWidth={6} strokeLinecap="round"/>)}
+      <text x={vertical ? c + LANE / 2 : hi + 14} y={vertical ? (bus.n ? Math.min(A.y, Bb.y) - 12 - 18 * (bus.n - 1 - (bus.k ?? 0)) : bus.id === 'deposit' ? hi + 22 : lo - 12) : c + LANE} textAnchor={vertical ? 'middle' : 'start'} className="bus-name" fill={bus.color}>{bus.label}</text>
       {hit(vertical ? [[c + LANE / 2, lo], [c + LANE / 2, hi]] : [[lo, c + LANE / 2], [hi, c + LANE / 2]], bus.id + 'rail', { kind: 'bus', id: bus.id, at: vertical ? [c + LANE, lo + 40] : [lo + 40, c + LANE] }, `${bus.label}: click to plot its flows`)}
     </g>);
   }
@@ -348,13 +358,13 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 30, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 60, w: 260, h: 100 };
   { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'DNB / central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
     const ys = [ibY, ...ends.map(e => e[1])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
-    const g2: ReactNode[] = [line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1'), line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2', '5 3')];
+    const g2: ReactNode[] = [line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1'), line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2')];
     ends.forEach(([ex, ey, nm], k) => {
-      if (buses) { g2.push(line([[rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k, '5 3')); }
-      else { g2.push(line([[rx, ibY], [rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ibY + LANE], [rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k, '5 3')); }
+      if (buses) { g2.push(line([[rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k)); }
+      else { g2.push(line([[rx, ibY], [rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ibY + LANE], [rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k)); }
       if (nm) g2.push(<text key={'ibn' + k} x={(rx + LANE + ex) / 2} y={ey - 8} textAnchor="middle" className="bus-label" fill={IB}>{nm}</text>);
     });
-    if (buses) { g2.unshift(...[0, LANE].map(k => <line key={'ibr' + k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>));
+    if (buses) { g2.unshift(...[0, LANE].map(k => <line key={'ibr' + k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round"/>));
       g2.push(<text key="ibname" x={rx + LANE / 2} y={lo - 12} textAnchor="middle" className="bus-name" fill={IB}>Interbank bus (€)</text>); }
     wires.push(<g key="ib">{g2}</g>);
     // A3: f = net inflow of other banks' deposits (cash flow statement), e = the interbank rate (interest ÷ deposits)
@@ -379,7 +389,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // ---- disturbances d: Covid (and the other active shocks) into the firms' breadboard, the subsidy into households
   const dMeter = (pts: number[][], id: string, key: string) => { const d = map.disturbances.find(x => x.id === id); const sig = id === 'd_others' ? 'I(Bk_shape)' /* crisis intensity 0..1: zero outside the crisis */ : d?.signal ?? '';
     const a = pts[pts.length - 2], b = pts[pts.length - 1], c: P = [a[0] + (b[0] - a[0]) * 0.6, a[1] + (b[1] - a[1]) * 0.6];
-    dots.push({ key: 'dd' + key, pts, v: Math.abs(norm(sig)), color: '#c0392b' }); over.push(meterAt(c, 'd', raw(sig), '#c0392b', 'dm' + key, () => setPick({ kind: 'd', id, at: c }), Math.abs(a[1] - b[1]) < 0.5 ? 'b' : 'r')); };
+    over.push(meterAt(c, 'd', raw(sig), '#c0392b', 'dm' + key, () => setPick({ kind: 'd', id, at: c }), Math.abs(a[1] - b[1]) < 0.5 ? 'b' : 'r')); };
   const D = '#c0392b', SCALE: Record<string, keyof Scenario> = { d_income: 'income_scale', d_covid: 'covid_scale', d_crisis: 'crisis_scale' };
   const firmIns = map.disturbances.filter(d => d.target === 'firms' && !(SCALE[d.id] && scenario[SCALE[d.id]] === 0));
   if (!o.hm) firmIns.forEach((d, i) => {
@@ -409,112 +419,115 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // ---- B1: DNB (the supervisor) sends the regulatory thresholds to the ALCO: a signal with its values (CRR, DNB)
   { const th = result.ledger?.thresholds ?? [], txt = th.map(t => t.value == null ? `RW floor ${t.text ?? ''}`.replace(' up to 55% LTV, 45% above', '/45%') : `${t.label.replace(' minimum', '')} ≥ ${t.value}${t.unit}`).join(' · ');
     const src: P = o.fs ? [cbk.x + cbk.w, cbk.y + 30] : [fs.x + fs.w, fs.y + fs.h / 2], top = B.y - 100, xr = fs.x + fs.w + 40;
-    const tgt: P = g.inner ? [g.inner.alco.x + g.inner.alco.w - 30, g.inner.alco.y] : [B.x + B.w - 50, B.y];
+    const gi = g.inner, tgt: P = gi?.t ? [gi.t.alco.x + gi.t.alco.w - 30, gi.t.alco.y] : gi ? [gi.tre.x + gi.tre.w - 50, gi.tre.y] : [B.x + B.w - 50, B.y];
     over.push(arrow([src, [xr, src[1]], [xr, top], [tgt[0], top], tgt], SIG, 'sig-dnb', 'DNB thresholds: ' + txt, 0.55)); }
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
-    const { bs, acc, alco, sum, desk: dk, circ, sub } = g.inner, G = SIG, PU = SIG, bankFlows = Object.keys(map.layouts.bank.ports);
-    // the bank's ports into the Bank circuit (onto the breadboard's own terminals when it is open)
+    const { bs, ops, tre, opsOpen, treOpen, circ, t: T } = g.inner, G = SIG, PU = SIG, bankFlows = Object.keys(map.layouts.bank.ports);
+    // the bank's ports into Operations (onto the breadboard's own terminals when it is open; the division's edge when closed)
     for (const f of bankFlows) {
       const t = terminal(map, g, o, 'bank', f), col = BUSES.find(b => (b.flows as readonly string[]).includes(f))!.color;
       const into = (p: P): P => t.side === 'L' ? [circ ? circ.x : bs.x, p[1]] : [p[0], circ ? circ.y + circ.h : bs.y + bs.h];
-      const W2 = circ ? over : wires; W2.push(line([t.p, into(t.p)], col, 'in' + f)); W2.push(line([t.q, into(t.q)], col, 'iq' + f, '5 3'));
+      const W2 = circ ? over : wires; W2.push(line([t.p, into(t.p)], col, 'in' + f)); W2.push(line([t.q, into(t.q)], col, 'iq' + f));
       const fl = flowOf(f), cp = fl ? (fl.source === 'bank' ? fl.target : fl.source) : ''; flowDots([t.p, into(t.p)], f, cp, col, 'in' + f); flowDots([t.q, into(t.q)], f, cp, col, 'iq' + f, true);
     }
-    // the interbank bus enters on the bank's right edge and runs underneath the other blocks to the Bank circuit
+    // the interbank bus enters on the bank's right edge and runs underneath the other blocks into Operations
     { const t = terminal(map, g, o, 'bank', 'loan_interest'), x = t.p[0] + 120, bot = circ ? circ.y + circ.h : bs.y + bs.h;
-      wires.push(line([[B.x + B.w, ibY], [x, ibY], [x, bot]], IB, 'in-ib')); wires.push(line([[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]], IB, 'iq-ib', '5 3')); }
-    // the breadboard's stocks and flows are read by Accounting; Accounting reports y to Σ
-    { const ya = sub ? acc.y + HEAD + 30 : acc.y + 55;
+      const v = -norm('Ledger:cf_interbank'), p1 = [[B.x + B.w, ibY], [x, ibY], [x, bot]], p2 = [[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]];
+      wires.push(line(p1, IB, 'in-ib')); wires.push(line(p2, IB, 'iq-ib'));
+      dots.push({ key: 'in-ib', pts: p1, v, color: IB }, { key: 'iq-ib', pts: p2, v: -v, color: IB }); }
+    const ceo: P = [B.x + B.w / 2, B.y + HEAD + 18], tv = (k: string) => readTrace(result, k)?.[at];
+    const appetite = `risk appetite: Tier 1 ${tv('Bank_target_t1')?.toFixed(1) ?? '–'}% · NSFR ${tv('Bank_target_nsfr')?.toFixed(0) ?? '–'}%`;
+    // CEO -> Banking Operations: a lending-volume target, not in the model yet, so 0 (named, to be connected later)
+    { const ox = bs.x + bs.w - 70, yS = ceo[1] + 26;
+      over.push(arrow([[ceo[0] - 40, ceo[1]], [ceo[0] - 60, ceo[1]], [ceo[0] - 60, yS], [ox, yS], [ox, bs.y]], SIG, 'sig-ceo-ops', 'lending volume target · 0 (not modelled)', 0.8)); }
+    let parts: ReactNode = null;
+    if (!T) {
+      // Treasury closed: its signals at the division's edge (CEO in, Operations' stocks and flows in, the rates u out)
+      over.push(arrow([[ceo[0] + 40, ceo[1]], [tre.x + tre.w / 2, ceo[1]], [tre.x + tre.w / 2, tre.y]], SIG, 'sig-ceo-alco', appetite, 0.5));
+      const yx = tre.y + 60; wires.push(arrow([[bs.x + bs.w, yx], [tre.x, yx]], G, 'x', 'stocks · flows', 0.5));
+      ['u₁ loan rate', 'u₂ savings rate'].forEach((name, i) => { const y = tre.y + 150 + 40 * i; over.push(arrow([[tre.x, y], [circ ? circ.x + circ.w : bs.x + bs.w, y]], PU, 'u' + i, name, 0.5)); });
+    } else {
+      const { acc, alco, sum, desk: dk, sub, accF, almF } = T;
+      over.push(arrow([[ceo[0] + 40, ceo[1]], [alco.x + alco.w / 2, ceo[1]], [alco.x + alco.w / 2, alco.y]], SIG, 'sig-ceo-alco', appetite, 0.5));
+      // the breadboard's stocks and flows are read by Accounting; Accounting reports y to Σ
+      { const ya = sub ? acc.y + HEAD + 30 : acc.y + 55;
+        if (sub) {
+          // stocks -> balance sheet, rates and flows -> income statement, the home value (LTV, DNB mortgage risk weight) -> metrics
+          over.push(arrow([[bs.x + bs.w, ya], [sub.bal.x + 40, ya], [sub.bal.x + 40, sub.bal.y]], G, 'x', 'stocks', 0));
+          const yf = acc.y + HEAD + 44; over.push(arrow([[bs.x + bs.w, yf], [sub.inc.x + 40, yf], [sub.inc.x + 40, sub.inc.y]], G, 'xf', 'rates · flows', 0));
+          const yl = acc.y + acc.h + 26, ys = bs.y + bs.h - 20, kx = sub.key.x + sub.key.w / 2, xg = acc.x - 40;
+          over.push(arrow([[bs.x + bs.w, ys], [xg, ys], [xg, yl], [kx, yl], [kx, sub.key.y + sub.key.h]], G, 'xl', 'home value (LTV)', 0.62));
+        }
+        else wires.push(arrow([[bs.x + bs.w, ya], [acc.x, ya]], G, 'x', 'stocks · flows', 0.5)); }
+      { const k = sub?.key, yy = k ? k.y + Math.min(k.h / 2, 45) : acc.y + 55, xm = alco.x - 45;
+        (k ? over : wires).push(arrow([[k ? k.x + k.w : acc.x + acc.w, yy], [xm, yy], [xm, sum[1]], [sum[0] - 17, sum[1]]], G, 'y', 'y₁ Tier 1 · y₂ NSFR', 0.15)); }
+      // inside Accounting: retained profit into equity on the balance sheet, balance-sheet items and net profit into the metrics
       if (sub) {
-        // what each statement is computed from (bank_ledger.py): stocks -> balance sheet, rates and flows -> income statement,
-        // the home value (LTV, for the DNB mortgage risk weight) -> metrics
-        over.push(arrow([[bs.x + bs.w, ya], [sub.bal.x + 40, ya], [sub.bal.x + 40, sub.bal.y]], G, 'x', 'stocks', 0));
-        const yf = acc.y + HEAD + 44; over.push(arrow([[bs.x + bs.w, yf], [sub.inc.x + 40, yf], [sub.inc.x + 40, sub.inc.y]], G, 'xf', 'rates · flows', 0));
-        // round underneath Accounting (the left edge inside it carries net profit into the cash flow statement)
-        const yl = acc.y + acc.h + 26, ys = bs.y + bs.h - 20, kx = sub.key.x + sub.key.w / 2, xg = acc.x - 40;
-        over.push(arrow([[bs.x + bs.w, ys], [xg, ys], [xg, yl], [kx, yl], [kx, sub.key.y + sub.key.h]], G, 'xl', 'home value (LTV)', 0.62));
+        const { inc, cf, bal, key } = sub;
+        { const yi = inc.y + inc.h - 16, xl = inc.x - 22, yc = cf.y + 30, ym = (yi + yc) / 2;
+          over.push(arrow([[inc.x, yi], [xl, yi], [xl, yc], [cf.x, yc]], G, 's-cfnp'));
+          over.push(<text key="s-cfnp-t" className="bus-label" fill={G} textAnchor="middle" transform={`translate(${xl - 6} ${ym}) rotate(-90)`}>net profit</text>); }
+        { const xb = bal.x + 40, yc = cf.y + 46; over.push(arrow([[xb, bal.y + bal.h], [xb, yc], [cf.x + cf.w, yc]], G, 's-cfst', 'changes in stocks', 0.5)); }
+        { const ey = inc.y + 60, mx = bal.x - 50; over.push(arrow([[inc.x + inc.w, ey], [mx, ey], [mx, bal.y + 60], [bal.x, bal.y + 60]], G, 's-ret', 'retained profit → equity', 0)); }
+        const items = KEY_INPUTS.filter(([id]) => id !== 'net_profit');
+        if (o.bal && o.key) items.forEach(([id, name], i) => { const y = bal.y + HEAD + 24 + i * 30; over.push(arrow([[bal.x + bal.w, y], [key.x, y]], G, 's-' + id, name)); });
+        else over.push(arrow([[bal.x + bal.w, bal.y + HEAD + 10], [key.x, bal.y + HEAD + 10]], G, 's-items', 'balance-sheet items'));
+        { const x1 = inc.x + inc.w - 40, ly = inc.y - 16, kx = key.x - 14, ky = key.y + key.h - 10;
+          over.push(arrow([[x1, inc.y], [x1, ly], [kx, ly], [kx, ky], [key.x, ky]], G, 's-np', 'net profit', 0.3)); }
       }
-      else wires.push(arrow([[bs.x + bs.w, ya], [acc.x, ya]], G, 'x', 'stocks · flows', 0.5)); }
-    { const k = sub?.key, yy = k ? k.y + Math.min(k.h / 2, 45) : acc.y + 55, xm = alco.x - 45;
-      (k ? over : wires).push(arrow([[k ? k.x + k.w : acc.x + acc.w, yy], [xm, yy], [xm, sum[1]], [sum[0] - 17, sum[1]]], G, 'y', 'y₁ Tier 1 · y₂ NSFR', 0.15)); }
-    // inside Accounting: retained profit into equity, equity onto the balance sheet, balance-sheet items and net profit into the metrics
-    if (sub) {
-      const { inc, eq, cf, bal, key } = sub;
-      // into the cash flow statement: net profit from the income statement, changes in stocks from the balance sheet
-      { const yi = inc.y + inc.h - 16, xl = inc.x - 22, yc = cf.y + 30, ym = (yi + yc) / 2;
-        over.push(arrow([[inc.x, yi], [xl, yi], [xl, yc], [cf.x, yc]], G, 's-cfnp'));
-        over.push(<text key="s-cfnp-t" className="bus-label" fill={G} textAnchor="middle" transform={`translate(${xl - 6} ${ym}) rotate(-90)`}>net profit</text>); }  // beside its line, clear of the equity statement
-      { const xb = bal.x + 40, yc = cf.y + 46; over.push(arrow([[xb, bal.y + bal.h], [xb, yc], [cf.x + cf.w, yc]], G, 's-cfst', 'changes in stocks', 0.5)); }
-      over.push(arrow([[inc.x + 60, inc.y + inc.h], [inc.x + 60, eq.y]], G, 's-ret', 'retained profit'));
-      { const ey = eq.y + 45, mx = bal.x - 50; over.push(arrow([[eq.x + eq.w, ey], [mx, ey], [mx, bal.y + 45], [bal.x, bal.y + 45]], G, 's-eq', 'equity', 0)); }
-      const items = KEY_INPUTS.filter(([id]) => id !== 'net_profit');
-      if (o.bal && o.key) items.forEach(([id, name], i) => { const y = bal.y + HEAD + 24 + i * 30; over.push(arrow([[bal.x + bal.w, y], [key.x, y]], G, 's-' + id, name)); });
-      else over.push(arrow([[bal.x + bal.w, bal.y + HEAD + 10], [key.x, bal.y + HEAD + 10]], G, 's-items', 'balance-sheet items'));
-      { const x1 = inc.x + inc.w - 40, ly = inc.y - 16, kx = key.x - 14, ky = key.y + key.h - 10;
-        over.push(arrow([[x1, inc.y], [x1, ly], [kx, ly], [kx, ky], [key.x, ky]], G, 's-np', 'net profit', 0.3)); }
+      wires.push(arrow([[sum[0], alco.y + alco.h], [sum[0], sum[1] - 17]], SIG, 'r', 'r₁, r₂'));
+      const dt = (q: P): P => { const k = (dk.w - 16) / DESK_VB[0]; return [dk.x + 8 + q[0] * k, dk.y + HEAD + 6 + q[1] * k]; };
+      if (o.desk) {
+        const [e2, e1] = [dt(DESK_T.e2), dt(DESK_T.e1)], ly = dk.y - 28;
+        over.push(arrow([[sum[0], sum[1] + 17], [sum[0], ly], [dk.x - 30, ly], [dk.x - 30, e2[1]], e2], SIG, 'e2', 'e₂ NSFR', 0.6));
+        over.push(arrow([[dk.x - 30, e2[1]], [dk.x - 30, e1[1]], e1], SIG, 'e1', 'e₁ Tier 1', 0.5));
+      } else wires.push(arrow([[sum[0], sum[1] + 17], [sum[0], dk.y]], SIG, 'e', 'e₁, e₂'));
+      // u: the desk's rates into the bank's rate sources (B§Mortgage_rate_ALM and B2 on the breadboard)
+      const el = (name: string): P | null => { const e = map.elements.find(x => x.agent === 'bank' && x.name === name); if (!circ || !e?.pins) return null;
+        const cx = e.pins.reduce((s, p) => s + p[0], 0) / e.pins.length, cy = e.pins.reduce((s, p) => s + p[1], 0) / e.pins.length; return [circ.x + cx * g.cs, circ.y + cy * g.cs]; };
+      const uT = [el('B§Mortgage_rate_ALM') ?? [bs.x + bs.w, bs.y + bs.h - 110] as P, el('B2') ?? [bs.x + bs.w, bs.y + bs.h - 60] as P];
+      ['u₁ loan rate', 'u₂ savings rate'].forEach((name, i) => {
+        const uy = dk.y + 45 + 30 * i, mx = acc.x + acc.w + 40 + 25 * i, t = uT[i], top = Math.min(bs.y, acc.y) - 20 - 18 * i, dx = bs.x + bs.w + 40 + 20 * i;
+        const head: number[][] = o.desk ? (() => { const u = dt(i ? DESK_T.u2 : DESK_T.u1), rx = dk.x + dk.w + 30 + 22 * i; return [u, [rx, u[1]], [rx, top]]; })() : [[dk.x, uy], [mx, uy], [mx, top]];
+        const straight = !circ && !sub && !o.desk && uy > bs.y + HEAD && uy < bs.y + bs.h;
+        const yt = accF.y + accF.h + 30 + 25 * i, mx2 = acc.x + acc.w + 60 + 25 * i;
+        const pts = !opsOpen ? (o.desk ? [head[0], head[1], [head[1][0], yt], [ops.x + ops.w, yt]] : [[dk.x, uy], [mx2, uy], [mx2, yt], [ops.x + ops.w, yt]]) : straight ? [[dk.x, uy], [bs.x + bs.w, uy]] : circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
+        over.push(arrow(pts, PU, 'u' + i, name, 0.5));
+      });
+      const frame = (r: R, label: string) => <div key={label} className="bus-org-frame unit" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}><span>{label}</span></div>;
+      parts = <>
+        {frame(accF, 'Accounting & Reporting')}{frame(almF, 'ALM')}
+        <Block r={acc} label="Accounting" tone="bank-l2" open={o.acc} toggle={() => set('acc')} z={1} info="3 statements · metrics"/>
+        {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone="bank-l3 bus-stmt" open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3} info={tileValue(k)}>  {/* open: above the wires, so a dragged plot card stays on top */}
+          {o[k] && <FitBody k={k} onH={fitH} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
+            <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></FitBody>}
+          {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
+            onDoubleClick={e => { e.stopPropagation(); resize(k, null); }}
+            onPointerDown={e => { e.stopPropagation(); e.preventDefault(); const el = e.currentTarget, z = rf.getZoom(), x0 = e.clientX, y0 = e.clientY, s0 = sub[k]; el.setPointerCapture(e.pointerId);
+              const move = (ev: PointerEvent) => resize(k, [Math.max(240, s0.w + (ev.clientX - x0) / z), Math.max(HEAD + 120, s0.h + (ev.clientY - y0) / z)]);
+              const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+              el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }}/>}
+        </Block>)}
+        <Block r={alco} label="ALCO" tone="bank-l2" info="targets: Tier 1 · NSFR"/>
+        <div className="map-node summing" style={{ position: 'absolute', left: sum[0] - 17, top: sum[1] - 17, width: 34, height: 34, zIndex: 2 }}/>
+        <Block r={dk} label="ALM Desk" tone="bank-l2" open={o.desk} toggle={() => set('desk')} info="PI on FTP · PI on spread">
+          {o.desk && <div className="bus-breadboard" style={{ position: 'absolute', left: 8, right: 8, top: HEAD + 6, bottom: 8 }}><AtContext.Provider value={{ result, at }}>{desk}</AtContext.Provider></div>}
+        </Block>
+      </>;
     }
-    wires.push(arrow([[sum[0], alco.y + alco.h], [sum[0], sum[1] - 17]], SIG, 'r', 'r₁, r₂'));
-    // the desk's terminals in canvas units (open desk), from its breadboard coordinates
-    const dt = (q: P): P => { const k = (dk.w - 16) / DESK_VB[0]; return [dk.x + 8 + q[0] * k, dk.y + HEAD + 6 + q[1] * k]; };
-    if (o.desk) {
-      const [e2, e1] = [dt(DESK_T.e2), dt(DESK_T.e1)], ly = dk.y - 28;
-      over.push(arrow([[sum[0], sum[1] + 17], [sum[0], ly], [dk.x - 30, ly], [dk.x - 30, e2[1]], e2], SIG, 'e2', 'e₂ NSFR', 0.6));
-      over.push(arrow([[dk.x - 30, e2[1]], [dk.x - 30, e1[1]], e1], SIG, 'e1', 'e₁ Tier 1', 0.5));
-    } else wires.push(arrow([[sum[0], sum[1] + 17], [sum[0], dk.y]], SIG, 'e', 'e₁, e₂'));
-    // u: the desk's rates into the bank's rate sources (B§Mortgage_rate_ALM and B2 on the breadboard)
-    const el = (name: string): P | null => { const e = map.elements.find(x => x.agent === 'bank' && x.name === name); if (!circ || !e?.pins) return null;
-      const cx = e.pins.reduce((s, p) => s + p[0], 0) / e.pins.length, cy = e.pins.reduce((s, p) => s + p[1], 0) / e.pins.length; return [circ.x + cx * g.cs, circ.y + cy * g.cs]; };
-    const uT = [el('B§Mortgage_rate_ALM') ?? [bs.x + bs.w, bs.y + bs.h - 110] as P, el('B2') ?? [bs.x + bs.w, bs.y + bs.h - 60] as P];
-    ['u₁ loan rate', 'u₂ savings rate'].forEach((name, i) => {  // labels on the top lane, clear of each other
-      // over the top of Accounting, then down into the breadboard's rate source (or the closed box's right edge)
-      const uy = dk.y + 45 + 30 * i, mx = acc.x + acc.w + 40 + 25 * i, t = uT[i], top = Math.min(bs.y, acc.y) - 20 - 18 * i, dx = bs.x + bs.w + 40 + 20 * i;
-      // open desk: from its rate output on the right, round the desk and over the top lane
-      const head: number[][] = o.desk ? (() => { const u = dt(i ? DESK_T.u2 : DESK_T.u1), rx = dk.x + dk.w + 30 + 22 * i; return [u, [rx, u[1]], [rx, top]]; })() : [[dk.x, uy], [mx, uy], [mx, top]];
-      // Operations and Accounting closed: straight from the desk into Operations (Jesse)
-      const straight = !circ && !sub && !o.desk && uy > bs.y + HEAD && uy < bs.y + bs.h;
-      const pts = straight ? [[dk.x, uy], [bs.x + bs.w, uy]] : circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
-      over.push(arrow(pts, PU, 'u' + i, name, 0.5));
-    });
-    // the bank's organisation: CEO header, two divisions, their units; the sub-units of Banking Operations tag their ports
-    const { fr } = g.inner, ceo: P = [B.x + B.w / 2, B.y + HEAD + 18];
-    // A4 (M. Mendel): no dashed structure lines; the chiefs send signals, each with a name and its value at the cursor.
-    // CEO -> ALCO: the risk appetite (the ALCO targets); CEO -> Banking Operations: a lending-volume target, not in the
-    // model yet, so 0 (named, to be connected later). The ALM Desk's rates (u) and Operations -> Accounting are drawn below.
-    { const tv = (k: string) => readTrace(result, k)?.[at], t1 = tv('Bank_target_t1'), ns = tv('Bank_target_nsfr'), yS = ceo[1] + 26;
-      const toA: number[][] = [[ceo[0] + 40, ceo[1]], [alco.x + alco.w / 2, ceo[1]], [alco.x + alco.w / 2, alco.y]];
-      over.push(arrow(toA, SIG, 'sig-ceo-alco', `risk appetite: Tier 1 ${t1 == null ? '–' : t1.toFixed(1) + '%'} · NSFR ${ns == null ? '–' : ns.toFixed(0) + '%'}`, 0.5));
-      const ox = bs.x + bs.w - 70, toO: number[][] = [[ceo[0] - 40, ceo[1]], [ceo[0] - 60, ceo[1]], [ceo[0] - 60, yS], [ox, yS], [ox, bs.y]];
-      over.push(arrow(toO, SIG, 'sig-ceo-ops', 'lending volume target · 0 (not modelled)', 0.6)); }
-    const tag = (x: number, y: number, t: string, k: string) => over.push(<text key={k} x={x} y={y} className="bus-unit-tag">{t}</text>);
-    tag(B.x + 30, terminal(map, g, o, 'bank', 'mortgages').p[1] - 22, 'Loan operations', 'tg1');
-    tag(B.x + 30, terminal(map, g, o, 'bank', 'savings').p[1] - 22, 'Payment & deposit operations', 'tg2');
-    tag(terminal(map, g, o, 'bank', 'loans').p[0] + 70, bs.y + bs.h + 26, 'Loan operations', 'tg3');
-    tag(B.x + B.w - 250, ibY - 10, 'Payment & deposit operations', 'tg4');
-    const frame = (r: R, label: string, unit = false) => <div key={label} className={'bus-org-frame' + (unit ? ' unit' : '')} style={{ left: r.x, top: r.y, width: r.w, height: r.h }}><span>{label}</span></div>;
+    // the sub-units of Banking Operations tag their ports (classic back-office units: loans, deposits, payments)
+    // Banking Operations' sub-units (classic back-office units; the full org chart is still to be decided with M. Mendel)
+    if (opsOpen) over.push(<text key="tg" x={ops.x + 16} y={ops.y + HEAD + 22} className="bus-unit-tag">loan operations · deposit operations · payments & settlement</text>);
     inside = <>
-      {frame(fr.ops, 'Banking Operations (COO)')}{frame(fr.fin, 'Treasury (treasurer)')}{frame(fr.accF, 'Accounting & Reporting', true)}{frame(fr.almF, 'ALM', true)}
       <div className="bus-ceo" style={{ left: ceo[0] - 40, top: ceo[1] - 12, width: 80 }}>CEO</div>
-      <Block r={bs} label="Operations" tone={o.bs ? 'bank-group' : 'bank-closed'} open={o.bs} toggle={() => set('bs')} z={1} info="mortgages · firm loans · savings">
+      <Block r={ops} label="Banking Operations (COO)" tone="bank-l1" open={opsOpen} toggle={() => set('bops')} z={opsOpen ? 0 : 1} info="loan · deposit · payment operations"/>
+      {opsOpen && <Block r={bs} label="Operations" tone="bank-l2" open={o.bs} toggle={() => set('bs')} z={1} info="mortgages · firm loans · savings">
         {o.bs && circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - bs.x, top: circ.y - bs.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
-      </Block>
-      <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1} info="5 statements · metrics"/>
-      {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3} info={tileValue(k)}>  {/* open: above the wires, so a dragged plot card stays on top */}
-        {o[k] && <FitBody k={k} onH={fitH} build={build} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
-          <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></FitBody>}
-        {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
-          onDoubleClick={e => { e.stopPropagation(); resize(k, null); }}
-          onPointerDown={e => { e.stopPropagation(); e.preventDefault(); const el = e.currentTarget, z = rf.getZoom(), x0 = e.clientX, y0 = e.clientY, s0 = sub[k]; el.setPointerCapture(e.pointerId);
-            const move = (ev: PointerEvent) => resize(k, [Math.max(240, s0.w + (ev.clientX - x0) / z), Math.max(HEAD + 120, s0.h + (ev.clientY - y0) / z)]);
-            const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
-            el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); }}/>}
-      </Block>)}
-      <Block r={alco} label="ALCO" tone="reference" info="targets: Tier 1 · NSFR"/>
-      <div className="map-node summing" style={{ position: 'absolute', left: sum[0] - 17, top: sum[1] - 17, width: 34, height: 34, zIndex: 2 }}/>
-      <Block r={dk} label="ALM Desk" tone="controller" open={o.desk} toggle={() => set('desk')} info="PI on FTP · PI on spread">
-        {o.desk && <div className="bus-breadboard" style={{ position: 'absolute', left: 8, right: 8, top: HEAD + 6, bottom: 8 }}><AtContext.Provider value={{ result, at }}>{desk}</AtContext.Provider></div>}
-      </Block>
+      </Block>}
+      <Block r={tre} label="Treasury (treasurer)" tone="bank-l1" open={treOpen} toggle={() => set('tre')} z={treOpen ? 0 : 1} info="Accounting & Reporting · ALCO · ALM Desk"/>
+      {parts}
     </>;
   }
   const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h, comp.y + comp.h) + 140;  // (y from 0: the Government sits above the Housing Market)
@@ -562,7 +575,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       return <div onClick={e => { e.stopPropagation(); if (compOn) setPick({ kind: 'comp', id: 'comp', at: [comp.x + comp.w, comp.y] }); }} style={{ cursor: compOn ? 'pointer' : undefined }}>
         <Block r={comp} label="Competitor bank" tone="bank-closed bus-comp" z={2}>
           {compOn ? <div className="bus-comp-body">{row('Tier 1 (min 6%)', t1, t1 != null && t1 < 6)}{row('NSFR', v('I(Bk_nsfrc)'))}{row('Loan-to-deposit', v('I(Bk_ltdc)'))}{row('Market share', v('I(Bk_sharec)'))}</div>
-            : <div className="bus-tile-info">off · switch it on under Other banks in the Scenario panel</div>}
+            : null}
         </Block></div>; })()}
     <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0} info="Treasury · Operations"/>
     {inside}
@@ -577,7 +590,7 @@ const nodeTypes = { diagram: Diagram };
 function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
   const n = result.year.length;
   const [buses, setBuses] = useState(true);  // buses on by default (M. Mendel, 26 Nov 2026)
-  const [sizes, setSizes] = useState<Record<string, P>>({}), [build, setBuild] = useState(0), playRef = useRef(false);
+  const [sizes, setSizes] = useState<Record<string, P>>({}), playRef = useRef(false);
   // A1: no layout change while Play runs (a measured height is a 'fit:' size; dragged sizes come from the user)
   const resize = useCallback((k: string, s: P | null) => { if (playRef.current && k.startsWith('fit:')) return; setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }); }, []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
   const [at, setAt] = useState(n - 1), [playing, setPlaying] = useState(false), [o, setO] = useState<Open>({});
@@ -595,25 +608,25 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
   const set = useCallback((k: string) => setO(old => {
     const next: Open = { ...old, [k]: !old[k] };
     const subs = STMT.map(x => x[0]);
-    if (k === 'bank' && !next.bank) for (const x of ['bs', 'acc', 'desk', ...subs]) next[x] = false;
+    if (k === 'bank' && !next.bank) for (const x of ['bops', 'tre', 'bs', 'acc', 'desk', ...subs]) next[x] = false;
+    if (k === 'bops' && !next.bops) next.bs = false;
+    if (k === 'tre' && !next.tre) for (const x of ['acc', 'desk', ...subs]) next[x] = false;
     if (k === 'hm' && !next.hm) for (const x of CPB4) next[x] = false;
     if (k === 'acc' && !next.acc) for (const x of subs) next[x] = false;
     if (!map) return next;
-    const g = geometry(next, map, sizes), byId: Record<string, R | undefined> = { ...g.R, ...g.inner?.sub, bs: g.inner?.bs, acc: g.inner?.acc, desk: g.inner?.desk };
-    const target = next[k] ? byId[k] : subs.includes(k) ? byId.acc : (k === 'bs' || k === 'acc' || k === 'desk') ? g.R.bank : undefined;
+    const g = geometry(next, map, sizes), byId: Record<string, R | undefined> = { ...g.R, ...g.inner?.t?.sub, bops: g.inner?.ops, tre: g.inner?.tre, bs: g.inner?.bs, acc: g.inner?.t?.acc, desk: g.inner?.t?.desk };
+    const target = next[k] ? byId[k] : subs.includes(k) ? byId.acc : (k === 'bs') ? g.inner?.ops : (k === 'acc' || k === 'desk') ? g.inner?.tre : (k === 'bops' || k === 'tre') ? g.R.bank : undefined;
     if (k === 'acc' || k === 'fs' || subs.includes(k)) return next;  // Accounting and its statements open in place, no zoom (Jesse)
     window.setTimeout(() => { if (target) rf.fitBounds({ x: target.x - 40, y: target.y - 40, width: target.w + 80, height: target.h + 80 }, { duration: 450 }); else rf.fitView({ duration: 450, padding: 0.04 }); }, 40);
     return next;
   }), [rf, map, sizes]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
-    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize, build } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize, build]);
+    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize]);
   const tools = <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
       <input type="range" min={0} max={n - 1} value={Math.min(at, n - 1)} onChange={e => { setPlaying(false); setAt(+e.target.value); }}/>
       <div className="segmented small" role="group" aria-label="Connections"><button className={!buses ? 'active' : ''} aria-pressed={!buses} onClick={() => setBuses(false)}>Ports</button><button className={buses ? 'active' : ''} aria-pressed={buses} onClick={() => setBuses(true)}>Buses</button></div>
-      {/* A2 (M. Mendel): building the layout is a step of its own; Play only moves time */}
-      <button className="ghost small" title="Measure every open box again and fit the view (the layout stays fixed while Play runs)" onClick={() => { setPlaying(false); playRef.current = false; setBuild(b => b + 1); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 80); }}>Rebuild layout</button>
       <button className="ghost small" onClick={() => { setO({}); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 40); }}>Close all</button>
     </div>;
   return <>

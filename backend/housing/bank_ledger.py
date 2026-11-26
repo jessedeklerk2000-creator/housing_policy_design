@@ -154,8 +154,8 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
             dict(label="Interest income", accounts=["ii_mortgages", "ii_firms", "ii_reserves", "interest_income"]),
             dict(label="Interest expense", accounts=["ie_savings", "ie_interbank", "ie_cb", "interest_expense"]),
             dict(label="Result", accounts=["nii", "impairments", "net_profit", "dividend", "retained"])]),
-        dict(id="equity", label="Equity statement", sections=[
-            dict(label="Equity since the start", accounts=["equity_open", "profit_cum", "dividend_cum", "retained_cum", "equity", "equity_check"])]),
+        # no equity statement since 26 Nov 2026 (Jesse): retained profit goes straight into equity on the balance sheet; the
+        # cumulative accounts stay as the inputs of equity (open the equity line to see them)
         dict(id="cashflow", label="Cash flow statement", sections=[
             dict(label="Operating activities", accounts=["cf_profit", "cf_mortgages", "cf_firm_loans", "cf_savings", "cf_interbank", "cf_operating"]),
             dict(label="Investing activities", accounts=["cf_investing"]),
@@ -168,6 +168,6 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     ]
     values = {k: [round(float(x), 4) if keep else None for x, keep in zip(a, valid)] for k, a in v.items()}
     return dict(version="bank-ledger-1", groups=groups, accounts=defs, values=values, thresholds=THRESHOLDS,
-                links=[["income", "equity", "Retained profit"], ["equity", "balance", "Equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"],
+                links=[["income", "balance", "Retained profit → equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"],
                        ["balance", "cashflow", "Changes in stocks"], ["income", "cashflow", "Net profit"]],
                 basis="Statements built from the bank netlist's stocks and flows. Cash is the balancing item; current accounts are on the sheet but not yet connected to the model.")
