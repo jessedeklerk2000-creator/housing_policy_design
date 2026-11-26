@@ -33,14 +33,17 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
   const row = (id: string, path: string, depth: number, op = ''): ReactElement => {
     const a = L.accounts[id], x = val(id), k = path + '/' + id, isOpen = open.has(k), check = CHECKS.has(id);
     // bar: share of the largest value of this account over the run (same idea as DynaBI's account bars)
-    const s = series(id), scale = Math.max(1e-9, ...s.map(v => Math.abs(v ?? 0))), w = check ? 0 : Math.min(50, Math.abs(x ?? 0) / scale * 50);
+    // A10: one fixed scale over the run (max |value|); an account that never changes sign uses the whole width, so the
+    // bar moves twice as far for the same change
+    const s = series(id), scale = Math.max(1e-9, ...s.map(v => Math.abs(v ?? 0))), both = s.some(v => (v ?? 0) < -1e-9) && s.some(v => (v ?? 0) > 1e-9);
+    const half = both ? 50 : 100, w = check ? 0 : Math.min(half, Math.abs(x ?? 0) / scale * half), left = both ? ((x ?? 0) < 0 ? 50 - w : 50) : (x ?? 0) < 0 ? 100 - w : 0;
     const ok = check ? Math.abs(x ?? 0) < 0.01 : undefined;
     // a plotted value: the plot to the right of its line (Jesse, 25 Nov 2026)
     return <div key={k} className={'stmt-entry' + (depth ? ' sub' : '')}>
       <div className={'stmt-line' + (plots.has(k) ? ' plotted' : '')}><button className={'stmt-row' + (TOTALS.has(id) && !depth ? ' total' : '') + (check ? ' check' : '')} onClick={() => toggle(k)} title={a.formula}>
         <span className="stmt-op">{op}</span>
         <span className="stmt-label">{a.label}</span>
-        <span className="stmt-bar">{depth === 0 && !check && <i className={(x ?? 0) < 0 ? 'neg' : ''} style={{ left: (x ?? 0) < 0 ? `${50 - w}%` : '50%', width: `${w}%` }}/>}</span>
+        <span className="stmt-bar">{depth === 0 && !check && <i className={(x ?? 0) < 0 ? 'neg' : ''} style={{ left: `${left}%`, width: `${w}%` }}/>}</span>
         <b className={'stmt-val' + (ok === undefined ? '' : ok ? ' ok' : ' bad') + (plots.has(k) ? ' plotted' : '')} role="button" title="Click to plot over time" onClick={ev => { ev.stopPropagation(); togglePlot(k); }}>{show(id, x)}{ok !== undefined && (ok ? ' ✓' : ' ✗')}</b>
         <span className="stmt-fold">{isOpen ? '−' : '+'}</span>
       </button>

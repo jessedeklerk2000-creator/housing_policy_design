@@ -743,3 +743,6 @@ body:has(.bank-full) { overflow:hidden; }
 .bus-org-frame.unit { border-style:dashed; border-color:rgba(79,124,172,.45); } .bus-org-frame.unit > span { font-size:12px; font-weight:600; }
 .bus-ceo { position:absolute; text-align:center; font-size:12px; font-weight:700; letter-spacing:.08em; color:#2e4a6b; background:#d5e1ee; border:1px solid #4f7cac; border-radius:6px; padding:3px 0; z-index:2; }
 .bus-unit-tag { font-size:11px; font-style:italic; fill:#4f7cac; }
+/* Feedback round 2, A1: the value column has a fixed width and never wraps, so a changing number cannot change a box's height */
+.stmt-row { grid-template-columns:12px 1fr 34px 70px 12px; }
+.stmt-val { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }

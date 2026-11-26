@@ -146,19 +146,21 @@ function Block({ r, label, tone, open, toggle, children, z }: { r: R; label: str
 }
 
 // A statement box body that reports its content height, so the box grows or shrinks with opened lines (Jesse)
-function FitBody({ k, onH, style, children }: { k: string; onH: (k: string, h: number) => void; style: React.CSSProperties; children: ReactNode }) {
+// Feedback round 2 (A1): the height follows opened and closed lines only, never a value. Value cells have a fixed width
+// (style.css), and while Play runs the measured height is frozen (Inner drops 'fit:' updates); build re-measures.
+function FitBody({ k, onH, style, build, children }: { k: string; onH: (k: string, h: number) => void; style: React.CSSProperties; build: number; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current?.querySelector('.stmt-block') as HTMLElement | null; if (!el) return;  // the statement itself, not its stretched wrapper
     const report = () => onH(k, el.offsetHeight + 12); report();
     const ro = new ResizeObserver(report); ro.observe(el); return () => ro.disconnect();
-  }, [k, onH]);
+  }, [k, onH, build]);
   return <div ref={ref} className="bus-stmt-body nowheel" style={style}>{children}</div>;
 }
 
-type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
+type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void; build: number };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
-  const { result, at, o, set, map, scenario, desk, buses, sizes, resize } = data;
+  const { result, at, o, set, map, scenario, desk, buses, sizes, resize, build } = data;
   const rf = useReactFlow();
   const fitH = useCallback((k: string, h: number) => { if (Math.abs((sizes['fit:' + k]?.[1] ?? 0) - h) > 2) resize('fit:' + k, [0, h]); }, [sizes, resize]);
   STRAIGHT.on = !buses;
@@ -371,7 +373,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       </Block>
       <Block r={acc} label="Accounting" tone={o.acc ? 'sensor-open' : 'sensor'} open={o.acc} toggle={() => set('acc')} z={1}/>
       {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone={o[k] ? 'sensor-open bus-stmt' : 'sensor'} open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3}>  {/* open: above the wires, so a dragged plot card stays on top */}
-        {o[k] && <FitBody k={k} onH={fitH} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
+        {o[k] && <FitBody k={k} onH={fitH} build={build} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
           <AtContext.Provider value={{ result, at }}><BankStatements only={gid}/></AtContext.Provider></FitBody>}
         {o[k] && <div className="bus-grip nodrag nopan" role="separator" aria-label={`Resize ${label}`} title="Drag to make the box bigger or smaller (double-click: original size)"
           onDoubleClick={e => { e.stopPropagation(); resize(k, null); }}
@@ -435,9 +437,11 @@ const nodeTypes = { diagram: Diagram };
 function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
   const n = result.year.length;
   const [buses, setBuses] = useState(true);  // buses on by default (M. Mendel, 26 Nov 2026)
-  const [sizes, setSizes] = useState<Record<string, P>>({});
-  const resize = useCallback((k: string, s: P | null) => setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }), []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
+  const [sizes, setSizes] = useState<Record<string, P>>({}), [build, setBuild] = useState(0), playRef = useRef(false);
+  // A1: no layout change while Play runs (a measured height is a 'fit:' size; dragged sizes come from the user)
+  const resize = useCallback((k: string, s: P | null) => { if (playRef.current && k.startsWith('fit:')) return; setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }); }, []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
   const [at, setAt] = useState(n - 1), [playing, setPlaying] = useState(false), [o, setO] = useState<Open>({});
+  playRef.current = playing;
   const [map, setMap] = useState<MapData | null>(null);
   const rf = useReactFlow();
   useEffect(() => { api<MapData>('/model/map').then(m => setMap(patch(m))).catch(() => setMap(null)); }, [patch]);
@@ -462,12 +466,14 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
     return next;
   }), [rf, map, sizes]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
-    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize]);
+    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize, build } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize, build]);
   const tools = <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
       <input type="range" min={0} max={n - 1} value={Math.min(at, n - 1)} onChange={e => { setPlaying(false); setAt(+e.target.value); }}/>
       <div className="segmented small" role="group" aria-label="Connections"><button className={!buses ? 'active' : ''} aria-pressed={!buses} onClick={() => setBuses(false)}>Ports</button><button className={buses ? 'active' : ''} aria-pressed={buses} onClick={() => setBuses(true)}>Buses</button></div>
+      {/* A2 (M. Mendel): building the layout is a step of its own; Play only moves time */}
+      <button className="ghost small" title="Measure every open box again and fit the view (the layout stays fixed while Play runs)" onClick={() => { setPlaying(false); playRef.current = false; setBuild(b => b + 1); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 80); }}>Rebuild layout</button>
       <button className="ghost small" onClick={() => { setO({}); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 40); }}>Close all</button>
     </div>;
   return <>
