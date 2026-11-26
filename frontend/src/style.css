@@ -816,3 +816,4 @@ body:has(.bank-full) { overflow:hidden; }
 .sot-pick { display:flex; align-items:center; gap:6px; font-size:12.5px; white-space:nowrap; } .sot-pick select { font:inherit; padding:2px 4px; }
 .bus-diagram .map-node.bus-comp.off { opacity:.5; }
 .bus-branch-name { font-size:8px; font-weight:600; paint-order:stroke; stroke:#fafbf7; stroke-width:2.5px; pointer-events:none; }
+.sot-time { margin:4px 0 6px; } .sot-time small { display:block; color:#5f6b7a; font-size:10.5px; }

@@ -24,8 +24,8 @@ from scipy import signal
 from scipy.stats import norm
 
 HERE = Path(__file__).resolve().parent
-# copy of the thesis' plant_tf_years.json (Jesse's housing plant, years); the prototype lives in Thesis/sot_multiport/
-PLANT_JSON = HERE / "sot_plant_tf_years.json"
+# the thesis copy (../website_handoff) or the website's copy next to this module (backend/housing)
+PLANT_JSON = next((q for q in (HERE / "sot_plant_tf_years.json", HERE.parent / "website_handoff" / "plant_tf_years.json") if q.exists()), HERE / "sot_plant_tf_years.json")
 
 DT = 1 / 12            # monthly steps
 T_END = 50.0           # horizon of the EVE cash flows (years)
@@ -146,6 +146,9 @@ class ScenarioPath:
     cpr: np.ndarray
     D: np.ndarray
     r_s: np.ndarray
+    moves: np.ndarray | None = None       # CPR split: movers (theta) and refinancing, % a year as decimals
+    refi: np.ndarray | None = None
+    book: np.ndarray | None = None        # mortgage book over time (run-off)
     cf: dict = field(default_factory=dict)
     pv: dict = field(default_factory=dict)
 
@@ -196,9 +199,10 @@ class Engine:
             P = np.ones(n)
         uw = norm.cdf((np.log(b.ltv0 / P) - b.sigma_ltv ** 2 / 2) / b.sigma_ltv)
         if b.dynamic:
-            cpr = self.theta0 * (1 - b.uw_mobility * uw) + b.refi_max * sigmoid((b.mort_rate - r_mm[:n]) / b.refi_width)
+            moves = self.theta0 * (1 - b.uw_mobility * uw); refi = b.refi_max * sigmoid((b.mort_rate - r_mm[:n]) / b.refi_width)
         else:
-            cpr = np.full(n, b.cpr_target)
+            moves = np.full(n, b.cpr_target); refi = np.zeros(n)
+        cpr = moves + refi
         # deposits: RC pair (client-rate lag tau_beta, volume chasing the market against the base path)
         r_s, D = np.empty(n), np.empty(n)
         r_s[0], D[0] = b.r_s0 + (0 if b.dynamic else b.beta * dfw[0]), b.savings
@@ -210,7 +214,7 @@ class Engine:
                 r_s[k + 1] = b.r_s0 + b.beta * dfw[k + 1]
             chase = b.kappa * (dfw[k] - (r_s[k] - b.r_s0)) if b.dynamic else 0.0
             D[k + 1] = D[k] * np.exp(-DT * (b.runoff + chase))
-        return ScenarioPath(t=tg[:n], f=f[:n], df=df[:n], r_mm=r_mm[:n], P=P, uw=uw, cpr=cpr, D=D, r_s=r_s)
+        return ScenarioPath(t=tg[:n], f=f[:n], df=df[:n], r_mm=r_mm[:n], P=P, uw=uw, cpr=cpr, D=D, r_s=r_s, moves=moves, refi=refi)
 
     # ------------------------------------------------------------------------------------------- run-off cash flows
     def cashflows(self, p: ScenarioPath, margins: bool) -> ScenarioPath:
@@ -237,6 +241,7 @@ class Engine:
         alive = np.clip(nc - np.arange(N), 0, nc)              # cohorts still fixed during month k+1
         reset = np.zeros(N); reset[:nc] = B[1:nc + 1]           # cohort j returns its balance at month j
         cf_m = per * (alive * (sched + prepay + intr)) + per * reset
+        p.book = per * np.r_[np.clip(nc - np.arange(N), 0, nc) * B[:N], 0.0]   # mortgage book at the start of each month
         # firm loans: floating, value to the next repricing date (3 months): principal + interest at the 3-month rate
         kf = int(round(b.firm_reprice / DT)); cf_f = np.zeros(N)
         z3 = self._z_from_df(p, kf)
@@ -269,32 +274,55 @@ class Engine:
         return self.cashflows(self.behaviour(self.curve(scen, sizes)), margins)
 
     # ----------------------------------------------------------------------------------------------------- NII
-    def nii(self, scen: str, sizes) -> float:
-        """One-year NII, constant balance sheet (Art. 4-5), margins included. Instantaneous shock at t = 0.
-        Maturing / prepaid mortgages are replaced at r_mm (fixed for the rest of the year), deposit outflows by
-        wholesale at f + 0.5%, firm loans reprice quarterly at the 3-month rate + margin, cash earns the overnight rate."""
+    def nii_path(self, scen: str, sizes, years: float = 1.0, parts: bool = False):
+        """Monthly NII (EUR bn per month), constant balance sheet (Art. 4-5), margins included, instantaneous shock at t = 0.
+        Maturing / prepaid mortgages are replaced at r_mm (fixed from then on), deposit outflows by wholesale at f + 0.5%,
+        firm loans reprice quarterly at the 3-month rate + margin, cash earns the overnight rate; the 5-year wholesale bullet
+        is replaced at f + 0.5% when it matures."""
         b = self.b
         p = self.behaviour(self.curve(scen, sizes))
-        n = int(round(1 / DT))
+        n = int(round(years / DT))
         f, r_mm, cpr = p.f[:n], p.r_mm[:n], p.cpr[:n]
         nc = int(round(b.mort_fix_max / DT))
-        old = b.mortgages; new_rate_vol = 0.0; inc_m = 0.0
+        old = b.mortgages; new_rate_vol = 0.0; inc_m = np.zeros(n)
         i = b.mort_rate / 12; nT = int(round(b.mort_term * 12)); ann = i / (1 - (1 + i) ** -nT)
         for k in range(n):
-            inc_m += (old * b.mort_rate + new_rate_vol) * DT
+            inc_m[k] = (old * b.mort_rate + new_rate_vol) * DT
             prin = old * (ann - i)                          # scheduled principal (young loans: ~ann - i per unit)
             resets = b.mortgages / nc if k < nc else 0.0    # one cohort reprices to par each month
             out = prin + (old - prin) * (1 - np.exp(-cpr[k] * DT)) + min(resets, old)
             out = min(out, old)
             old -= out; new_rate_vol += out * r_mm[k]          # replaced like for like at today's r_mm
-        q = np.arange(n) // int(round(b.firm_reprice / DT)) * int(round(b.firm_reprice / DT))
-        inc_f = float(np.sum(b.firm_loans * (f[q] + b.firm_margin) * DT))
-        inc_c = float(np.sum(b.cash * f * DT))
+        kq = int(round(b.firm_reprice / DT)); q = np.arange(n) // kq * kq
+        inc_f = b.firm_loans * (f[q] + b.firm_margin) * DT
+        inc_c = b.cash * f * DT
         D, r_s = p.D[:n], p.r_s[:n]
-        exp_d = float(np.sum((D * r_s + (b.savings - D) * (f + 0.005)) * DT))
-        exp_w = b.wholesale * b.wholesale_rate
+        exp_d = (D * r_s + (b.savings - D) * (f + 0.005)) * DT
+        mw = np.arange(n) >= int(round(b.wholesale_T / DT))
+        exp_w = b.wholesale * np.where(mw, f + 0.005, b.wholesale_rate) * DT
+        if parts:  # by component (EUR bn per month; costs negative)
+            return dict(mortgages=inc_m, firm_loans=inc_f, cash=inc_c, savings=-exp_d, wholesale=-exp_w)
         return inc_m + inc_f + inc_c - exp_d - exp_w
 
+    def nii(self, scen: str, sizes) -> float:
+        """One-year NII (the official NII test, Art. 4-5)."""
+        return float(self.nii_path(scen, sizes, 1.0).sum())
+
+    def eve_path(self, p: ScenarioPath, months: int) -> dict:
+        """Value still ahead at t = 0..months (monthly), in today's money: the PV (scenario curve, discounted to 0) of the
+        cash flows after t, per component. At t = 0 it is the official PV; it runs to 0 as the book runs off, and what is
+        gone has been realised. (The handoff's version, cash received carried at the base rate and the rest discounted on
+        the shocked curve, drifts with all behaviour switched off: parallel up -4.5% -> -52% of Tier 1 in 10 years, pure
+        bookkeeping. Checked 26 Nov 2026.)"""
+        df, out = p.df[: p.t.size], {}
+        j = np.arange(months + 1)
+        for k, sign in (("mortgages", 1), ("firm_loans", 1), ("savings", -1), ("wholesale", -1)):
+            w = p.cf[k] * df[1:]
+            tail = np.r_[np.cumsum(w[::-1])[::-1], 0.0]              # sum over the cash flows after t_j
+            out[k] = sign * tail[j]
+        out["cash"] = np.where(j == 0, self.b.cash, 0.0)              # overnight: realised at once
+        out["eve"] = out["mortgages"] + out["firm_loans"] + out["cash"] + out["savings"] + out["wholesale"]
+        return out
 
 def run_sot(bank: Bank = Bank(), margins: bool = False) -> dict:
     """dEVE and dNII per scenario and shock-size set, as % of Tier 1, with the outlier flags."""
@@ -312,6 +340,40 @@ def run_sot(bank: Bank = Bank(), margins: bool = False) -> dict:
                 row.update(d_nii=d_nii, d_nii_t1=100 * d_nii / bank.tier1, nii_outlier=100 * d_nii / bank.tier1 < -5)
             out["rows"].append(row)
     out["nii_base"] = nii0
+    return out
+
+
+# ------------------------------------------------------------------------------------------- time profile (section 3b)
+def time_profile(bank: Bank = Bank(), margins: bool = False, sizes=None, years: float = 5.0) -> dict:
+    """How each scenario plays out over time next to the official SOT number (supplementary, never a replacement).
+    dEVE is the one official number at t = 0 (today's value of the whole change). Over time the shock shows where it
+    hits: net interest income (constant balance sheet, as the NII test), quarter by quarter, and the behaviour behind it.
+    (A dEVE(t) path is not used: any split of dEVE over time mixes risk with the timing of principal; see eve_path.)"""
+    sizes = sizes or SIZES["EU RTS 2024/856"]
+    eng, eng_off = Engine(bank), Engine(replace(bank, housing=False))
+    T1, n = bank.tier1, int(round(years / DT))
+    off = run_sot(bank, margins)
+    official = {r["scenario"]: r["d_eve_t1"] for r in off["rows"] if r["sizes"] == "EU RTS 2024/856"} if sizes == SIZES["EU RTS 2024/856"] else {}
+    nb = eng.nii_path("none", (0, 0, 0), years, parts=True)
+    base = eng.eve("none", (0, 0, 0), margins)
+    out = {"t": eng.tg[: n + 1], "base": base, "scen": {}}
+    for sc in SCENARIOS:
+        p = eng.eve(sc, sizes, margins)
+        npart = eng.nii_path(sc, sizes, years, parts=True)
+        d = {k: npart[k] - nb[k] for k in npart}
+        dm = sum(d.values())                                           # dNII per month
+        q = 100 * dm.reshape(-1, 3).sum(1) / T1                        # % of Tier 1 per quarter
+        cum = 100 * np.cumsum(dm) / T1                                 # cumulative dNII, % of Tier 1
+        qw = int(np.argmin(q)); worst = float(q[qw])
+        half = None
+        if worst < 0:
+            rec = np.nonzero(q[qw:] >= worst / 2)[0]
+            half = float(rec[0] * 0.25) if rec.size else None
+        dq = {k: float(100 * v.reshape(-1, 3).sum(1)[qw] / T1) for k, v in d.items()}
+        driver = min(dq, key=dq.get) if worst < 0 else max(dq, key=dq.get)
+        out["scen"][sc] = dict(path=p, book_off=eng_off.eve(sc, sizes, margins).book, nii_q=q, nii_cum=cum, nii_1y=float(cum[11]),
+                               official=official.get(sc), nii_worst_q=worst, nii_worst_when=float((qw + 1) * 0.25), half_life=half,
+                               below5=float(np.sum(cum < -5) * DT), parts_at_worst=dq, driver=driver)
     return out
 
 
@@ -340,9 +402,13 @@ def report(margins: bool = False) -> dict:
         p = eng.behaviour(eng.curve(sc, EU))
         paths["base" if sc == "none" else sc] = dict(price=r4(100 * p.P[ip]), cpr=r4(100 * p.cpr[ip]), deposits=r4(p.D[ip] / 2),
                                                      client_rate=r4(100 * p.r_s[ip]), mortgage_rate=r4(100 * p.r_mm[ip]))
+    tpr = time_profile(Bank(), margins)
+    tq = r4(np.arange(1, 21) * 0.25)
+    time = {sc: dict(nii_cum=r4(tpr["scen"][sc]["nii_cum"][2::3]), nii_q=r4(tpr["scen"][sc]["nii_q"]), below5=tpr["scen"][sc]["below5"],
+                     worst_q=round(tpr["scen"][sc]["nii_worst_q"], 2), worst_when=tpr["scen"][sc]["nii_worst_when"], driver=tpr["scen"][sc]["driver"]) for sc in SCENARIOS}
     rows = [dict(sizes=r["sizes"], scenario=r["scenario"], name=NAMES[r["scenario"]], d_eve_pct_t1=round(r["d_eve_t1"], 2), eve_outlier=bool(r["eve_outlier"]),
                  **({"d_nii_pct_t1": round(r["d_nii_t1"], 2), "nii_outlier": bool(r["nii_outlier"])} if "d_nii" in r else {})) for r in res["rows"]]
-    return dict(margins="included" if margins else "excluded", rows=rows, maturities=r4(m), curves=curves, t_years=r4(tp), paths=paths,
+    return dict(margins="included" if margins else "excluded", rows=rows, t_quarters=tq, time=time, maturities=r4(m), curves=curves, t_years=r4(tp), paths=paths,
                 sizes={k: [round(100 * x, 2) for x in v] for k, v in SIZES.items()}, theta0=round(res["theta0"], 4),
                 rules="Delegated Regulation (EU) 2024/856: run-off balance sheet, CET1 excluded, risk-free discounting, post-shock floor; "
                       "outlier if dEVE < -15% or dNII < -5% of Tier 1. ALM desk off (no management action).")

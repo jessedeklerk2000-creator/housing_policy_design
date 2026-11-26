@@ -221,9 +221,11 @@ function DotLayer({ W, H, paths, playing }: { W: number; H: number; paths: DotPa
 // ---- Supervisory Outlier Test (26 Nov 2026): six regulatory rate shocks on My Bank's balance sheet (backend housing/sot.py)
 type SotRow = { sizes: string; scenario: string; name: string; d_eve_pct_t1: number; eve_outlier: boolean; d_nii_pct_t1?: number; nii_outlier?: boolean };
 type SotPaths = { price: number[]; cpr: number[]; deposits: number[]; client_rate: number[]; mortgage_rate: number[] };
-export type SotReport = { margins: string; rows: SotRow[]; maturities: number[]; curves: Record<string, number[]>; t_years: number[]; paths: Record<string, SotPaths>; rules: string };
+type SotTime = { nii_cum: number[]; nii_q: number[]; below5: number; worst_q: number; worst_when: number; driver: string };
+export type SotReport = { margins: string; rows: SotRow[]; t_quarters: number[]; time: Record<string, SotTime>; maturities: number[]; curves: Record<string, number[]>; t_years: number[]; paths: Record<string, SotPaths>; rules: string };
 const SOT_SC = ['parallel_up', 'parallel_down', 'steepener', 'flattener', 'short_up', 'short_down'];
 const SOT_EU = 'EU RTS 2024/856', SOT_RED = '#c0392b';
+const SOT_COL: Record<string, string> = { parallel_up: '#0072B2', parallel_down: '#D55E00', steepener: '#009E73', flattener: '#CC79A7', short_up: '#56B4E9', short_down: '#E69F00' };  // Okabe-Ito, as the thesis figures
 function SotCard({ r, rep, sel, pick }: { r: R; rep: SotReport; sel: string; pick: (s: string) => void }) {
   const eu = (sc: string) => rep.rows.find(x => x.sizes === SOT_EU && x.scenario === sc)!, bc = (sc: string) => rep.rows.find(x => x.sizes !== SOT_EU && x.scenario === sc)!;
   const vals = rep.rows.map(x => x.d_eve_pct_t1), lo = Math.min(-20, ...vals) - 3, hi = Math.max(5, ...vals) + 3;
@@ -249,6 +251,20 @@ function SotCard({ r, rep, sel, pick }: { r: R; rep: SotReport; sel: string; pic
     <div className="sot-legend"><i style={{ background: '#4f7cac' }}/>EU sizes (200/250/100 bp) <i style={{ background: '#4f7cac', opacity: 0.45 }}/>BCBS 2024 sizes (225/350/200 bp) <i style={{ background: SOT_RED }}/>outlier</div>
     <div className="sot-sel"><b>{s.name}</b>: ΔEVE <b className={s.eve_outlier ? 'bad' : ''}>{s.d_eve_pct_t1.toFixed(1)}%</b> of Tier 1
       {s.d_nii_pct_t1 !== undefined && <> · ΔNII (1 yr) <b className={s.nii_outlier ? 'bad' : ''}>{s.d_nii_pct_t1.toFixed(1)}%</b> (outlier below −5%)</>}</div>
+    {/* over time (supplementary): the cumulative change in net interest income, six scenarios, -5% line */}
+    {(() => { const tq = rep.t_quarters, all = SOT_SC.flatMap(sc => rep.time[sc].nii_cum), lo2 = Math.min(-8, ...all) - 1, hi2 = Math.max(5, ...all) + 1, H2 = 130;
+      const px = (t: number) => L + t / 5 * (W - L - 6), py = (v: number) => 6 + (hi2 - v) / (hi2 - lo2) * (H2 - 24);
+      const tsel = rep.time[sel];
+      return <div className="sot-time"><small>Over time (supplementary): cumulative ΔNII, % of Tier 1, constant balance sheet</small>
+        <svg width={W} height={H2} role="img" aria-label="Cumulative change in net interest income over five years">
+          <line x1={L} x2={W} y1={py(0)} y2={py(0)} stroke="#8a94a6"/><line x1={L} x2={W} y1={py(-5)} y2={py(-5)} stroke={SOT_RED} strokeDasharray="4 3"/>
+          <text x={W} y={py(-5) - 3} textAnchor="end" className="mini-tick" fill={SOT_RED}>−5%</text>
+          {[lo2, hi2].map(v => <text key={v} x={L - 4} y={py(v) + 3} textAnchor="end" className="mini-tick">{v.toFixed(0)}%</text>)}
+          {[0, 1, 2, 3, 4, 5].map(t => <text key={t} x={px(t)} y={H2 - 4} textAnchor="middle" className="mini-tick">{t} yr</text>)}
+          {SOT_SC.map(sc => <polyline key={sc} points={[[0, 0], ...tq.map((t, i) => [t, rep.time[sc].nii_cum[i]])].map(([t, v]) => `${px(t)},${py(v)}`).join(' ')}
+            fill="none" stroke={SOT_COL[sc]} strokeWidth={sc === sel ? 2.6 : 1.2} opacity={sc === sel ? 1 : 0.55} style={{ cursor: 'pointer' }} onClick={() => pick(sc)}><title>{eu(sc).name}</title></polyline>)}
+        </svg>
+        <small>{s.name}: worst quarter {tsel.worst_q.toFixed(1)}% of Tier 1 in year {tsel.worst_when.toFixed(2)} (driver: {tsel.driver.replace('_', ' ')}){tsel.below5 > 0 ? `; cumulative below −5% for ${tsel.below5.toFixed(1)} of 5 years` : ''}.</small></div>; })()}
     <div className="sot-minis">{mini('price', 'House price index')}{mini('cpr', 'Prepayment rate (% a year)')}{mini('deposits', 'Savings deposits')}{mini('client_rate', 'Savings rate (%)')}</div>
     <small className="sot-note">Grey: no shock; red: {s.name}. Behaviour from the multiport model: prepayment (movers, refinancing, house prices), savings rate and volume. {rep.rules}</small>
   </div>;
@@ -600,7 +616,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       {parts}
     </>;
   }
-  const sotR: R = { x: fs.x + fs.w + 130, y: fs.y, w: 460, h: 600 };  // the SOT card right of the Financial sector
+  const sotR: R = { x: fs.x + fs.w + 130, y: fs.y, w: 460, h: 800 };  // the SOT card right of the Financial sector
   const W = (sot ? sotR.x + sotR.w : fs.x + fs.w) + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h, comp.y + comp.h, sot ? sotR.y + sotR.h : 0) + 140;  // (y from 0: the Government sits above the Housing Market)
   // the card of a clicked flow, return, bus or shock
   let card: ReactNode = null;
