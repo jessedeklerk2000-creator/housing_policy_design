@@ -78,9 +78,9 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     if (o.acc) {
       // sizes: dragged by the corner grip (Jesse)
       const sz = (k: string): P => { if (!o[k]) return [210, 72]; const base = sizes[k] ?? STMT_OPEN[k], fit = sizes['fit:' + k]?.[1];  // fit: measured content height (grows with an opened line)
-        return [base[0], fit ? Math.max(sizes[k] ? base[1] : 0, fit + HEAD + 16) : base[1]]; }, x0 = acc.x + 20, y0 = acc.y + HEAD + 70;
+        return [base[0], fit ? Math.max(sizes[k] ? base[1] : 0, fit + HEAD + 16) : base[1]]; }, x0 = acc.x + 44, y0 = acc.y + HEAD + 70;  // left margin: the net-profit line into the cash flow statement runs there
       const inc: R = { x: x0, y: y0, w: sz('inc')[0], h: sz('inc')[1] }, eq: R = { x: x0, y: inc.y + inc.h + 70, w: sz('eq')[0], h: sz('eq')[1] };
-      const bal: R = { x: x0 + Math.max(inc.w, eq.w) + 120, y: y0, w: sz('bal')[0], h: sz('bal')[1] };
+      const bal: R = { x: x0 + Math.max(inc.w, eq.w, sz('cf')[0]) + 120,  /* clear of the widest box in the left column */ y: y0, w: sz('bal')[0], h: sz('bal')[1] };
       const key: R = { x: bal.x + bal.w + 170, y: y0, w: sz('key')[0], h: sz('key')[1] };
       const cf: R = { x: x0, y: eq.y + eq.h + 70, w: sz('cf')[0], h: sz('cf')[1] };  // cash flow statement under the equity statement (M. Mendel)
       sub = { inc, eq, cf, bal, key };
@@ -322,7 +322,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     if (sub) {
       const { inc, eq, cf, bal, key } = sub;
       // into the cash flow statement: net profit from the income statement, changes in stocks from the balance sheet
-      { const yi = inc.y + inc.h - 16, xl = inc.x - 10, yc = cf.y + 30; over.push(arrow([[inc.x, yi], [xl, yi], [xl, yc], [cf.x, yc]], G, 's-cfnp', 'net profit', 0.5)); }
+      { const yi = inc.y + inc.h - 16, xl = inc.x - 22, yc = cf.y + 30, ym = (yi + yc) / 2;
+        over.push(arrow([[inc.x, yi], [xl, yi], [xl, yc], [cf.x, yc]], G, 's-cfnp'));
+        over.push(<text key="s-cfnp-t" className="bus-label" fill={G} textAnchor="middle" transform={`translate(${xl - 6} ${ym}) rotate(-90)`}>net profit</text>); }  // beside its line, clear of the equity statement
       { const xb = bal.x + 40, yc = cf.y + 46; over.push(arrow([[xb, bal.y + bal.h], [xb, yc], [cf.x + cf.w, yc]], G, 's-cfst', 'changes in stocks', 0.5)); }
       over.push(arrow([[inc.x + 60, inc.y + inc.h], [inc.x + 60, eq.y]], G, 's-ret', 'retained profit'));
       { const ey = eq.y + 45, mx = bal.x - 50; over.push(arrow([[eq.x + eq.w, ey], [mx, ey], [mx, bal.y + 45], [bal.x, bal.y + 45]], G, 's-eq', 'equity', 0)); }
