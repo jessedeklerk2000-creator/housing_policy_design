@@ -36,13 +36,14 @@ def test_the_bank_passes_the_crisis_on():
     a, b, c = bn.simulate(o, alm_on=False), bn.simulate(o, housing_feedback=False), bn.simulate(o)
     assert all(x["ok"] for x in (a, b, c))
     assert b["summary"]["min_price_pct"] > -2                                           # without the bank, housing hardly notices
-    assert a["summary"]["min_price_pct"] == pytest.approx(-3.5, abs=0.5)                # rates frozen: credit supply alone
-    assert a["summary"]["min_tier1_pct"] < c["summary"]["min_tier1_pct"] - 0.8          # ...but the bank takes the hit
-    # The desk passes it on (bank channel only). 26 Nov 2026: crisis only at the other banks, credit supply 0.6,
-    # credit channel k_credit 110 (was -7.3, 4.8)
-    assert c["summary"]["min_price_pct"] == pytest.approx(-4.1, abs=0.5)
-    assert c["summary"]["max_price_after_crisis_pct"] == pytest.approx(6.7, abs=0.7)     # and the rebound
-    assert c["summary"]["mortgage_rate_range_pct"][1] > 3.75 and a["summary"]["mortgage_rate_range_pct"] == [3.7, 3.7]
+    # 26 Nov 2026, sourced shock (premium +1.9 pp, ECB FSR Dec 2008; central bank at policy rate + 1 pp): the bank's
+    # lending cut carries the shock to housing (rates frozen: -3.5%); the desk softens it, as the bank's ratios improve
+    # when it lends less and the desk lowers its rates (was: the desk passed the crisis on, -7.3%).
+    assert a["summary"]["min_price_pct"] == pytest.approx(-3.5, abs=0.5)
+    assert c["summary"]["min_price_pct"] == pytest.approx(-1.5, abs=0.5)
+    assert c["summary"]["max_price_after_crisis_pct"] == pytest.approx(4.7, abs=0.7)     # and the rebound
+    assert a["summary"]["min_tier1_pct"] < c["summary"]["min_tier1_pct"] - 0.3          # the desk still protects capital
+    assert a["summary"]["mortgage_rate_range_pct"] == [3.7, 3.7]
 
 
 def test_a_runaway_is_cut_and_valid_json():
@@ -59,7 +60,7 @@ def test_government_step_moves_the_price():
 def test_api_whitelists_and_clamps(tmp_path):
     c = TestClient(create_app(tmp_path / "t.sqlite3"))
     r = c.post("/api/bank/simulate", json={"overrides": {}, "alm_on": True, "housing_feedback": True})
-    assert r.status_code == 200 and r.json()["summary"]["min_price_pct"] == pytest.approx(-4.1, abs=0.5)
+    assert r.status_code == 200 and r.json()["summary"]["min_price_pct"] == pytest.approx(-1.5, abs=0.5)
     assert c.post("/api/bank/simulate", json={"overrides": {"E0": 5}}).status_code == 422
     assert c.post("/api/bank/simulate", json={"overrides": {}, "netlist": "x"}).status_code == 422
     big = c.post("/api/bank/simulate", json={"overrides": {"funding_cut": 9}}).json()
@@ -88,8 +89,8 @@ def test_firm_loans_and_nsfr():
     assert r["targets"]["nsfr_pct"] == pytest.approx(126.47, abs=0.05)  # Basel: interbank < 6 months counts 0%
     assert 30 < min(x for x in r["firm_loans"] if x is not None) < 38                     # calibrated: about -15%, no collapse
     off = bn.simulate({"covid_scale": 0}, alm_on=False)
-    # the desk protects capital (gap 1.6 pp since 26 Nov 2026: no firm-loan losses any more, was > 2)
-    assert off["summary"]["min_tier1_pct"] < r["summary"]["min_tier1_pct"] - 1.4
+    # the desk protects capital (gap 0.56 pp since 26 Nov 2026: no firm-loan losses, sourced premium; was > 2)
+    assert off["summary"]["min_tier1_pct"] < r["summary"]["min_tier1_pct"] - 0.3
 
 
 def test_historical_subsidy_is_a_disturbance():
@@ -116,7 +117,7 @@ def test_ledger_balances_and_gives_the_controlled_ratios():
 
 
 @pytest.mark.parametrize("ov, alm, fb", [({}, True, True), ({}, False, True), ({}, True, False),
-                                         ({"funding_cut": 1.0, "premium_pp": 6.0}, True, True), ({"funding_cut": 1.0, "premium_pp": 6.0}, False, True)])
+                                         ({"funding_cut": 1.0, "premium_pp": 4.0}, True, True), ({"funding_cut": 1.0, "premium_pp": 4.0}, False, True)])
 def test_cash_flow_statement_reconciles(ov, alm, fb):
     """Cash flow statement (M. Mendel, 26 Nov 2026): operating + investing + financing = the change in cash, also in a
     severe financial crisis. The derivatives come from the solver's own time steps, so the check stays below 0.01 a year."""

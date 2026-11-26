@@ -58,7 +58,7 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     acc("interest_income", "Interest income", "sum of the above", v["ii_mortgages"] + v["ii_firms"] + v["ii_reserves"], ["ii_mortgages", "ii_firms", "ii_reserves"], py)
     acc("ie_savings", "Interest on savings", "savings rate × savings deposits", rs * Dep, ["savings"], py, MENKVELD + " Fig. 2-3 (deposit interest)")
     acc("ie_interbank", "Interest to other banks", "(market rate + premium) × deposits of other banks", (b["r_mkt"] + prem) * W, ["interbank"], py)
-    acc("ie_cb", "Interest to the central bank", "(market rate + premium + penalty) × central-bank borrowing", (b["r_mkt"] + prem + gap) * v["cb_borrowing"], ["cb_borrowing"], py)
+    acc("ie_cb", "Interest to the central bank", "(market rate + 1 pp marginal lending facility) × central-bank borrowing", (b["r_mkt"] + gap) * v["cb_borrowing"], ["cb_borrowing"], py, "ECB corridor: marginal lending facility = MRO rate + 1 pp (ECB press release 8 Oct 2008)")
     acc("interest_expense", "Interest expense", "sum of the above", v["ie_savings"] + v["ie_interbank"] + v["ie_cb"], ["ie_savings", "ie_interbank", "ie_cb"], py)
     acc("nii", "Net interest income", "interest income − interest expense", v["interest_income"] - v["interest_expense"], ["interest_income", "interest_expense"], py, MENKVELD + " Fig. 2-3")
     acc("imp_mortgages", "Impairments on mortgages", "loss rate × underwater share × mortgages", b["loss_uw"] * uw * M, ["mortgages"], py)

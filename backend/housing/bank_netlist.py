@@ -54,8 +54,14 @@ BANK_DEFAULTS = dict(
     k_rate=300.0,          # rate-channel gain, demo choice (24 Nov 2026, NSFR loop with Basel factors): -7% house price in the
                            # crisis from the bank channel alone; settles up to 500, runs away from about 700.
     funding_cut=0.5,       # share of wholesale funding other banks withdraw in the crisis
-    premium_pp=3.0,        # rise of the interbank premium in the crisis (pp)
-    gap_penalty_pp=2.0,    # a funding gap (negative cash) is borrowed from the central bank at a penalty on top
+    # Interbank premium at the crisis peak (26 Nov 2026): the 3-month EURIBOR-EONIA swap spread rose from about 5 bp
+    # before August 2007 to about 190-200 bp in October 2008 (ECB Financial Stability Review Dec 2008, Chart 3.2, p. 61;
+    # values read off the chart by Claude), so +1.9 pp.
+    premium_pp=1.9,
+    # A funding gap (negative cash) is borrowed from the central bank at its marginal lending facility: the policy rate
+    # (here r_mkt) + 1 pp, the ECB corridor of 200 bp around the MRO rate (ECB press releases 8 Oct and 18 Dec 2008; the
+    # corridor was 100 bp, i.e. +0.5 pp, from 9 Oct 2008 to 21 Jan 2009). No interbank premium on central-bank money.
+    gap_penalty_pp=1.0,
     gov_step=0.0, gov_year=5.0,  # government subsidy step (model units) and the year it starts
     # Firm loans (24 Nov 2026): a short stock fed by the netlist's firm-loan port I8 (30 a year), repaid in Lf0/30 years;
     # firms borrow eta_firm less per pp the loan rate is above its start; the loan interest B5 floats with the loan rate.
@@ -176,7 +182,7 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         # Wholesale funding and any funding gap (negative cash: emergency borrowing) cost the market rate plus the
         # premium, which rises in the crisis. Without the gap term, losing funding made the bank richer (20 Nov 2026).
         S("prem", f"{g('w_prem')}+{v['premium_pp'] / 100!r}*I(bk_shape)"),
-        S("nii", f"I(bk_rm)*(I(bk_M)+I(bk_Lf))+{g('r_mkt')}*I(bk_cash)-(I(bk_prem)+{v['gap_penalty_pp'] / 100!r})*max(-I(bk_cash),0)-I(bk_rs)*I(bk_Dep)"
+        S("nii", f"I(bk_rm)*(I(bk_M)+I(bk_Lf))+{g('r_mkt')}*I(bk_cash)-{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cash),0)-I(bk_rs)*I(bk_Dep)"
                  f"-({g('r_mkt')}+I(bk_prem))*I(bk_W)"),
         f"B§Net_interest 0 0 I=I(bk_nii)-{g('loss_uw')}*I(bk_uw)*I(bk_M)-{g('pay0')}*I(bk_E)/{g('E0')}",  # drawn: NII
         S("E", f"{g('E0')}+idt(I(Net_interest))/{YR}"),                     # drawn: Equity (capacitor)
@@ -325,7 +331,7 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
 
 
 # What the site may change, with its slider range (anything else is rejected, values are clamped).
-RANGES = {"funding_cut": (0.0, 1.0), "premium_pp": (0.0, 6.0), "k_rate": (1.0, 900.0),
+RANGES = {"funding_cut": (0.0, 1.0), "premium_pp": (0.0, 4.0), "k_rate": (1.0, 900.0),
           "Kp_ftp": (0.0, 1.0), "Ki_ftp": (0.0, 1.0), "Kp_s": (0.0, 3.0), "Ki_s": (0.0, 3.0),
           "uw_mobility": (0.0, 0.5), "theta0": (0.03, 0.10), "sigma_ltv": (0.25, 0.6),
           "gov_step": (-20.0, 20.0), "gov_year": (1.0, 25.0), "covid_scale": (0.0, 2.0), "hist_subsidy": (0.0, 10.0),
