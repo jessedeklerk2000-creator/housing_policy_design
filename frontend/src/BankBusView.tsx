@@ -50,7 +50,7 @@ const HM_PORTS: Record<'R' | 'B', string[]> = { R: ['mortgages', 'mortgage_inter
 // the ALM Desk breadboard (BankBoards.DeskBoard): its viewBox and terminals, so e₁, e₂ end on the PI inputs and u₁, u₂
 // leave from the rate outputs when the desk is open
 const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1: [20, 680] as P, u1: [1080, 470] as P, u2: [1080, 600] as P };
-type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp'; id: string; at: P };
+type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp' | 'shock'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
 type Inner = { bs: R; ops: R; tre: R; opsOpen: boolean; treOpen: boolean; circ: R | null;
@@ -256,14 +256,16 @@ function SotCard({ r, rep, sel, pick }: { r: R; rep: SotReport; sel: string; pic
 
 // B2: the market's yield curve at the cursor (rate against maturity), with the bank's own rates: savings at the short
 // end, mortgages against the 10-year point (static curve: a parallel shift with r_mkt; term premia from the ECB AAA curve)
-function YieldCurve({ r, result, at, shock }: { r: R; result: Result; at: number; shock?: { m: number[]; dz: number[]; name: string } }) {
+function YieldCurve({ r, result, at, shock }: { r: R; result: Result; at: number; shock?: { m: number[]; dz: number[]; name: string; after: boolean } }) {
   const MAT = [0, 2, 5, 10, 20, 30], v = (k: string) => readTrace(result, k)?.[at] ?? null, pts = MAT.map(T => [T, v('Yield:' + T)] as [number, number | null]);
   // SOT shock: the regulatory shift dz(maturity) on top of the market curve (0-10 years shown)
-  const base = (T: number) => { let k = 1; while (k < MAT.length - 1 && MAT[k] < T) k++; const a = pts[k - 1][1] ?? 0, b = pts[k][1] ?? a; return a + (b - a) * (T - MAT[k - 1]) / (MAT[k] - MAT[k - 1]); };
-  const sh = shock ? shock.m.map((T, i) => [T, base(T) + shock.dz[i]] as [number, number]).filter(p => p[0] <= 30) : [];
+  // the curve itself carries the shock once the cursor is past the shock year (a full netlist run); dashed: without it
+  const dzAt = (T: number) => { if (!shock) return 0; const m = shock.m; let k = 1; while (k < m.length - 1 && m[k] < T) k++; return shock.dz[k - 1] + (shock.dz[k] - shock.dz[k - 1]) * (T - m[k - 1]) / (m[k] - m[k - 1]); };
+  const sh = shock?.after ? pts.filter(p => p[1] != null).map(p => [p[0], p[1]! - dzAt(Math.max(p[0], 0.25))] as [number, number]) : [];
   const rm = v('I(Bk_rm)'), rs = v('I(Bk_rs)'), ys = [...pts.map(p => p[1]), rm, rs, ...sh.map(p => p[1])].filter((x): x is number => x != null);
   if (!ys.length) return null;
-  const lo = Math.floor(Math.min(...ys) * 2) / 2 - 0.5, hi = Math.ceil(Math.max(...ys) * 2) / 2 + 0.5, W = r.w - 16, H = r.h - 76, L = 34, Bm = 22;
+  // a fixed axis (Jesse): shifts, shocks and the bank's rates show against the same scale
+  const lo = Math.min(-2, Math.floor(Math.min(...ys))), hi = Math.max(6, Math.ceil(Math.max(...ys))), W = r.w - 16, H = r.h - 76, L = 34, Bm = 22;
   const sx = (T: number) => L + T / 30 * (W - L - 14), sy = (y: number) => 6 + (hi - y) / (hi - lo) * (H - 6 - Bm);
   const curve = pts.filter(p => p[1] != null).map(p => `${sx(p[0])},${sy(p[1]!)}`).join(' ');
   return <div className="bus-yield" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
@@ -272,8 +274,8 @@ function YieldCurve({ r, result, at, shock }: { r: R; result: Result; at: number
       {[lo, (lo + hi) / 2, hi].map(y => <g key={y}><line x1={L} x2={W - 8} y1={sy(y)} y2={sy(y)} stroke="#e4e2ea"/><text x={L - 4} y={sy(y) + 3} textAnchor="end" className="mini-tick">{y.toFixed(1)}%</text></g>)}
       {[0, 5, 10, 20, 30].map(T => <text key={T} x={sx(T)} y={H - 6} textAnchor="middle" className="mini-tick">{T === 0 ? 'short' : T + ' yr'}</text>)}
       <polyline points={curve} fill="none" stroke="#7a7396" strokeWidth={2}/>
-      {sh.length > 0 && <polyline points={sh.map(p => `${sx(p[0])},${sy(p[1])}`).join(' ')} fill="none" stroke={SOT_RED} strokeWidth={2} strokeDasharray="5 3"/>}
-      {shock && <text x={W - 10} y={14} textAnchor="end" className="mini-tick" fill={SOT_RED}>{shock.name}</text>}
+      {sh.length > 0 && <polyline points={sh.map(p => `${sx(p[0])},${sy(p[1])}`).join(' ')} fill="none" stroke="#9aa3b2" strokeWidth={1.5} strokeDasharray="5 3"/>}
+      {shock && <text x={W - 10} y={14} textAnchor="end" className="mini-tick" fill={SOT_RED}>{shock.after ? shock.name + ' (dashed: no shock)' : shock.name + ': from ' + (result.year[0] + 3).toFixed(0)}</text>}
       {pts.map(p => p[1] != null && <circle key={p[0]} cx={sx(p[0])} cy={sy(p[1])} r={3.5} fill="#7a7396"/>)}
       {rm != null && <g><rect x={sx(10) - 4} y={sy(rm) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(10) - 8} y={sy(rm) + 3} textAnchor="end" className="mini-tick" fill="#2e4a6b">mortgage {rm.toFixed(2)}%</text></g>}
       {rs != null && <g><rect x={sx(0) - 4} y={sy(rs) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(0) + 8} y={sy(rs) + 3} className="mini-tick" fill="#2e4a6b">savings {rs.toFixed(2)}%</text></g>}
@@ -387,16 +389,18 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       continue;
     }
     const taps: P[] = [];
-    const branch = (pt: P, k: number, key: string, flow: string, dash?: string) => {
+    const branch = (pt: P, k: number, key: string, flow: string, ret = false, dash?: string) => {  // ret: the return (e) line
       const end: P = vertical ? [c + k, pt[1]] : [pt[0], c + k]; taps.push(end);
-      const f = flowOf(flow), ret = !!dash;
+      const f = flowOf(flow);
       wires.push(line([pt, end], bus.color, key, dash)); wires.push(dot(end, bus.color, key + 'd'));
+      if (!ret) { const mx = (pt[0] + end[0]) / 2, my = (pt[1] + end[1]) / 2, vert = Math.abs(pt[0] - end[0]) < 0.5;  // the flow's name on its line
+        wires.push(<text key={key + 'n'} className="bus-branch-name" fill={bus.color} textAnchor="middle" transform={`translate(${vert ? mx - 5 : mx} ${vert ? my : my - 4}) rotate(${vert ? -90 : 0})`}>{f?.short ?? flow}</text>); }
       wires.push(hit([pt, end], key, { kind: ret ? 'ret' : 'flow', id: flow, at: end }, `${f?.label ?? flow}${ret ? ' · incentive (return)' : ''}: click to plot`));
     };
     // the competitor on the same bus as My Bank (dotted while it is switched off)
     if (bus.b === 'bank') bus.flows.forEach((f, j) => { const t = compTerm(f); ([[t.p, 0, 'p'], [t.q, LANE, 'q']] as const).forEach(([pt, k, s2]) => {
       const end: P = vertical ? [c + k, pt[1]] : [pt[0], c + k]; taps.push(end); wires.push(line([pt, end], bus.color, `${bus.id}c${j}${s2}`, compOn ? undefined : '2 4')); wires.push(dot(end, bus.color, `${bus.id}c${j}${s2}d`)); }); });
-    ends.forEach((e, i) => { const f = bus.flows[Math.floor(i / 2)], who = i % 2 ? bus.b : bus.a; branch(e.p, 0, `${bus.id}${i}p`, f); branch(e.q, LANE, `${bus.id}${i}q`, f);
+    ends.forEach((e, i) => { const f = bus.flows[Math.floor(i / 2)], who = i % 2 ? bus.b : bus.a; branch(e.p, 0, `${bus.id}${i}p`, f); branch(e.q, LANE, `${bus.id}${i}q`, f, true);
       flowDots([e.p, taps[taps.length - 2]], f, who, bus.color, `${bus.id}${i}p`); flowDots([e.q, taps[taps.length - 1]], f, who, bus.color, `${bus.id}${i}q`, true);
       // A3: e and f meters at the boundary port, on the branch just outside the block
       const t = taps[taps.length - 2], dl = Math.hypot(t[0] - e.p[0], t[1] - e.p[1]) || 1, u: P = [(t[0] - e.p[0]) / dl, (t[1] - e.p[1]) / dl], dd = Math.min(30, dl / 2.5);
@@ -470,12 +474,11 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const sotName = sot && sotRep ? sotRep.rows.find(x => x.scenario === sot)?.name ?? sot : '';
   const yc: R = { x: fs.x + 20, y: cbk.y + cbk.h + 84, w: fs.w - 40, h: 250 };
   if (sotName) {
-    // the shock moves the market rates (the yield curve, set outside the model) ...
-    const xr = fs.x + fs.w + 80, ty = o.fs ? yc.y + 50 : fs.y + fs.h / 2, tx = o.fs ? yc.x + yc.w : fs.x + fs.w;
-    wires.push(arrow([[xr, fs.y - 150], [xr, fs.y - 50], [xr, ty], [tx, ty]], D, 'dsot', 'd · rate shock: ' + sotName, 0));
-    // ... and the shocked rates reach My Bank's book: repricing, prepayment, deposits (what the SOT card measures)
-    const sy0 = o.fs ? yc.y + yc.h - 50 : fs.y + fs.h - 20, sx0 = o.fs ? yc.x : fs.x, enter = B.y + B.h - 25, xk = B.x + B.w + 90;
-    over.push(arrow([[sx0, sy0], [xk, sy0], [xk, enter], [B.x + B.w, enter]], D, 'sotrates', 'shocked market rates → My Bank', 0.25));
+    // the shock moves the market rates (the yield curve, set outside the model); from there it reaches My Bank over the
+    // interbank bus (its effort e is the interbank rate) and through My Bank's own rates (Jesse: no separate line)
+    const xr = fs.x + fs.w + 80, ty = o.fs ? yc.y + 50 : fs.y + fs.h / 2, tx = o.fs ? yc.x + yc.w : fs.x + fs.w, pts = [[xr, fs.y - 150], [xr, fs.y - 50], [xr, ty], [tx, ty]];
+    wires.push(arrow(pts, D, 'dsot', 'd · rate shock: ' + sotName, 0));
+    wires.push(hit(pts, 'dsot', { kind: 'shock', id: sot, at: [xr, fs.y - 40] }, 'Rate shock: click for its pattern over the maturities'));
   }
   // ---- B1: DNB (the supervisor) sends the regulatory thresholds to the ALCO: a signal with its values (CRR, DNB)
   { const th = result.ledger?.thresholds ?? [], txt = th.map(t => t.value == null ? `RW floor ${t.text ?? ''}`.replace(' up to 55% LTV, 45% above', '/45%') : `${t.label.replace(' minimum', '')} ≥ ${t.value}${t.unit}`).join(' · ');
@@ -613,6 +616,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     } else if (pick.kind === 'bus') {
       const b = BUSES.find(x => x.id === pick.id)!; title = b.label; note = 'One quantity on this bus: every flow below is in the same unit.';
       b.flows.forEach(id => { const f = flowOf(id); if (f) rows.push({ label: f.label, unit: f.unit, y: series(f.signal) }); });
+    } else if (pick.kind === 'shock' && sotRep) {
+      title = 'Rate shock: ' + sotName; note = `Change of the zero rate per maturity (EU RTS 2024/856 sizes), a step in ${(result.year[0] + 3).toFixed(0)}. The short end moves the market rate (interbank, reserves, central bank), the 10-year point the mortgage rate; savers compare their rate with the market.`;
     } else if (pick.kind === 'comp') {
       title = 'Competitor bank'; note = 'Sharper mortgage rates, funded more by other banks, a thinner buffer (M. Mendel; values not calibrated).';
       ([['Tier 1 capital ratio', 'I(Bk_t1c)'], ['Market share of mortgages', 'I(Bk_sharec)'], ['NSFR', 'I(Bk_nsfrc)'], ['Mortgage rate', 'I(Bk_rmc)']] as const).forEach(([l, k]) => rows.push({ label: l, unit: '%', y: series(k), min: k === 'I(Bk_t1c)' ? 6 : undefined }));
@@ -623,6 +628,12 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     card = <div className="bus-pick nodrag nowheel" style={{ left: pick.at[0] + 14, top: pick.at[1] + 14 }} onClick={e => e.stopPropagation()}>
       <div className="bus-pick-head"><b>{title}</b><button className="ghost small" aria-label="Close" onClick={() => setPick(null)}>×</button></div>
       {note && <small>{note}</small>}
+      {pick.kind === 'shock' && sotRep && (() => { const dz = sotRep.curves[pick.id].map((z, i) => z - sotRep.curves.base[i]), m = sotRep.maturities, W2 = 330, H2 = 120, lo = Math.min(-3.5, ...dz), hi = Math.max(3.5, ...dz);
+        const sx = (T: number) => 30 + T / 30 * (W2 - 40), sy = (v: number) => 8 + (hi - v) / (hi - lo) * (H2 - 30);
+        return <svg width={W2} height={H2} role="img" aria-label="Rate shock per maturity"><line x1={30} x2={W2 - 10} y1={sy(0)} y2={sy(0)} stroke="#c9cfd8"/>
+          <polyline points={m.map((T, i) => `${sx(T)},${sy(dz[i])}`).join(' ')} fill="none" stroke={SOT_RED} strokeWidth={2}/>
+          {[lo, 0, hi].map(v => <text key={v} x={26} y={sy(v) + 3} textAnchor="end" className="mini-tick">{v > 0 ? '+' : ''}{v.toFixed(1)} pp</text>)}
+          {[0, 10, 20, 30].map(T => <text key={T} x={sx(T)} y={H2 - 6} textAnchor="middle" className="mini-tick">{T} yr</text>)}</svg>; })()}
       {rows.map(r => <div key={r.label}><div className="bus-pick-row">{r.label}</div>{r.y ? <StmtPlot y={r.y} at={at} years={result.year} unit={r.unit} label={r.label} min={r.min}/> : <small className="muted">Not in this run.</small>}</div>)}
     </div>;
   }
@@ -639,7 +650,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
       <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)</div>
       <YieldCurve r={yc} result={result} at={at}
-        shock={sotName && sotRep ? { m: sotRep.maturities, dz: sotRep.curves[sot].map((z, i) => z - sotRep.curves.base[i]), name: sotName } : undefined}/></>}
+        shock={sotName && sotRep ? { m: sotRep.maturities, dz: sotRep.curves[sot].map((z, i) => z - sotRep.curves.base[i]), name: sotName, after: result.year[at] >= result.year[0] + 3 } : undefined}/></>}
     {sotName && sotRep && <SotCard r={sotR} rep={sotRep} sel={sot} pick={setSot}/>}
     {/* the competitor: a closed bank like My Bank, no text; a click opens its Tier 1, market share, NSFR and rate */}
     <div onClick={e => { e.stopPropagation(); if (compOn) setPick({ kind: 'comp', id: 'comp', at: [comp.x + comp.w, comp.y] }); }} style={{ cursor: compOn ? 'pointer' : undefined }}
@@ -655,13 +666,15 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
 
 const nodeTypes = { diagram: Diagram };
 
-function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
+type ShockProps = { shock: number; setShock: (k: number) => void; alm: boolean; setAlm: (v: boolean) => void };
+function Inner({ result, desk, patch, toolsSlot, shock, setShock, alm, setAlm }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null } & ShockProps) {
   const n = result.year.length;
   const [buses, setBuses] = useState(true);
   // Supervisory Outlier Test: '' = no rate shock; a scenario id shows it on the canvas (report fetched once)
-  const [sot, setSotRaw] = useState(''), [sotRep, setSotRep] = useState<SotReport | null>(null);
-  const setSot = useCallback((s: string) => { setSotRaw(s); if (s) setO(old => old.fs ? old : { ...old, fs: true }); }, []);
-  useEffect(() => { if (sot && !sotRep) api<SotReport>('/bank/sot').then(setSotRep).catch(() => setSotRaw('')); }, [sot, sotRep]);  // buses on by default (M. Mendel, 26 Nov 2026)
+  // the rate shock is a scenario input (Bank.tsx: shock_scen): choosing one runs the whole bank netlist with it
+  const sot = shock > 0 ? SOT_SC[shock - 1] : '', [sotRep, setSotRep] = useState<SotReport | null>(null);
+  const setSot = useCallback((s: string) => { setShock(s ? SOT_SC.indexOf(s) + 1 : 0); if (s) setO(old => old.fs ? old : { ...old, fs: true }); }, [setShock]);
+  useEffect(() => { if (sot && !sotRep) api<SotReport>('/bank/sot').then(setSotRep).catch(() => {}); }, [sot, sotRep]);  // buses on by default (M. Mendel, 26 Nov 2026)
   const [sizes, setSizes] = useState<Record<string, P>>({}), playRef = useRef(false);
   // A1: no layout change while Play runs (a measured height is a 'fit:' size; dragged sizes come from the user)
   const resize = useCallback((k: string, s: P | null) => { if (playRef.current && k.startsWith('fit:')) return; setSizes(old => { const n = { ...old }; if (s) n[k] = s; else delete n[k]; return n; }); }, []);  // Ports (default): the port pairs wired directly; Buses: one bus per conserved quantity
@@ -700,6 +713,7 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
       <input type="range" min={0} max={n - 1} value={Math.min(at, n - 1)} onChange={e => { setPlaying(false); setAt(+e.target.value); }}/>
       <div className="segmented small" role="group" aria-label="Connections"><button className={!buses ? 'active' : ''} aria-pressed={!buses} onClick={() => setBuses(false)}>Ports</button><button className={buses ? 'active' : ''} aria-pressed={buses} onClick={() => setBuses(true)}>Buses</button></div>
+      <div className="segmented small" role="group" aria-label="ALM desk"><button className={alm ? 'active' : ''} aria-pressed={alm} onClick={() => setAlm(true)}>Desk on</button><button className={!alm ? 'active' : ''} aria-pressed={!alm} onClick={() => setAlm(false)}>Desk off</button></div>
       <label className="sot-pick">Rate shock (SOT) <select aria-label="Rate shock (SOT)" value={sot} onChange={e => setSot(e.target.value)}>
         <option value="">none</option>{SOT_SC.map(sc => <option key={sc} value={sc}>{sc.replace('_', ' ').replace(/^./, c => c.toUpperCase())}</option>)}</select></label>
       <button className="ghost small" onClick={() => { setO({}); window.setTimeout(() => rf.fitView({ duration: 450, padding: 0.04 }), 40); }}>Close all</button>
@@ -710,6 +724,6 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
   </>;
 }
 
-export function BankBusView({ result, desk, patch, toolsSlot }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null }) {
-  return <section className="panel bus-view"><ReactFlowProvider><Inner result={result} desk={desk} patch={patch} toolsSlot={toolsSlot}/></ReactFlowProvider></section>;
+export function BankBusView({ result, desk, patch, toolsSlot, ...sp }: { result: Result; desk: ReactNode; patch: (m: MapData) => MapData; toolsSlot?: HTMLElement | null } & ShockProps) {
+  return <section className="panel bus-view"><ReactFlowProvider><Inner result={result} desk={desk} patch={patch} toolsSlot={toolsSlot} {...sp}/></ReactFlowProvider></section>;
 }

@@ -34,6 +34,7 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     M, Lf, Dep, W, E, cash = T("I(Bk_m)"), T("I(Bk_lf)"), T("I(Bk_dep)"), T("I(Bk_w)"), T("I(Bk_e)"), T("I(Bk_cash)")
     rm, rs, prem, uw, shape = T("I(Bk_rm)"), T("I(Bk_rs)"), T("I(Bk_prem)"), T("I(Bk_uw)"), T("I(Bk_shape)")
     rw_m, rwa, ltv = T("I(Bk_rw_m)"), T("I(Bk_rwa)"), T("I(Bk_ltv)")
+    rmk = T("I(Bk_rmk)") if "I(Bk_rmk)" in tr else 0 * rm + b["r_mkt"]   # market rate, with a rate shock if one is set
     gap = b["gap_penalty_pp"] / 100
     zero = 0 * M
     v: dict[str, np.ndarray] = {}
@@ -67,11 +68,11 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     py = "model units / year"
     acc("ii_mortgages", "Interest on mortgages", "loan rate × mortgages", rm * M, ["mortgages"], py, MENKVELD + " Fig. 2-3 (loan interest)")
     acc("ii_firms", "Interest on loans to firms", "loan rate × loans to firms", rm * Lf, ["firm_loans"], py, MENKVELD + " Fig. 2-3 (loan interest)")
-    acc("ii_reserves", "Interest on reserves", "market rate × reserves", b["r_mkt"] * v["reserves"], ["reserves"], py)
+    acc("ii_reserves", "Interest on reserves", "market rate × reserves", rmk * v["reserves"], ["reserves"], py)
     acc("interest_income", "Interest income", "sum of the above", v["ii_mortgages"] + v["ii_firms"] + v["ii_reserves"], ["ii_mortgages", "ii_firms", "ii_reserves"], py)
     acc("ie_savings", "Interest on savings", "savings rate × savings deposits", rs * Dep, ["savings"], py, MENKVELD + " Fig. 2-3 (deposit interest)")
-    acc("ie_interbank", "Interest to other banks", "(market rate + premium) × deposits of other banks", (b["r_mkt"] + prem) * W, ["interbank"], py)
-    acc("ie_cb", "Interest to the central bank", "(market rate + 1 pp marginal lending facility) × central-bank borrowing", (b["r_mkt"] + gap) * v["cb_borrowing"], ["cb_borrowing"], py, "ECB corridor: marginal lending facility = MRO rate + 1 pp (ECB press release 8 Oct 2008)")
+    acc("ie_interbank", "Interest to other banks", "(market rate + premium) × deposits of other banks", (rmk + prem) * W, ["interbank"], py)
+    acc("ie_cb", "Interest to the central bank", "(market rate + 1 pp marginal lending facility) × central-bank borrowing", (rmk + gap) * v["cb_borrowing"], ["cb_borrowing"], py, "ECB corridor: marginal lending facility = MRO rate + 1 pp (ECB press release 8 Oct 2008)")
     acc("interest_expense", "Interest expense", "sum of the above", v["ie_savings"] + v["ie_interbank"] + v["ie_cb"], ["ie_savings", "ie_interbank", "ie_cb"], py)
     acc("nii", "Net interest income", "interest income − interest expense", v["interest_income"] - v["interest_expense"], ["interest_income", "interest_expense"], py, MENKVELD + " Fig. 2-3")
     acc("imp_mortgages", "Impairments on mortgages", "loss rate × underwater share × mortgages", b["loss_uw"] * uw * M, ["mortgages"], py)
@@ -111,7 +112,7 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
         note="Run-off rates are not modelled per deposit type; the 100% run-off of other banks' short deposits and any inflows are left out. "
              "The model bank holds no securities, so its only liquid asset is cash.")
     acc("roe", "Return on equity", "net profit ÷ equity", 100 * v["net_profit"] / E, ["net_profit", "equity"], "% a year", MENKVELD + " Fig. 2-2")
-    acc("margin10", "Mortgage rate over the 10-year rate", "mortgage rate − (market rate + 10-year term premium)", 100 * (rm - b["r_mkt"] - b["tp10"]),
+    acc("margin10", "Mortgage rate over the 10-year rate", "mortgage rate − (market rate + 10-year term premium)", 100 * (rm - b["r_mkt"] - b["tp10"] - (T("I(Bk_dlg)") if "I(Bk_dlg)" in tr else 0)),
         unit="pp", source="ECB euro-area AAA yield curve, average 10y-1y spread 2004-2026 (+1.02 pp)", note="Dutch mortgages are mostly fixed for 10 years.")
     acc("nim", "Net interest margin", "net interest income ÷ interest-earning assets (reserves + mortgages + loans to firms)", 100 * v["nii"] / v["assets"],
         ["nii", "assets"], "% a year", "Definition (no regulatory minimum)")

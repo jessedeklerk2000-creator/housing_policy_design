@@ -77,6 +77,12 @@ BANK_DEFAULTS = dict(
     # sizes (book 25, savings 8, other banks 17, equity 0.62: Tier 1 at the start ~0.82 x the bank's, the ratio of the SOT
     # handoff's Tier 1 14 vs 17). Not calibrated; not tuned to give a story.
     competitor=0.0, comp_gap_pp=0.3, comp_share_per_pp=1.0, Mc0=25.0, Depc0=8.0, Wc0=17.0, Ec0=0.62,
+    # Rate shock (SOT scenario on the canvas, 26 Nov 2026): shock_scen 0 = none, 1-6 = the six EU RTS 2024/856 scenarios
+    # (parallel up/down, steepener, flattener, short up/down; EU sizes), a step at shock_year. It enters the market rates:
+    # the short end (3 months) moves r_mkt (reserves, interbank, central bank), the 10-year point the mortgage rate (Dutch
+    # mortgages mostly 10-year fixed), and savers compare their rate with the shocked market rate; the savings rate passes
+    # on dep_beta of the short shock (0.5, as in the SOT handoff). The ALM desk reacts on top of that.
+    shock_scen=0.0, shock_year=3.0, dep_beta=0.5,
     gov_step=0.0, gov_year=5.0,  # government subsidy step (model units) and the year it starts
     # Firm loans (24 Nov 2026): a short stock fed by the netlist's firm-loan port I8 (30 a year), repaid in Lf0/30 years;
     # firms borrow eta_firm less per pp the loan rate is above its start; the loan interest B5 floats with the loan rate.
@@ -150,6 +156,16 @@ def _annuity(r: str) -> str:
     return f"((1-(1+({r}))**(-30))/({r}))"
 
 
+SHOCK_SCEN = ["none", "parallel_up", "parallel_down", "steepener", "flattener", "short_up", "short_down"]
+
+
+def rate_shock(b: dict, T: float) -> float:
+    """dR (decimal) at maturity T of the selected SOT scenario, EU sizes (0 when none)."""
+    from .sot import SIZES, shock
+    k = int(round(b.get("shock_scen", 0)))
+    return 0.0 if k <= 0 else float(shock(SHOCK_SCEN[k], np.array([T]), SIZES["EU RTS 2024/856"])[0])
+
+
 def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict]:
     e = equilibrium(b)
     on_c = b["competitor"] > 0
@@ -165,7 +181,11 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
     on, fb = ("1" if alm_on else "0"), ("1" if housing_feedback else "0")
     S = lambda name, expr: f"B§bk_{name} 0 0 I={expr}"
     D1 = f"((ln(I(bk_ltv)/{g('ltv_split')})+{v['sigma_ltv'] ** 2 / 2!r})/{g('sigma_ltv')})"
+    ts = T0 + YR * b["shock_year"]
     rows = [
+        S("dsh", f"{rate_shock(b, 0.25)!r}*u(time-{ts!r})"),                # rate shock: short end (3 months)
+        S("dlg", f"{rate_shock(b, 10.0)!r}*u(time-{ts!r})"),                # rate shock: 10-year point
+        S("rmk", f"{g('r_mkt')}+I(bk_dsh)"),                                  # the market rate (short end)
         S("shape", "min((30-I(Crisis_timing))/20,1)"),                          # crisis timing (0..1) at the other banks
         S("W", f"{g('W0')}*(1-{g('funding_cut')}*I(bk_shape))"),              # funding from other banks
         S("P", f"I(Construction_cost)/{P_START + P_PER_SUBSIDY * b['hist_subsidy']!r}"),  # price index, 1 at the start
@@ -195,12 +215,12 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("t1_err", f"{g('t1_ref')}-I(bk_t1)"),
         S("ftp", f"{g('ftp0')}+{on}*({g('Kp_ftp')}*I(bk_nsfr_err)+{g('Ki_ftp')}*idt(I(bk_nsfr_err))/{YR})"),
         S("s", f"{g('s0')}+{on}*({g('Kp_s')}*I(bk_t1_err)+{g('Ki_s')}*idt(I(bk_t1_err))/{YR})"),
-        S("rm", "I(bk_ftp)+I(bk_s)/2"),                                     # loan rate (Menkveld eq. 3-4, 3-8)
-        S("rs", "I(bk_ftp)-I(bk_s)/2"),                                     # savings rate
+        S("rm", "I(bk_ftp)+I(bk_s)/2+I(bk_dlg)"),                           # loan rate (Menkveld eq. 3-4, 3-8) + the 10-year shock
+        S("rs", f"I(bk_ftp)-I(bk_s)/2+{g('dep_beta')}*I(bk_dsh)"),         # savings rate + part of the short shock
         S("theta", f"{g('theta0')}*(1-{g('uw_mobility')}*I(bk_uw))"),
         S("lti", f"{g('lti0')}*{_annuity('I(bk_rm)')}/{_annuity(g('rm0'))}/I(bk_P)"),
         S("lnew", f"-{g('soft')}*ln(exp(-{g('ltv_cap')}/{g('soft')})+exp(-I(bk_lti)/{g('soft')}))"),
-        f"B§Deposit_flow 0 0 I=({g('Dep0')}*(1+{g('eta_dep')}*(I(bk_rs)-{g('rs0')})*100)-I(bk_Dep))/{g('tau_dep')}",  # drawn: Inflow
+        f"B§Deposit_flow 0 0 I=({g('Dep0')}*(1+{g('eta_dep')}*(I(bk_rs)-{g('rs0')}-I(bk_dsh))*100)-I(bk_Dep))/{g('tau_dep')}",  # vs the market rate  # drawn: Inflow
         S("Dep", f"{g('Dep0')}+idt(I(Deposit_flow))/{YR}"),                 # drawn: Deposits (capacitor)
         # lending supply (26 Nov 2026): the bank lends credit_supply % less per 1% of funding lost (Khwaja & Mian 2008)
         S("lsf", f"max(1-{fb}*{g('credit_supply')}*(1-(I(bk_Dep)+I(bk_W))/{v['Dep0'] + v['W0']!r}),0.2)"),
@@ -208,7 +228,7 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         # ---- competitor bank (B3; competitor=0: all of it zero)
         # its own rate, fixed: 0.3 pp below the bank's start rate (it has no ALM desk). Tied to the bank's rate, it followed the
         # bank's desk into a price war and failed without any crisis (Jesse, 26 Nov 2026: it should not)
-        S("rmc", f"{e['rm0']!r}-{v['comp_gap_pp'] / 100!r}*u(time-{T0!r})"),     # sharper from year 0 (not in the warm-up before it)
+        S("rmc", f"{e['rm0']!r}-{v['comp_gap_pp'] / 100!r}*u(time-{T0!r})+I(bk_dlg)"),     # sharper from year 0 (not in the warm-up before it)
         S("sc", f"{g('competitor')}/(1+exp(-({e['a0']!r}+{e['beta']!r}*100*(I(bk_rm)-I(bk_rmc)))))"),   # its share of new lending
         S("lsfc", f"max(1-{fb}*{g('credit_supply')}*{v['Wc0'] / (v['Depc0'] + v['Wc0'])!r}*{g('funding_cut')}*I(bk_shape),0.2)"),
         "B§Comp_flow 0 0 I=" + f"I(bk_sc)*I(bk_theta)*I(bk_V)*I(bk_lnew)*I(bk_lsfc)-I(bk_theta)*I(bk_Mc)-I(bk_Mc)/{b['T_amort']!r}",
@@ -216,7 +236,7 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("Wc", f"{g('competitor')}*max({g('Wc0')}+I(bk_Mc)-{g('Mc0')},0)*(1-{g('funding_cut')}*I(bk_shape))"),  # growth funded by other banks
         S("Depc", f"{g('competitor')}*{g('Depc0')}"),
         S("cashc", "I(bk_Depc)+I(bk_Ec)+I(bk_Wc)-I(bk_Mc)"),
-        S("niic", f"I(bk_rmc)*I(bk_Mc)+{g('r_mkt')}*I(bk_cashc)-{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cashc),0)-I(bk_rs)*I(bk_Depc)-({g('r_mkt')}+I(bk_prem))*I(bk_Wc)"),
+        S("niic", f"I(bk_rmc)*I(bk_Mc)+I(bk_rmk)*I(bk_cashc)-{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cashc),0)-I(bk_rs)*I(bk_Depc)-(I(bk_rmk)+I(bk_prem))*I(bk_Wc)"),
         f"B§Comp_profit 0 0 I=I(bk_niic)-{g('loss_uw')}*I(bk_uw)*I(bk_Mc)-{g('pay0')}*I(bk_Ec)/{g('E0')}",
         S("Ec", f"{g('competitor')}*{g('Ec0')}+idt(I(Comp_profit))/{YR}"),
         S("t1c", f"I(bk_Ec)/max(I(bk_rw_m)*I(bk_Mc),1e-6)"),
@@ -228,8 +248,8 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         # Wholesale funding and any funding gap (negative cash: emergency borrowing) cost the market rate plus the
         # premium, which rises in the crisis. Without the gap term, losing funding made the bank richer (20 Nov 2026).
         S("prem", f"{g('w_prem')}+{v['premium_pp'] / 100!r}*I(bk_shape)"),
-        S("nii", f"I(bk_rm)*(I(bk_M)+I(bk_Lf))+{g('r_mkt')}*I(bk_cash)-{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cash),0)-I(bk_rs)*I(bk_Dep)"
-                 f"-({g('r_mkt')}+I(bk_prem))*I(bk_W)"),
+        S("nii", f"I(bk_rm)*(I(bk_M)+I(bk_Lf))+I(bk_rmk)*I(bk_cash)-{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cash),0)-I(bk_rs)*I(bk_Dep)"
+                 f"-(I(bk_rmk)+I(bk_prem))*I(bk_W)"),
         f"B§Net_interest 0 0 I=I(bk_nii)-{g('loss_uw')}*I(bk_uw)*I(bk_M)-{g('pay0')}*I(bk_E)/{g('E0')}",  # drawn: NII
         S("E", f"{g('E0')}+idt(I(Net_interest))/{YR}"),                     # drawn: Equity (capacitor)
         S("rate", f"0.01033+{fb}*{g('k_rate')}*(I(bk_rmavg)-{e['rmavg0']!r})/{YR}"),   # what the housing market pays (avg over the banks)
@@ -324,12 +344,14 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
         except ValueError:  # a run that breaks down has non-finite values; the canvas then shows no values
             run_result = None
         if run_result:  # ratios and rates in percent on the canvas (Tier 1 16.3, not 0.163); r = the Tier 1 target
-            for k in ("I(Bk_t1)", "I(Bk_ltf)", "I(Bk_rm)", "I(Bk_rs)", "I(Bk_ftp)", "I(Bk_s)", "I(Bk_uw)", "I(Bk_ltv)", "I(Bk_ltf_err)", "I(Bk_t1_err)", "I(Bk_rate)", "I(Bk_nsfr)", "I(Bk_nsfr_err)", "I(Bk_t1c)", "I(Bk_nsfrc)", "I(Bk_ltdc)", "I(Bk_sharec)", "I(Bk_rmc)"):
+            for k in ("I(Bk_t1)", "I(Bk_ltf)", "I(Bk_rm)", "I(Bk_rs)", "I(Bk_ftp)", "I(Bk_s)", "I(Bk_uw)", "I(Bk_ltv)", "I(Bk_ltf_err)", "I(Bk_t1_err)", "I(Bk_rate)", "I(Bk_nsfr)", "I(Bk_nsfr_err)", "I(Bk_t1c)", "I(Bk_nsfrc)", "I(Bk_ltdc)", "I(Bk_sharec)", "I(Bk_rmc)", "I(Bk_rmk)"):
                 if k in run_result["traces"]:
                     run_result["traces"][k] = [round(x * 100, 4) for x in run_result["traces"][k]]
             run_result["traces"]["Bank_target_t1"] = [round(100 * e["t1_ref"], 4)] * len(run_result["year"])
+            yrs0 = np.asarray(run_result["year"], dtype=float) - YEAR_AT_RAW_ZERO
             for T, tp in ((0, 0.0), (2, b["tp2"]), (5, b["tp5"]), (10, b["tp10"]), (20, b["tp20"]), (30, b["tp30"])):  # B2: the yield curve (%), 0-30 years
-                run_result["traces"][f"Yield:{T}"] = [round(100 * (b["r_mkt"] + tp), 4)] * len(run_result["year"])
+                dR = rate_shock(b, max(T, 0.25)) * (yrs0 >= b["shock_year"])     # + the rate shock from shock_year on
+                run_result["traces"][f"Yield:{T}"] = [round(100 * (b["r_mkt"] + tp + d), 4) for d in dR]
             # The loop on the canvas (Menkveld Fig. 3-2): r = financial targets, y = financial reports, e = r - y for both
             # channels (target minus measured). The FTP controller uses the opposite sign (loan-to-deposit above target -> FTP up).
             tt = run_result["traces"]
@@ -388,7 +410,7 @@ RANGES = {"funding_cut": (0.0, 1.0), "premium_pp": (0.0, 4.0), "k_rate": (1.0, 9
           "uw_mobility": (0.0, 0.5), "theta0": (0.03, 0.10), "sigma_ltv": (0.25, 0.6),
           "gov_step": (-20.0, 20.0), "gov_year": (1.0, 25.0), "covid_scale": (0.0, 2.0), "hist_subsidy": (0.0, 10.0),
           "credit_supply": (0.0, 1.5), "k_credit": (0.0, 400.0), "eta_firm": (0.0, 0.30),
-          "competitor": (0.0, 1.0), "comp_gap_pp": (0.0, 1.0), "comp_share_per_pp": (0.0, 3.0)}
+          "competitor": (0.0, 1.0), "shock_scen": (0.0, 6.0), "shock_year": (1.0, 25.0), "comp_gap_pp": (0.0, 1.0), "comp_share_per_pp": (0.0, 3.0)}
 
 
 @lru_cache(maxsize=256)

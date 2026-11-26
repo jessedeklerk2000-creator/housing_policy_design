@@ -28,10 +28,10 @@ interface BankRun {
 }
 
 // Defaults = bank_netlist.BANK_DEFAULTS (demo choices). Ranges = bank_netlist.RANGES.
-const DEF = { funding_cut: 0.5, premium_pp: 1.9, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, credit_supply: 0.6, k_credit: 110, eta_firm: 0.10, competitor: 0, comp_gap_pp: 0.3, comp_share_per_pp: 1.0 };
+const DEF = { funding_cut: 0.5, premium_pp: 1.9, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, credit_supply: 0.6, k_credit: 110, eta_firm: 0.10, competitor: 0, comp_gap_pp: 0.3, comp_share_per_pp: 1.0, shock_scen: 0, shock_year: 3 };
 type Params = typeof DEF;
 type Key = keyof Params;
-const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 4], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], credit_supply: [0, 1.5], k_credit: [0, 400], eta_firm: [0, 0.3], competitor: [0, 1], comp_gap_pp: [0, 1], comp_share_per_pp: [0, 3] };
+const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 4], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], credit_supply: [0, 1.5], k_credit: [0, 400], eta_firm: [0, 0.3], competitor: [0, 1], comp_gap_pp: [0, 1], comp_share_per_pp: [0, 3], shock_scen: [0, 6], shock_year: [1, 25] };
 const overrides = (p: Params) => Object.fromEntries((Object.keys(DEF) as Key[]).filter(k => Math.abs(p[k] - DEF[k]) > 1e-9).map(k => [k, p[k]]));
 const YEAR0 = 1996.46;  // calendar year of run year 0 (scenario.YEAR_AT_RAW_ZERO)
 
@@ -299,7 +299,8 @@ export function BankMode() {
     {error && <p className="notice bad">{error}</p>}
     {broken.length > 0 && <p className="notice bad">{broken.map(r => `${r === now ? 'This run' : 'The comparison'} runs away in ${((r.breakdown_year ?? 0) + YEAR0).toFixed(1)}`).join('; ')}: the desk raises rates, prices fall, Tier 1 falls further, the desk raises rates again. The model leaves its valid range there, so the lines stop.</p>}
 
-    {view === 'bus' && (now?.result ? <BankBusView result={now.result} patch={patchMap} desk={<LiveDesk p={p} alm={alm}/>} toolsSlot={busSlot}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
+    {view === 'bus' && (now?.result ? <BankBusView result={now.result} patch={patchMap} desk={<LiveDesk p={p} alm={alm}/>} toolsSlot={busSlot}
+      shock={p.shock_scen} setShock={k => set('shock_scen', k)} alm={alm} setAlm={setAlm}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
     {view === 'loop' && <BankCtx.Provider value={variant}>
       {scenario && now?.result ? <ModelMap key="bank" scenario={scenario} result={now.result} pinned={null} busy={busy} run={() => {}} setFeedback={setAlm} update={() => {}} design={DESIGN} setDesign={() => {}} lag={0} left={left}/>
         : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>}
