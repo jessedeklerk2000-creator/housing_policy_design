@@ -284,11 +284,11 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     : [[gx, gov.y + gov.h], [gx, R.hm.y]];
   wires.push(arrow(govPts, D, 'dgov', 'd · subsidy', o.hm ? 0.3 : 0.5));
   wires.push(hit(govPts, 'dgov', { kind: 'd', id: 'd_gov', at: [gx, laneY] }, 'Government subsidy: click to plot'));
-  // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
+  // the other banks' shock (deposits withdrawn, premium up) into the bank, from above
   // the financial crisis comes from the Financial sector (other banks withdraw deposits, cut credit)
   // the financial crisis (Jesse): from outside into the Financial sector; it reaches the bank through the interbank link
   { const tgt = o.fs ? ob : fs, fx = tgt.x + tgt.w / 2, pts = [[fx, fs.y - 110], [fx, tgt.y]];  // open: into Other banks
-    wires.push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); wires.push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [fx, fs.y - 50] }, 'Financial crisis: deposits withdrawn, firm credit cut: click to plot')); }
+    wires.push(arrow(pts, D, 'dob', 'd · financial crisis', 0.4)); wires.push(hit(pts, 'dob', { kind: 'd', id: 'd_others', at: [fx, fs.y - 50] }, 'Financial crisis at other banks: deposits withdrawn, premium up: click to plot')); }
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {

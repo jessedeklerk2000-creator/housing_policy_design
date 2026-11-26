@@ -62,8 +62,8 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     acc("interest_expense", "Interest expense", "sum of the above", v["ie_savings"] + v["ie_interbank"] + v["ie_cb"], ["ie_savings", "ie_interbank", "ie_cb"], py)
     acc("nii", "Net interest income", "interest income − interest expense", v["interest_income"] - v["interest_expense"], ["interest_income", "interest_expense"], py, MENKVELD + " Fig. 2-3")
     acc("imp_mortgages", "Impairments on mortgages", "loss rate × underwater share × mortgages", b["loss_uw"] * uw * M, ["mortgages"], py)
-    acc("imp_firms", "Impairments on loans to firms", "loss rate × crisis shape × loans to firms", b["loss_firm"] * shape * Lf, ["firm_loans"], py)
-    acc("impairments", "Impairments", "sum of the above", v["imp_mortgages"] + v["imp_firms"], ["imp_mortgages", "imp_firms"], py)
+    # No firm-loan losses since 26 Nov 2026: the crisis starts at the other banks, not at the firms.
+    acc("impairments", "Impairments", "sum of the above", v["imp_mortgages"], ["imp_mortgages"], py)
     acc("net_profit", "Net profit", "net interest income − impairments", v["nii"] - v["impairments"], ["nii", "impairments"], py)
     acc("dividend", "Dividend", "payout in proportion to equity (equity at rest at the start)", e["pay0"] * E / b["E0"], ["equity"], py)
     acc("retained", "Retained profit", "net profit − dividend", v["net_profit"] - v["dividend"], ["net_profit", "dividend"], py)

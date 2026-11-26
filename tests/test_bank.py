@@ -37,8 +37,9 @@ def test_the_bank_passes_the_crisis_on():
     assert all(x["ok"] for x in (a, b, c))
     assert a["summary"]["min_price_pct"] > -2 and b["summary"]["min_price_pct"] > -2  # housing hardly notices
     assert a["summary"]["min_tier1_pct"] < c["summary"]["min_tier1_pct"] - 0.8          # ...but the bank takes the hit
-    assert c["summary"]["min_price_pct"] == pytest.approx(-7.3, abs=0.5)                 # the desk passes it on (bank channel only)
-    assert c["summary"]["max_price_after_crisis_pct"] == pytest.approx(4.8, abs=0.7)     # and the rebound
+    # The desk passes it on (bank channel only). 26 Nov 2026: crisis only at the other banks, credit supply 0.6 (was -7.3, 4.8)
+    assert c["summary"]["min_price_pct"] == pytest.approx(-4.2, abs=0.5)
+    assert c["summary"]["max_price_after_crisis_pct"] == pytest.approx(2.6, abs=0.7)     # and the rebound
     assert c["summary"]["mortgage_rate_range_pct"][1] > 3.8 and a["summary"]["mortgage_rate_range_pct"] == [3.7, 3.7]
 
 
@@ -56,7 +57,7 @@ def test_government_step_moves_the_price():
 def test_api_whitelists_and_clamps(tmp_path):
     c = TestClient(create_app(tmp_path / "t.sqlite3"))
     r = c.post("/api/bank/simulate", json={"overrides": {}, "alm_on": True, "housing_feedback": True})
-    assert r.status_code == 200 and r.json()["summary"]["min_price_pct"] == pytest.approx(-7.3, abs=0.5)
+    assert r.status_code == 200 and r.json()["summary"]["min_price_pct"] == pytest.approx(-4.2, abs=0.5)
     assert c.post("/api/bank/simulate", json={"overrides": {"E0": 5}}).status_code == 422
     assert c.post("/api/bank/simulate", json={"overrides": {}, "netlist": "x"}).status_code == 422
     big = c.post("/api/bank/simulate", json={"overrides": {"funding_cut": 9}}).json()
@@ -120,3 +121,15 @@ def test_cash_flow_statement_reconciles(ov, alm, fb):
     V = r["ledger"]["values"]
     assert max(abs(x) for x in V["cf_check"] if x is not None) < 0.01
     assert r["ledger"]["groups"][-1]["label"] == "Metrics"
+
+
+def test_crisis_starts_at_the_other_banks_only():
+    """26 Nov 2026: no shock at the firms; the bank cuts new firm lending by credit_supply % per 1% funding lost."""
+    o = {"covid_scale": 0}
+    c, n = bn.simulate(o), bn.simulate({**o, "credit_supply": 0.0})
+    lines = bn.lines({**bn.BANK_DEFAULTS, **o})[0]
+    assert not any("loss_firm" in l or "firm_link" in l for l in lines)
+    firm = next(l for l in lines if l.startswith("B§Firm_loans "))
+    assert "I(bk_Dep)+I(bk_W)" in firm and "Crisis_timing" not in firm
+    assert min(c["firm_new_loans"]) < min(n["firm_new_loans"]) - 1   # the bank lends less to firms when it loses funding
+    assert bn.BANK_DEFAULTS["credit_supply"] == 0.6                   # Khwaja & Mian (2008)

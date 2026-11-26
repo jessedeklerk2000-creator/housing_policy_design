@@ -10,8 +10,9 @@ already has the ports:
     The netlist's rate channel is weak (+1 pp -> -0.12% price), so the change is multiplied by k_rate (demo choice).
   - Savings rate r_s = FTP - spread drives B2, the savings-interest flow (L15), which was a constant 5.
   - Government: the owner-occupied subsidy source, a user-set step (a disturbance, not a controller here).
-  - Crisis (aggregate bank): other banks withdraw wholesale funding and raise the interbank premium; firm lending I8 is
-    cut as in the netlist's W-shaped financial crisis. No shock at the firms. Timing follows the I8 cut.
+  - Crisis: starts at the other banks only (26 Nov 2026): they withdraw wholesale funding and raise the interbank premium.
+    Timing follows the netlist's W-shaped firm-credit path (I8), used as a clock only. No direct shock at the firms:
+    the bank passes the funding loss on through its own firm lending (credit supply, Khwaja & Mian 2008) and its rates.
   - ALM desk: PI on FTP for the loan-to-FUNDING ratio (loans / (deposits + wholesale funding); Menkveld uses
     loan-to-deposit, which a funding run does not move) and PI on the spread for the Tier 1 ratio.
 Covid: the netlist's own Covid shock at the firms stays in (Jesse, 20 Nov 2026).
@@ -55,11 +56,13 @@ BANK_DEFAULTS = dict(
     # Firm loans (24 Nov 2026): a short stock fed by the netlist's firm-loan port I8 (30 a year), repaid in Lf0/30 years;
     # firms borrow eta_firm less per pp the loan rate is above its start; the loan interest B5 floats with the loan rate.
     firm_new0=30.0, eta_firm=0.10,
-    # Calibrated 24 Nov 2026 against Dutch data 2008-2014 (Claude's choices): bank lending to firms did not collapse
-    # (peak end-2012, then -2.7% a year, DNB), so 15% of the netlist's firm-credit cut reaches your bank's new firm loans
-    # (firm book about -15%); loan-loss allowances rose from <1% to ~2.5% of loans in 2008-2011 (DNB WP 513), so firm
-    # losses peak at 1% of the firm book a year.
-    loss_firm=0.01, firm_link=0.15,
+    # Credit supply (26 Nov 2026): new firm lending falls by credit_supply % per 1% of funding (savings + deposits of
+    # other banks) the bank has lost. 0.6: Khwaja & Mian (2008), AER 98(4):1413-1442, within-firm estimate for Pakistan
+    # after the 1998 nuclear tests (a 1% larger liquidity drop at a bank -> 0.6% less lending to the same firm). Applied
+    # here to a Dutch bank, which is an assumption. Iyer et al. (2014, RFS 27(1):347-372) find the same direction for
+    # Portugal 2007-08 (banks that relied more on interbank funding cut firm credit more). Applied to the flow of new
+    # loans; with a firm-book turnover of Lf0/firm_new0 = 1.3 years the stock follows within about that time.
+    credit_supply=0.6,
     # NSFR (Basel III, BCBS 2014): available stable funding factors: capital 100%, less stable retail deposits 90% (stable
     # 95% gives the same results), funding from financial institutions with less than six months to maturity 0% (the
     # interbank funding that ran in 2008 was short-term; Jesse 24 Nov 2026); required stable funding factors: residential
@@ -123,7 +126,7 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
     S = lambda name, expr: f"B§bk_{name} 0 0 I={expr}"
     D1 = f"((ln(I(bk_ltv)/{g('ltv_split')})+{v['sigma_ltv'] ** 2 / 2!r})/{g('sigma_ltv')})"
     rows = [
-        S("shape", "min((30-I(Firm_credit))/20,1)"),                            # crisis timing: the netlist's firm-credit cut
+        S("shape", "min((30-I(Crisis_timing))/20,1)"),                          # crisis timing (0..1) at the other banks
         S("W", f"{g('W0')}*(1-{g('funding_cut')}*I(bk_shape))"),              # funding from other banks
         S("P", f"I(Construction_cost)/{P_START + P_PER_SUBSIDY * b['hist_subsidy']!r}"),  # price index, 1 at the start
         S("M", "I(Mortgage_debt)"),
@@ -162,7 +165,7 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("prem", f"{g('w_prem')}+{v['premium_pp'] / 100!r}*I(bk_shape)"),
         S("nii", f"I(bk_rm)*(I(bk_M)+I(bk_Lf))+{g('r_mkt')}*I(bk_cash)-(I(bk_prem)+{v['gap_penalty_pp'] / 100!r})*max(-I(bk_cash),0)-I(bk_rs)*I(bk_Dep)"
                  f"-({g('r_mkt')}+I(bk_prem))*I(bk_W)"),
-        f"B§Net_interest 0 0 I=I(bk_nii)-{g('loss_uw')}*I(bk_uw)*I(bk_M)-{g('loss_firm')}*I(bk_shape)*I(bk_Lf)-{g('pay0')}*I(bk_E)/{g('E0')}",  # drawn: NII
+        f"B§Net_interest 0 0 I=I(bk_nii)-{g('loss_uw')}*I(bk_uw)*I(bk_M)-{g('pay0')}*I(bk_E)/{g('E0')}",  # drawn: NII
         S("E", f"{g('E0')}+idt(I(Net_interest))/{YR}"),                     # drawn: Equity (capacitor)
         S("rate", f"0.01033+{fb}*{g('k_rate')}*(I(bk_rm)-{g('rm0')})/{YR}"),   # what the housing market pays
     ]
@@ -190,10 +193,12 @@ def lines(b: dict, alm_on: bool = True, housing_feedback: bool = True) -> tuple[
             l = f"B§Mortgage_rate_ALM {n1} {n2} I=I(bk_rate)"
         elif l.startswith("B§Mortgage_interest "):
             l = "B§Mortgage_interest N007 0 I=I(Mortgage_debt)*I(Mortgage_rate_ALM)"
-        elif l.startswith("I8 "):  # firm-loan port: the netlist's credit path stays as a signal, firms answer the loan rate
+        elif l.startswith("I8 "):  # firm-loan port: the netlist's credit path stays as the crisis clock only
             pwl = l.split(None, 3)[3]
-            out.append(f"I§Firm_credit 0 0 {pwl}")
-            l = (f"B§Firm_loans 0 N008 I={b['firm_new0']!r}*(1-{b['firm_link']!r}*(1-I(Firm_credit)/{b['firm_new0']!r}))*max(1-{fb}*{b['eta_firm']!r}*(I(bk_rm)-{e['rm0']!r})*100,0.2)")
+            out.append(f"I§Crisis_timing 0 0 {pwl}")
+            fund0 = b['Dep0'] + b['W0']
+            l = (f"B§Firm_loans 0 N008 I={b['firm_new0']!r}*max(1-{fb}*{b['credit_supply']!r}*(1-(I(bk_Dep)+I(bk_W))/{fund0!r}),0.2)"
+                 f"*max(1-{fb}*{b['eta_firm']!r}*(I(bk_rm)-{e['rm0']!r})*100,0.2)")
         elif l.startswith("B5 "):  # firm-loan interest floats with the loan rate and the firm-loan stock
             l = f"B5 N001 N003 I=10*I(bk_Lf)/{b['Lf0']!r}*(1+{fb}*(I(bk_rm)/{e['rm0']!r}-1))+0.001*idt(I(I1))"
         elif l.startswith("B2 "):
@@ -205,7 +210,7 @@ def lines(b: dict, alm_on: bool = True, housing_feedback: bool = True) -> tuple[
             out += rows
         out.append(l)
     for must in ("B§Mortgages ", "B§Mortgage_interest ", "B2 ", "I§Owner_occupied_subsidies ", "B§Firm_loans ", "B5 ", "B§Mortgage_rate_ALM "):
-        assert any(l.startswith(must) and ("bk_" in l or "Firm_credit" in l or "Mortgage_rate_ALM" in l or must.startswith("I§")) for l in out), must
+        assert any(l.startswith(must) and ("bk_" in l or "Crisis_timing" in l or "Mortgage_rate_ALM" in l or must.startswith("I§")) for l in out), must
     return out, e
 
 
@@ -310,7 +315,7 @@ RANGES = {"funding_cut": (0.0, 1.0), "premium_pp": (0.0, 6.0), "k_rate": (1.0, 9
           "Kp_ftp": (0.0, 1.0), "Ki_ftp": (0.0, 1.0), "Kp_s": (0.0, 3.0), "Ki_s": (0.0, 3.0),
           "uw_mobility": (0.0, 0.5), "theta0": (0.03, 0.10), "sigma_ltv": (0.25, 0.6),
           "gov_step": (-20.0, 20.0), "gov_year": (1.0, 25.0), "covid_scale": (0.0, 2.0), "hist_subsidy": (0.0, 10.0),
-          "firm_link": (0.0, 1.0), "loss_firm": (0.0, 0.10), "eta_firm": (0.0, 0.30)}
+          "credit_supply": (0.0, 1.5), "eta_firm": (0.0, 0.30)}
 
 
 @lru_cache(maxsize=256)
