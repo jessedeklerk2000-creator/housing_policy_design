@@ -28,10 +28,10 @@ interface BankRun {
 }
 
 // Defaults = bank_netlist.BANK_DEFAULTS (demo choices). Ranges = bank_netlist.RANGES.
-const DEF = { funding_cut: 0.5, premium_pp: 1.9, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, credit_supply: 0.6, k_credit: 110, eta_firm: 0.10 };
+const DEF = { funding_cut: 0.5, premium_pp: 1.9, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, credit_supply: 0.6, k_credit: 110, eta_firm: 0.10, competitor: 0, comp_gap_pp: 0.3, comp_share_per_pp: 1.0 };
 type Params = typeof DEF;
 type Key = keyof Params;
-const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 4], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], credit_supply: [0, 1.5], k_credit: [0, 400], eta_firm: [0, 0.3] };
+const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 4], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], credit_supply: [0, 1.5], k_credit: [0, 400], eta_firm: [0, 0.3], competitor: [0, 1], comp_gap_pp: [0, 1], comp_share_per_pp: [0, 3] };
 const overrides = (p: Params) => Object.fromEntries((Object.keys(DEF) as Key[]).filter(k => Math.abs(p[k] - DEF[k]) > 1e-9).map(k => [k, p[k]]));
 const YEAR0 = 1996.46;  // calendar year of run year 0 (scenario.YEAR_AT_RAW_ZERO)
 
@@ -131,7 +131,11 @@ function Panel({ part, p, set, alm, setAlm, fb, setFb, run }: { part: Part; p: P
       <p className="muted small">The crisis comes from outside your bank: other banks withdraw their deposits and charge more. Nothing else is shocked: your bank passes the funding loss on as less new lending to firms and households and, through the ALM desk, as a higher mortgage rate. Timing as the W-shaped financial crisis of the housing model. A funding gap is borrowed from the central bank at a penalty rate.</p>
       <Knob label="Deposits withdrawn" hint="Share of the deposits of other banks that is withdrawn in the crisis." value={p.funding_cut} k="funding_cut" step={0.05} format={x => `${Math.round(x * 100)}%`} set={set}/>
       <Knob label="Interbank premium" hint="Extra cost of what is left of those deposits, at the crisis peak. 1.9 pp: 3-month EURIBOR over EONIA swap, Oct 2008 (ECB Financial Stability Review, Dec 2008)." value={p.premium_pp} k="premium_pp" step={0.25} format={x => `+${f(x, 2)} pp`} set={set}/>
-      <Knob label="Lending cut per 1% funding lost" hint="Credit supply: % less new lending (firms and mortgages) per 1% of funding (savings + deposits of other banks) your bank has lost. 0.6: Khwaja & Mian (2008), American Economic Review 98(4), Pakistan 1998; applying it to a Dutch bank is an assumption." value={p.credit_supply} k="credit_supply" step={0.1} format={x => `${f(x, 1)}%`} set={set}/></>;
+      <Knob label="Lending cut per 1% funding lost" hint="Credit supply: % less new lending (firms and mortgages) per 1% of funding (savings + deposits of other banks) your bank has lost. 0.6: Khwaja & Mian (2008), American Economic Review 98(4), Pakistan 1998; applying it to a Dutch bank is an assumption." value={p.credit_supply} k="credit_supply" step={0.1} format={x => `${f(x, 1)}%`} set={set}/>
+      {/* B3 (M. Mendel): a competitor bank with sharper mortgage rates, more funding from other banks, a thinner buffer */}
+      <Knob label="Competitor bank" hint="A second bank (Menkveld Fig. 3-10) competing for the same households: sharper mortgage rates, funded more by other banks, a thinner capital buffer. Its values are M. Mendel's and Claude's choices, not calibrated. Off by default." value={p.competitor} k="competitor" step={1} format={x => x ? 'on' : 'off'} set={set}/>
+      {p.competitor > 0 && <><Knob label="Competitor's rate below yours" hint="M. Mendel's example: 0.3 pp." value={p.comp_gap_pp} k="comp_gap_pp" step={0.05} format={x => `${f(x, 2)} pp`} set={set}/>
+      <Knob label="Market share per pp rate gap" hint="Share of new mortgages that moves per pp of rate gap, at the start. 1.0 = 10% per 0.1 pp (README example)." value={p.comp_share_per_pp} k="comp_share_per_pp" step={0.1} format={x => `${f(x * 10, 0)}% per 0.1 pp`} set={set}/></>}</>;
     case 'covid': return <><p className="eyebrow">Disturbance d</p><h3>Covid shock</h3>
       <p className="muted small">The housing netlist's own Covid shock at the firms, as in the main model (2020.5, fading over about 8 years).</p>
       <Knob label="Size of the Covid shock" hint="× 1 as in the main model; 0 switches it off." value={p.covid_scale} k="covid_scale" step={0.1} format={x => `× ${f(x, 1)}`} set={set}/></>;

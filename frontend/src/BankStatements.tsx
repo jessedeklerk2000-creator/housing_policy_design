@@ -28,7 +28,7 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
   const series = (id: string) => readTrace(result, 'Ledger:' + id) ?? [];
   const unit = (id: string) => L.accounts[id]?.unit ?? '';
   const show = (id: string, x?: number) => x === undefined || x === null ? '–'
-    : unit(id).startsWith('%') ? `${x.toFixed(2)}%` : (Math.abs(x) < 0.005 ? '0.00' : (x < 0 ? '−' : '') + Math.abs(x).toFixed(2));
+    : unit(id).startsWith('%') ? `${x.toFixed(2)}%` : unit(id) === 'pp' ? `${x.toFixed(2)} pp` : (Math.abs(x) < 0.005 ? '0.00' : (x < 0 ? '−' : '') + Math.abs(x).toFixed(2));
   const flip = (set: typeof setOpen) => (k: string) => set(o => { const n = new Set(o); if (n.has(k)) n.delete(k); else n.add(k); return n; });
   const toggle = flip(setOpen), togglePlot = flip(setPlots);
   const year = result.year[at];

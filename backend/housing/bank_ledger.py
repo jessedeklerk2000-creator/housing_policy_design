@@ -111,6 +111,8 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
         note="Run-off rates are not modelled per deposit type; the 100% run-off of other banks' short deposits and any inflows are left out. "
              "The model bank holds no securities, so its only liquid asset is cash.")
     acc("roe", "Return on equity", "net profit ÷ equity", 100 * v["net_profit"] / E, ["net_profit", "equity"], "% a year", MENKVELD + " Fig. 2-2")
+    acc("margin10", "Mortgage rate over the 10-year rate", "mortgage rate − (market rate + 10-year term premium)", 100 * (rm - b["r_mkt"] - b["tp10"]),
+        unit="pp", source="ECB euro-area AAA yield curve, average 10y-1y spread 2004-2026 (+1.02 pp)", note="Dutch mortgages are mostly fixed for 10 years.")
     acc("nim", "Net interest margin", "net interest income ÷ interest-earning assets (reserves + mortgages + loans to firms)", 100 * v["nii"] / v["assets"],
         ["nii", "assets"], "% a year", "Definition (no regulatory minimum)")
 
@@ -162,7 +164,7 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
         dict(id="ratios", label="Metrics", sections=[
             dict(label="Solvency (ALM Desk channel 1)", accounts=["rw_mortgages", "rwa", "tier1", "leverage"]),
             dict(label="Liquidity (ALM Desk channel 2)", accounts=["asf", "rsf", "nsfr", "ltd", "lcr"]),
-            dict(label="Profitability", accounts=["roe", "nim"])]),
+            dict(label="Profitability", accounts=["roe", "nim", "margin10"])]),
     ]
     values = {k: [round(float(x), 4) if keep else None for x, keep in zip(a, valid)] for k, a in v.items()}
     return dict(version="bank-ledger-1", groups=groups, accounts=defs, values=values, thresholds=THRESHOLDS,

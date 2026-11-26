@@ -136,7 +136,7 @@ def test_crisis_starts_at_the_other_banks_only():
     firm = next(l for l in lines if l.startswith("B§Firm_loans "))
     lsf = next(l for l in lines if l.startswith("B§bk_lsf "))
     assert "I(bk_Dep)+I(bk_W)" in lsf and "I(bk_lsf)" in firm and "Crisis_timing" not in firm
-    assert any(l.startswith("B§Credit_conditions 0 N007 ") and "I(bk_lsf)" in l for l in lines)
+    assert any(l.startswith("B§Credit_conditions 0 N007 ") and "I(bk_lsfm)" in l for l in lines)  # market-weighted; = lsf without the competitor
     assert min(c["firm_new_loans"]) < min(n["firm_new_loans"]) - 1   # the bank lends less to firms when it loses funding
     assert bn.BANK_DEFAULTS["credit_supply"] == 0.6                   # Khwaja & Mian (2008)
 
@@ -176,3 +176,15 @@ def test_dnb_thresholds_lcr_and_nim():
     assert v["nim"][0] == pytest.approx(100 * v["nii"][0] / v["assets"][0], abs=0.01)
     ratios = next(g for g in led["groups"] if g["id"] == "ratios")
     assert "lcr" in ratios["sections"][1]["accounts"] and "nim" in ratios["sections"][2]["accounts"]
+
+
+def test_competitor_bank():
+    """Feedback round 2 B3: off by default (one-bank results unchanged); on, it starts at rest with a 20% share. With the
+    bank's rates frozen it grows its share and only the crisis pushes its Tier 1 below 6%. Numbers reported, not tuned."""
+    off = bn.simulate({})
+    assert max(abs(x or 0) for x in off["comp_book"]) < 1e-6 and off["summary"]["min_price_pct"] == pytest.approx(-1.51, abs=0.05)
+    calm = bn.simulate({"competitor": 1, "funding_cut": 0, "premium_pp": 0}, alm_on=False)
+    crisis = bn.simulate({"competitor": 1}, alm_on=False)
+    assert calm["comp_share_pct"][0] == pytest.approx(20, abs=0.5)
+    assert calm["comp_share_pct"][-1] > 40 and min(calm["comp_tier1_pct"]) > 6
+    assert min(crisis["comp_tier1_pct"]) < 6 and crisis["summary"]["min_tier1_pct"] > 6

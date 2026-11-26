@@ -772,3 +772,9 @@ body:has(.bank-full) { overflow:hidden; }
 /* A3: live values beside the e/f/d meters; the moving dots sit above the wires, below the meters */
 .bus-meter-val { font-size:10px; font-weight:600; fill:#2b2b33; paint-order:stroke; stroke:#fafbf7; stroke-width:3px; font-variant-numeric:tabular-nums; pointer-events:none; }
 .bus-wires.bus-dots { z-index:3; pointer-events:none; }
+/* B2: yield curve inside the Financial sector */
+.bus-yield { position:absolute; z-index:2; background:#fff; border:1.2px solid #7a7396; border-radius:2px; padding:6px 8px; font-size:12px; color:#3f3a57; box-sizing:border-box; }
+.bus-yield small { color:#6b6680; font-size:10.5px; }
+/* B3: competitor bank tile */
+.bus-comp-body { padding:6px 10px; font-size:13px; display:flex; flex-direction:column; gap:2px; }
+.bus-comp-body .bus-kv.bad b { color:#c0392b; }

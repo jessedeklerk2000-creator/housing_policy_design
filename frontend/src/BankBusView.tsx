@@ -48,7 +48,7 @@ const HM_PORTS: Record<'R' | 'B', string[]> = { R: ['mortgages', 'mortgage_inter
 // the ALM Desk breadboard (BankBoards.DeskBoard): its viewBox and terminals, so e₁, e₂ end on the PI inputs and u₁, u₂
 // leave from the rate outputs when the desk is open
 const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1: [20, 680] as P, u1: [1080, 470] as P, u2: [1080, 600] as P };
-type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd'; id: string; at: P };
+type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
 function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
@@ -198,6 +198,29 @@ function DotLayer({ W, H, paths }: { W: number; H: number; paths: DotPath[] }) {
   </g></svg>;
 }
 
+// B2: the market's yield curve at the cursor (rate against maturity), with the bank's own rates: savings at the short
+// end, mortgages against the 10-year point (static curve: a parallel shift with r_mkt; term premia from the ECB AAA curve)
+function YieldCurve({ r, result, at }: { r: R; result: Result; at: number }) {
+  const v = (k: string) => readTrace(result, k)?.[at] ?? null, pts = ([0, 5, 10] as const).map(T => [T, v('Yield:' + T)] as [number, number | null]);
+  const rm = v('I(Bk_rm)'), rs = v('I(Bk_rs)'), ys = [...pts.map(p => p[1]), rm, rs].filter((x): x is number => x != null);
+  if (!ys.length) return null;
+  const lo = Math.floor(Math.min(...ys) * 2) / 2 - 0.5, hi = Math.ceil(Math.max(...ys) * 2) / 2 + 0.5, W = r.w - 16, H = r.h - 76, L = 34, Bm = 22;
+  const sx = (T: number) => L + T / 10 * (W - L - 14), sy = (y: number) => 6 + (hi - y) / (hi - lo) * (H - 6 - Bm);
+  const curve = pts.filter(p => p[1] != null).map(p => `${sx(p[0])},${sy(p[1]!)}`).join(' ');
+  return <div className="bus-yield" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+    <b>Yield curve</b> <small>at {result.year[at].toFixed(1)}</small>
+    <svg width={W} height={H} role="img" aria-label="Yield curve at the cursor">
+      {[lo, (lo + hi) / 2, hi].map(y => <g key={y}><line x1={L} x2={W - 8} y1={sy(y)} y2={sy(y)} stroke="#e4e2ea"/><text x={L - 4} y={sy(y) + 3} textAnchor="end" className="mini-tick">{y.toFixed(1)}%</text></g>)}
+      {[0, 5, 10].map(T => <text key={T} x={sx(T)} y={H - 6} textAnchor="middle" className="mini-tick">{T === 0 ? 'short' : T + ' yr'}</text>)}
+      <polyline points={curve} fill="none" stroke="#7a7396" strokeWidth={2}/>
+      {pts.map(p => p[1] != null && <circle key={p[0]} cx={sx(p[0])} cy={sy(p[1])} r={3.5} fill="#7a7396"/>)}
+      {rm != null && <g><rect x={sx(10) - 4} y={sy(rm) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(10) - 8} y={sy(rm) + 3} textAnchor="end" className="mini-tick" fill="#2e4a6b">mortgage {rm.toFixed(2)}%</text></g>}
+      {rs != null && <g><rect x={sx(0) - 4} y={sy(rs) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(0) + 8} y={sy(rs) + 3} className="mini-tick" fill="#2e4a6b">savings {rs.toFixed(2)}%</text></g>}
+    </svg>
+    <small>Market (grey-violet): r<sub>mkt</sub> + term premium (ECB euro-area AAA curve, 2004–2026 average: 5 yr +0.44 pp, 10 yr +1.02 pp). Bank (blue).</small>
+  </div>;
+}
+
 type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void; build: number };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const { result, at, o, set, map, scenario, desk, buses, sizes, resize, build } = data;
@@ -251,7 +274,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const HEADLINE: Record<string, [string, string]> = { inc: ['net_profit', 'net profit'], eq: ['equity', 'equity'], bal: ['assets', 'total assets'], cf: ['cf_net', 'net change in cash'], key: ['tier1', 'Tier 1'] };
   const tileValue = (k: string) => { const [id, name] = HEADLINE[k], x = readTrace(result, 'Ledger:' + id)?.[at], u = result.ledger?.accounts[id]?.unit ?? '';
     return <>{name} <b>{x == null ? '–' : u.startsWith('%') ? x.toFixed(1) + '%' : x.toFixed(1)}</b></>; };
-  const wires: ReactNode[] = [], over: ReactNode[] = [];  // over: drawn above the blocks (wires into an opened breadboard)
+  const wires: ReactNode[] = [], over: ReactNode[] = [], rails: Record<string, { c: number; vertical: boolean; hi: number }> = {};  // over: drawn above the blocks (wires into an opened breadboard)
   const line = (pts: number[][], color: string, key: string, dash?: string, w = 2) =>
     <polyline key={key} points={pts.map(p => p.join(',')).join(' ')} fill="none" stroke={color} strokeWidth={w} strokeDasharray={dash}/>;
   const arrow = (pts: number[][], color: string, key: string, label?: string, at2 = 0.5) => {
@@ -309,7 +332,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       const fm: P = [e.p[0] + u[0] * dd, e.p[1] + u[1] * dd], em: P = [(e.p[0] + e.q[0]) / 2 + u[0] * (dd + 18), (e.p[1] + e.q[1]) / 2 + u[1] * (dd + 18)];
       over.push(meterAt(fm, 'f', raw(flowSig(f)), bus.color, `${bus.id}${i}mf`, () => setPick({ kind: 'flow', id: f, at: fm }), vertical ? 'a' : 'r'));
       over.push(meterAt(em, 'e', raw(effSig(f)), bus.color, `${bus.id}${i}me`, () => setPick({ kind: 'ret', id: f, at: em }), vertical ? 'b' : 'r')); });
-    const along = taps.map(t => vertical ? t[1] : t[0]), lo = Math.min(...along) - 24, hi = Math.max(...along) + 24;
+    const along = taps.map(t => vertical ? t[1] : t[0]), lo = Math.min(...along) - 24, hi = Math.max(...along) + 24; rails[bus.id] = { c, vertical, hi };
     wires.unshift(<g key={bus.id + 'rails'}>
       {[0, LANE].map(k => <line key={k} x1={vertical ? c + k : lo} x2={vertical ? c + k : hi} y1={vertical ? lo : c + k} y2={vertical ? hi : c + k} stroke={bus.color} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
       <text x={vertical ? c + LANE / 2 : hi + 14} y={vertical ? (bus.n ? Math.min(A.y, Bb.y) - 12 - 18 * (bus.n - 1 - (bus.k ?? 0)) : lo - 12) : c + LANE} textAnchor={vertical ? 'middle' : 'start'} className="bus-name" fill={bus.color}>{bus.label}</text>
@@ -321,7 +344,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const IB = MONEY, ibY = B.y + B.h - 60;
   // the Financial sector (M. Mendel, 26 Nov 2026: scaffolding only): open, the two counterparties the model already has
   // open: shrunk to its content plus a fixed margin (A7); the central bank is DNB, also the supervisor (B1)
-  const fs: R = o.fs ? { x: B.x + B.w + 320, y: B.y + 40, w: 340, h: HEAD + 30 + 90 + 60 + 100 + 64 } : { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
+  const fs: R = o.fs ? { x: B.x + B.w + 320, y: B.y + 40, w: 340, h: HEAD + 30 + 90 + 60 + 100 + 64 + 290 } : { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
   const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 30, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 60, w: 260, h: 100 };
   { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'DNB / central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
     const ys = [ibY, ...ends.map(e => e[1])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
@@ -339,6 +362,20 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       dots.push({ key: 'ibf', pts: [[B.x + B.w, ibY], [rx, ibY]], v, color: IB }, { key: 'ibq', pts: [[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], v: -v, color: IB });
       over.push(meterAt([B.x + B.w + 30, ibY], 'f', L('cf_interbank'), IB, 'ibmf'));
       over.push(meterAt([B.x + B.w + 52, ibY + LANE / 2], 'e', ie != null && w ? 100 * ie / w : null, IB, 'ibme')); } }
+  // ---- B3: the competitor bank, a second (closed) bank on the same buses: mortgages and savings from the households'
+  // buses, deposits of other banks from the interbank bus. Its own small metrics at the cursor; click for the plots.
+  const compOn = (readTrace(result, 'I(Bk_mc)') ?? []).some(x => Math.abs(x ?? 0) > 1e-6);
+  const fb = Math.max(R.firms.y + R.firms.h, R.households.y + R.households.h, B.y + B.h) + 70;  // the firm-credit bus
+  const comp: R = { x: B.x, y: Math.max(fb + 80, B.y + B.h + 80), w: Math.min(B.w, 300), h: 150 };
+  { const cy = comp.y + 46, mr = rails.mortgage, dr = rails.deposit, ibx = B.x + B.w + 150;
+    // from the bottom of the households' mortgage and deposit rails (Buses view; the Ports view has no rails)
+    ([[mr, cy, 'mortgages', 'cmo'], [dr, cy + 40, 'savings', 'csa']] as const).forEach(([rl, y, nm, k]) => { if (!rl?.vertical) return;
+      const pts = [[rl.c, rl.hi], [rl.c, y], [comp.x, y]];
+      wires.push(line(pts, MONEY, k, compOn ? undefined : '2 4', 1.6));
+      wires.push(<text key={k + 't'} x={(rl.c + comp.x) / 2} y={y - 6} textAnchor="middle" className="bus-label" fill={MONEY}>{nm}</text>);
+      if (compOn) dots.push({ key: k, pts, v: 0.4, color: MONEY }); });
+    wires.push(line([[ibx, ibY], [ibx, cy + 20], [comp.x + comp.w, cy + 20]], MONEY, 'cib', compOn ? undefined : '2 4', 1.6));
+    wires.push(<text key="cibt" x={(ibx + comp.x + comp.w) / 2} y={cy + 14} textAnchor="middle" className="bus-label" fill={MONEY}>other banks</text>); }
   // ---- disturbances d: Covid (and the other active shocks) into the firms' breadboard, the subsidy into households
   const dMeter = (pts: number[][], id: string, key: string) => { const d = map.disturbances.find(x => x.id === id); const sig = id === 'd_others' ? 'I(Bk_shape)' /* crisis intensity 0..1: zero outside the crisis */ : d?.signal ?? '';
     const a = pts[pts.length - 2], b = pts[pts.length - 1], c: P = [a[0] + (b[0] - a[0]) * 0.6, a[1] + (b[1] - a[1]) * 0.6];
@@ -480,12 +517,12 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       </Block>
     </>;
   }
-  const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h) + 140;  // (y from 0: the Government sits above the Housing Market)
+  const W = fs.x + fs.w + 120, H = Math.max(fs.y + fs.h, R.hm.y + R.hm.h, B.y + B.h, comp.y + comp.h) + 140;  // (y from 0: the Government sits above the Housing Market)
   // the card of a clicked flow, return, bus or shock
   let card: ReactNode = null;
   if (pick) {
     const series = (signal: string) => readTrace(result, signal);
-    const rows: { label: string; unit: string; y?: number[] }[] = [];
+    const rows: { label: string; unit: string; y?: number[]; min?: number }[] = [];
     let title = '', note = '';
     if (pick.kind === 'flow' || pick.kind === 'ret') {
       const f = flowOf(pick.id); title = f?.label ?? pick.id; note = f?.description ?? '';
@@ -494,6 +531,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     } else if (pick.kind === 'bus') {
       const b = BUSES.find(x => x.id === pick.id)!; title = b.label; note = 'One quantity on this bus: every flow below is in the same unit.';
       b.flows.forEach(id => { const f = flowOf(id); if (f) rows.push({ label: f.label, unit: f.unit, y: series(f.signal) }); });
+    } else if (pick.kind === 'comp') {
+      title = 'Competitor bank'; note = 'Sharper mortgage rates, funded more by other banks, a thinner buffer (M. Mendel; values not calibrated).';
+      ([['Tier 1 capital ratio', 'I(Bk_t1c)'], ['Market share of mortgages', 'I(Bk_sharec)'], ['NSFR', 'I(Bk_nsfrc)'], ['Mortgage rate', 'I(Bk_rmc)']] as const).forEach(([l, k]) => rows.push({ label: l, unit: '%', y: series(k), min: k === 'I(Bk_t1c)' ? 6 : undefined }));
     } else {
       const d = map.disturbances.find(x => x.id === pick.id); title = d?.label ?? pick.id;
       if (d) rows.push({ label: 'd · shock', unit: d.unit, y: series(d.signal) });
@@ -501,7 +541,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     card = <div className="bus-pick nodrag nowheel" style={{ left: pick.at[0] + 14, top: pick.at[1] + 14 }} onClick={e => e.stopPropagation()}>
       <div className="bus-pick-head"><b>{title}</b><button className="ghost small" aria-label="Close" onClick={() => setPick(null)}>×</button></div>
       {note && <small>{note}</small>}
-      {rows.map(r => <div key={r.label}><div className="bus-pick-row">{r.label}</div>{r.y ? <StmtPlot y={r.y} at={at} years={result.year} unit={r.unit} label={r.label}/> : <small className="muted">Not in this run.</small>}</div>)}
+      {rows.map(r => <div key={r.label}><div className="bus-pick-row">{r.label}</div>{r.y ? <StmtPlot y={r.y} at={at} years={result.year} unit={r.unit} label={r.label} min={r.min}/> : <small className="muted">Not in this run.</small>}</div>)}
     </div>;
   }
   const agent = (id: string) => <Block key={id} r={R[id]} label={map.agents[id]?.label ?? id} tone="agent" open={o[id]} toggle={() => set(id)} info={`${Object.keys(map.layouts[id]?.ports ?? {}).length} port pairs`}>
@@ -515,7 +555,15 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <Block r={R.gov} label="Government" tone="reference" info="owner-occupier subsidy (d)"/>
     <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · DNB / central bank"/>
     {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="DNB / central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
-      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)<br/>A large Dutch bank is supervised by the ECB (SSM) with DNB in the joint team</div></>}
+      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)<br/>A large Dutch bank is supervised by the ECB (SSM) with DNB in the joint team</div>
+      <YieldCurve r={{ x: fs.x + 20, y: cbk.y + cbk.h + 84, w: fs.w - 40, h: 250 }} result={result} at={at}/></>}
+    {(() => { const v = (k: string) => readTrace(result, k)?.[at] ?? null, t1 = v('I(Bk_t1c)'), row = (name: string, x: number | null, bad = false) =>
+        <div className={'bus-kv' + (bad ? ' bad' : '')}><span>{name}</span><b>{x == null ? '–' : x.toFixed(1) + '%'}</b></div>;
+      return <div onClick={e => { e.stopPropagation(); if (compOn) setPick({ kind: 'comp', id: 'comp', at: [comp.x + comp.w, comp.y] }); }} style={{ cursor: compOn ? 'pointer' : undefined }}>
+        <Block r={comp} label="Competitor bank" tone="bank-closed bus-comp" z={2}>
+          {compOn ? <div className="bus-comp-body">{row('Tier 1 (min 6%)', t1, t1 != null && t1 < 6)}{row('NSFR', v('I(Bk_nsfrc)'))}{row('Loan-to-deposit', v('I(Bk_ltdc)'))}{row('Market share', v('I(Bk_sharec)'))}</div>
+            : <div className="bus-tile-info">off · switch it on under Other banks in the Scenario panel</div>}
+        </Block></div>; })()}
     <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0} info="Treasury · Operations"/>
     {inside}
     <DotLayer W={W} H={H} paths={dots}/>
