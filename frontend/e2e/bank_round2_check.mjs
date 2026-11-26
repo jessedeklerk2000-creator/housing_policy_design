@@ -20,5 +20,5 @@ await page.locator('.react-flow__controls-fitview').dispatchEvent('click'); awai
 const on = await page.locator('.bus-comp').innerText().catch(() => '');
 const yc = await page.locator('.bus-yield').count(), dnb = await page.locator('.bus-diagram').innerText().then(t => t.includes('Central bank'));
 await page.locator('.bus-canvas').screenshot({ path: `${out}/round2_top.png` });
-if (!yc || !dnb || !/Market share/.test(on)) fail.push({ yc, dnb, found, on });
+const compOk = await page.locator('.bus-comp:not(.off)').count(); if (!yc || !dnb || !compOk) fail.push({ yc, dnb, found, compOk });
 console.log(JSON.stringify({ fail, off, on, errors })); process.exit(0);
