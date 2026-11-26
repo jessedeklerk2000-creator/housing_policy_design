@@ -35,12 +35,14 @@ def test_the_bank_passes_the_crisis_on():
     o = {"covid_scale": 0}  # the financial crisis on its own
     a, b, c = bn.simulate(o, alm_on=False), bn.simulate(o, housing_feedback=False), bn.simulate(o)
     assert all(x["ok"] for x in (a, b, c))
-    assert a["summary"]["min_price_pct"] > -2 and b["summary"]["min_price_pct"] > -2  # housing hardly notices
+    assert b["summary"]["min_price_pct"] > -2                                           # without the bank, housing hardly notices
+    assert a["summary"]["min_price_pct"] == pytest.approx(-3.5, abs=0.5)                # rates frozen: credit supply alone
     assert a["summary"]["min_tier1_pct"] < c["summary"]["min_tier1_pct"] - 0.8          # ...but the bank takes the hit
-    # The desk passes it on (bank channel only). 26 Nov 2026: crisis only at the other banks, credit supply 0.6 (was -7.3, 4.8)
-    assert c["summary"]["min_price_pct"] == pytest.approx(-4.2, abs=0.5)
-    assert c["summary"]["max_price_after_crisis_pct"] == pytest.approx(2.6, abs=0.7)     # and the rebound
-    assert c["summary"]["mortgage_rate_range_pct"][1] > 3.8 and a["summary"]["mortgage_rate_range_pct"] == [3.7, 3.7]
+    # The desk passes it on (bank channel only). 26 Nov 2026: crisis only at the other banks, credit supply 0.6,
+    # credit channel k_credit 110 (was -7.3, 4.8)
+    assert c["summary"]["min_price_pct"] == pytest.approx(-4.1, abs=0.5)
+    assert c["summary"]["max_price_after_crisis_pct"] == pytest.approx(6.7, abs=0.7)     # and the rebound
+    assert c["summary"]["mortgage_rate_range_pct"][1] > 3.75 and a["summary"]["mortgage_rate_range_pct"] == [3.7, 3.7]
 
 
 def test_a_runaway_is_cut_and_valid_json():
@@ -57,7 +59,7 @@ def test_government_step_moves_the_price():
 def test_api_whitelists_and_clamps(tmp_path):
     c = TestClient(create_app(tmp_path / "t.sqlite3"))
     r = c.post("/api/bank/simulate", json={"overrides": {}, "alm_on": True, "housing_feedback": True})
-    assert r.status_code == 200 and r.json()["summary"]["min_price_pct"] == pytest.approx(-4.2, abs=0.5)
+    assert r.status_code == 200 and r.json()["summary"]["min_price_pct"] == pytest.approx(-4.1, abs=0.5)
     assert c.post("/api/bank/simulate", json={"overrides": {"E0": 5}}).status_code == 422
     assert c.post("/api/bank/simulate", json={"overrides": {}, "netlist": "x"}).status_code == 422
     big = c.post("/api/bank/simulate", json={"overrides": {"funding_cut": 9}}).json()
@@ -86,7 +88,8 @@ def test_firm_loans_and_nsfr():
     assert r["targets"]["nsfr_pct"] == pytest.approx(126.47, abs=0.05)  # Basel: interbank < 6 months counts 0%
     assert 30 < min(x for x in r["firm_loans"] if x is not None) < 38                     # calibrated: about -15%, no collapse
     off = bn.simulate({"covid_scale": 0}, alm_on=False)
-    assert off["summary"]["min_tier1_pct"] < r["summary"]["min_tier1_pct"] - 2            # the desk protects capital
+    # the desk protects capital (gap 1.6 pp since 26 Nov 2026: no firm-loan losses any more, was > 2)
+    assert off["summary"]["min_tier1_pct"] < r["summary"]["min_tier1_pct"] - 1.4
 
 
 def test_historical_subsidy_is_a_disturbance():
@@ -130,6 +133,28 @@ def test_crisis_starts_at_the_other_banks_only():
     lines = bn.lines({**bn.BANK_DEFAULTS, **o})[0]
     assert not any("loss_firm" in l or "firm_link" in l for l in lines)
     firm = next(l for l in lines if l.startswith("B§Firm_loans "))
-    assert "I(bk_Dep)+I(bk_W)" in firm and "Crisis_timing" not in firm
+    lsf = next(l for l in lines if l.startswith("B§bk_lsf "))
+    assert "I(bk_Dep)+I(bk_W)" in lsf and "I(bk_lsf)" in firm and "Crisis_timing" not in firm
+    assert any(l.startswith("B§Credit_conditions 0 N007 ") and "I(bk_lsf)" in l for l in lines)
     assert min(c["firm_new_loans"]) < min(n["firm_new_loans"]) - 1   # the bank lends less to firms when it loses funding
     assert bn.BANK_DEFAULTS["credit_supply"] == 0.6                   # Khwaja & Mian (2008)
+
+
+def test_credit_channel_matches_dnb():
+    """26 Nov 2026: a permanent 10% cut in lending supply, rates frozen, gives ~0.75% lower price per 1% less mortgage debt
+    at the end of the run (DNB Occasional Studies 13-2, 2015: debt -6%, price -4 to -5% for a lower LTV limit)."""
+    orig = bn.lines
+    def cut(b, alm_on=True, housing_feedback=True):
+        out, e = orig(b, alm_on, housing_feedback)
+        t0 = bn.T0 + 6 * 5
+        return [l.replace("I=max(", f"I=(1-0.1*min(max((time-{t0})/6,0),1))*max(", 1) if l.startswith("B§bk_lsf ") else l for l in out], e
+    o = {"funding_cut": 0, "premium_pp": 0, "covid_scale": 0, "hist_subsidy": 0}
+    base = bn.simulate(o, alm_on=False)
+    bn.lines = cut
+    try:
+        c = bn.simulate(o, alm_on=False)
+    finally:
+        bn.lines = orig
+    dM = c["mortgage_book"][-1] / base["mortgage_book"][-1] - 1
+    dP = c["price_index"][-1] / base["price_index"][-1] - 1
+    assert dM < -0.08 and dP / dM == pytest.approx(0.75, abs=0.05)

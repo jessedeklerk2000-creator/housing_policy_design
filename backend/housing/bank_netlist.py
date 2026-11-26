@@ -43,8 +43,12 @@ BASE = dict(bank=True, crisis_scale=2, covid_scale=0, crisis_w=True, crisis_w_st
 BANK_DEFAULTS = dict(
     M0=100.0, Lf0=40.0, W0=30.0, E0=8.5, Dep0=110.0,         # balance sheet (illustrative units)
     theta0=0.06, uw_mobility=0.22, T_amort=60.0, ltv_cap=1.0, lti0=0.95, soft=0.05, sigma_ltv=0.45,
-    loss_uw=0.004, rw_lo=0.12, rw_hi=0.45, ltv_split=0.55, eta_dep=0.05, tau_dep=1.0, r_mkt=0.025, ftp0=0.026, s0=0.022, w_prem=0.005,
+    loss_uw=0.004, rw_lo=0.12, rw_hi=0.45, ltv_split=0.55, eta_dep=0.054, tau_dep=1.0, r_mkt=0.025, ftp0=0.026, s0=0.022, w_prem=0.005,
     Kp_ftp=0.05, Ki_ftp=0.05, Kp_s=0.20, Ki_s=0.20,           # ALM desk (PI on FTP and on the spread)
+    # eta_dep (26 Nov 2026): savings deposits rise 5.4% per pp the savings rate rises against the market rate: Drechsler,
+    # Savov & Schnabl (2017, QJE 132(4); NBER WP 22152 p. 26): a 54 bp wider savings spread goes with 2.9% lower savings
+    # deposit growth, a price elasticity of -5.4 (US 1994-2014; applying it to the Netherlands is an assumption). The money
+    # leaves the banking system (bonds, funds): the households' alternative to savings, here implicit.
     # Menkveld (2025) eq. 3-4 and 3-8: FTP = (loan + savings)/2, spread = loan - savings, so loan = FTP + spread/2.
     # spread0 2.2% and the spread gains 0.20 give exactly the dynamics of the earlier FTP +/- s form (s0 1.1%, gains 0.10).
     k_rate=300.0,          # rate-channel gain, demo choice (24 Nov 2026, NSFR loop with Basel factors): -7% house price in the
@@ -63,6 +67,13 @@ BANK_DEFAULTS = dict(
     # Portugal 2007-08 (banks that relied more on interbank funding cut firm credit more). Applied to the flow of new
     # loans; with a firm-book turnover of Lf0/firm_new0 = 1.3 years the stock follows within about that time.
     credit_supply=0.6,
+    # Credit conditions -> house prices (26 Nov 2026). In the netlist mortgages enter the households' housing node only as
+    # the net flow, so a permanent cut in lending lowers the book but not the price (measured: book -8%, price 0%).
+    # Target: DNB Occasional Studies 13-2 (Verbruggen et al. 2015, p. 8-9): lowering the LTV limit to 90% gives mortgage
+    # debt almost -6% and house prices -4 to -5% in the long run (3.5-4% after five years), so ~0.75% price per 1% debt.
+    # k_credit (model units of the price current per unit of the lending-supply factor) is set so that a permanent cut
+    # in lending supply gives that ratio after 15 years with rates frozen (calibrated by Claude 26 Nov 2026; 90 gives 0.64, 130 gives 0.81).
+    k_credit=110.0,  # 10% permanent supply cut: book -10.7%, price -7.9% after 23 years (ratio 0.74)
     # NSFR (Basel III, BCBS 2014): available stable funding factors: capital 100%, less stable retail deposits 90% (stable
     # 95% gives the same results), funding from financial institutions with less than six months to maturity 0% (the
     # interbank funding that ran in 2008 was short-term; Jesse 24 Nov 2026); required stable funding factors: residential
@@ -159,6 +170,8 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("lnew", f"-{g('soft')}*ln(exp(-{g('ltv_cap')}/{g('soft')})+exp(-I(bk_lti)/{g('soft')}))"),
         f"B§Deposit_flow 0 0 I=({g('Dep0')}*(1+{g('eta_dep')}*(I(bk_rs)-{g('rs0')})*100)-I(bk_Dep))/{g('tau_dep')}",  # drawn: Inflow
         S("Dep", f"{g('Dep0')}+idt(I(Deposit_flow))/{YR}"),                 # drawn: Deposits (capacitor)
+        # lending supply (26 Nov 2026): the bank lends credit_supply % less per 1% of funding lost (Khwaja & Mian 2008)
+        S("lsf", f"max(1-{fb}*{g('credit_supply')}*(1-(I(bk_Dep)+I(bk_W))/{v['Dep0'] + v['W0']!r}),0.2)"),
         S("cash", "I(bk_Dep)+I(bk_E)+I(bk_W)-I(bk_M)-I(bk_Lf)"),
         # Wholesale funding and any funding gap (negative cash: emergency borrowing) cost the market rate plus the
         # premium, which rises in the crisis. Without the gap term, losing funding made the bank richer (20 Nov 2026).
@@ -187,7 +200,9 @@ def lines(b: dict, alm_on: bool = True, housing_feedback: bool = True) -> tuple[
         if l.startswith("V§Shock_financialcrisis "):
             l = l.split("PWL(")[0] + "PWL(0 0 1 0)"  # crisis comes from other banks, not from the firms
         elif l.startswith("I§Mortgages "):
-            l = (f"B§Mortgages 0 N007 I=(I(bk_theta)*I(bk_V)*I(bk_lnew)-I(bk_theta)*I(bk_M)-I(bk_M)/{b['T_amort']!r})/{YR}")
+            l = (f"B§Mortgages 0 N007 I=(I(bk_theta)*I(bk_V)*I(bk_lnew)*I(bk_lsf)-I(bk_theta)*I(bk_M)-I(bk_M)/{b['T_amort']!r})/{YR}")
+            # credit conditions reach housing demand (see k_credit); bank mode only, the thesis netlist is untouched
+            out.append(f"B§Credit_conditions 0 N007 I={b['k_credit']!r}*(I(bk_lsf)-1)")
         elif l.startswith("Interest_Rates "):  # drawn: Mortgage rate (ALM), on the same nodes as the old fixed input
             n1, n2 = l.split()[1:3]
             l = f"B§Mortgage_rate_ALM {n1} {n2} I=I(bk_rate)"
@@ -196,8 +211,7 @@ def lines(b: dict, alm_on: bool = True, housing_feedback: bool = True) -> tuple[
         elif l.startswith("I8 "):  # firm-loan port: the netlist's credit path stays as the crisis clock only
             pwl = l.split(None, 3)[3]
             out.append(f"I§Crisis_timing 0 0 {pwl}")
-            fund0 = b['Dep0'] + b['W0']
-            l = (f"B§Firm_loans 0 N008 I={b['firm_new0']!r}*max(1-{fb}*{b['credit_supply']!r}*(1-(I(bk_Dep)+I(bk_W))/{fund0!r}),0.2)"
+            l = (f"B§Firm_loans 0 N008 I={b['firm_new0']!r}*I(bk_lsf)"
                  f"*max(1-{fb}*{b['eta_firm']!r}*(I(bk_rm)-{e['rm0']!r})*100,0.2)")
         elif l.startswith("B5 "):  # firm-loan interest floats with the loan rate and the firm-loan stock
             l = f"B5 N001 N003 I=10*I(bk_Lf)/{b['Lf0']!r}*(1+{fb}*(I(bk_rm)/{e['rm0']!r}-1))+0.001*idt(I(I1))"
@@ -315,7 +329,7 @@ RANGES = {"funding_cut": (0.0, 1.0), "premium_pp": (0.0, 6.0), "k_rate": (1.0, 9
           "Kp_ftp": (0.0, 1.0), "Ki_ftp": (0.0, 1.0), "Kp_s": (0.0, 3.0), "Ki_s": (0.0, 3.0),
           "uw_mobility": (0.0, 0.5), "theta0": (0.03, 0.10), "sigma_ltv": (0.25, 0.6),
           "gov_step": (-20.0, 20.0), "gov_year": (1.0, 25.0), "covid_scale": (0.0, 2.0), "hist_subsidy": (0.0, 10.0),
-          "credit_supply": (0.0, 1.5), "eta_firm": (0.0, 0.30)}
+          "credit_supply": (0.0, 1.5), "k_credit": (0.0, 400.0), "eta_firm": (0.0, 0.30)}
 
 
 @lru_cache(maxsize=256)
