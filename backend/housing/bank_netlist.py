@@ -67,7 +67,8 @@ BANK_DEFAULTS = dict(
     # (ECB Data Portal, series YC.B.U2.EUR.4F.G_N_A.SV_C_YM.SR_1Y/5Y/10Y, business days 6 Sep 2004 - 25 Nov 2026, 5682 days;
     # computed by Claude): +0.44 pp and +1.02 pp. Dutch mortgages are mostly fixed for 10 years, so the mortgage rate is
     # read against the 10-year point (its margin is reported in the metrics). The netlist's rates are unchanged by it.
-    tp5=0.0044, tp10=0.0102,
+    # extended to 30 years (Jesse, 26 Nov 2026): same series and window, 2y +0.08, 20y +1.46, 30y +1.51 pp
+    tp2=0.0008, tp5=0.0044, tp10=0.0102, tp20=0.0146, tp30=0.0151,
     # Competitor bank (feedback round 2 B3, M. Mendel; Menkveld Fig. 3-10: two banks competing for the same households).
     # Off by default (competitor=0), so the one-bank results stay as they are. When on, the netlist's mortgage debt is the
     # whole market (start M0 + Mc0) and the bank's book is the market minus the competitor's book. New lending is split by
@@ -327,7 +328,7 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
                 if k in run_result["traces"]:
                     run_result["traces"][k] = [round(x * 100, 4) for x in run_result["traces"][k]]
             run_result["traces"]["Bank_target_t1"] = [round(100 * e["t1_ref"], 4)] * len(run_result["year"])
-            for T, tp in ((0, 0.0), (5, b["tp5"]), (10, b["tp10"])):  # B2: the yield curve (%) at 0, 5 and 10 years
+            for T, tp in ((0, 0.0), (2, b["tp2"]), (5, b["tp5"]), (10, b["tp10"]), (20, b["tp20"]), (30, b["tp30"])):  # B2: the yield curve (%), 0-30 years
                 run_result["traces"][f"Yield:{T}"] = [round(100 * (b["r_mkt"] + tp), 4)] * len(run_result["year"])
             # The loop on the canvas (Menkveld Fig. 3-2): r = financial targets, y = financial reports, e = r - y for both
             # channels (target minus measured). The FTP controller uses the opposite sign (loan-to-deposit above target -> FTP up).

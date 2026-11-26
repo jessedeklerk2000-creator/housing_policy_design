@@ -111,7 +111,7 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     // a closed Banking Operations reaches below Accounting, so Operations' lines into Treasury and the rates u back run straight
     if (!opsOpen && t) ops.h = Math.max(240, t.accF.y + t.accF.h + 100 - L1);
     inner = { bs, ops, tre, opsOpen, treOpen, t, circ: opsOpen && o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null };
-    R.bank = { x: bx, y: by, w: tre.x + tre.w + 40 - bx, h: Math.max(ops.y + ops.h, tre.y + tre.h) + 40 - by };
+    R.bank = { x: bx, y: by, w: tre.x + tre.w + 40 - bx, h: Math.max(ops.y + ops.h, tre.y + tre.h) + (treOpen ? 110 : 40) - by };
   } else R.bank = { x: bx, y: by, w: 240, h: o.hm ? Math.max(260, R.households.y + R.households.h + 30 - by) : R.hm.h };  // as tall as the closed Housing Market: straight lines
   // the competitor bank (Jesse, 26 Nov 2026): My Bank's twin, under it and above the firm-credit bus
   // (shifted right of My Bank's firm-credit ports, so those lines pass beside it)
@@ -257,20 +257,20 @@ function SotCard({ r, rep, sel, pick }: { r: R; rep: SotReport; sel: string; pic
 // B2: the market's yield curve at the cursor (rate against maturity), with the bank's own rates: savings at the short
 // end, mortgages against the 10-year point (static curve: a parallel shift with r_mkt; term premia from the ECB AAA curve)
 function YieldCurve({ r, result, at, shock }: { r: R; result: Result; at: number; shock?: { m: number[]; dz: number[]; name: string } }) {
-  const v = (k: string) => readTrace(result, k)?.[at] ?? null, pts = ([0, 5, 10] as const).map(T => [T, v('Yield:' + T)] as [number, number | null]);
+  const MAT = [0, 2, 5, 10, 20, 30], v = (k: string) => readTrace(result, k)?.[at] ?? null, pts = MAT.map(T => [T, v('Yield:' + T)] as [number, number | null]);
   // SOT shock: the regulatory shift dz(maturity) on top of the market curve (0-10 years shown)
-  const base = (T: number) => { const y0 = pts[0][1] ?? 0, y5 = pts[1][1] ?? y0, y10 = pts[2][1] ?? y5; return T <= 5 ? y0 + (y5 - y0) * T / 5 : y5 + (y10 - y5) * (T - 5) / 5; };
-  const sh = shock ? shock.m.map((T, i) => [T, base(T) + shock.dz[i]] as [number, number]).filter(p => p[0] <= 10) : [];
+  const base = (T: number) => { let k = 1; while (k < MAT.length - 1 && MAT[k] < T) k++; const a = pts[k - 1][1] ?? 0, b = pts[k][1] ?? a; return a + (b - a) * (T - MAT[k - 1]) / (MAT[k] - MAT[k - 1]); };
+  const sh = shock ? shock.m.map((T, i) => [T, base(T) + shock.dz[i]] as [number, number]).filter(p => p[0] <= 30) : [];
   const rm = v('I(Bk_rm)'), rs = v('I(Bk_rs)'), ys = [...pts.map(p => p[1]), rm, rs, ...sh.map(p => p[1])].filter((x): x is number => x != null);
   if (!ys.length) return null;
   const lo = Math.floor(Math.min(...ys) * 2) / 2 - 0.5, hi = Math.ceil(Math.max(...ys) * 2) / 2 + 0.5, W = r.w - 16, H = r.h - 76, L = 34, Bm = 22;
-  const sx = (T: number) => L + T / 10 * (W - L - 14), sy = (y: number) => 6 + (hi - y) / (hi - lo) * (H - 6 - Bm);
+  const sx = (T: number) => L + T / 30 * (W - L - 14), sy = (y: number) => 6 + (hi - y) / (hi - lo) * (H - 6 - Bm);
   const curve = pts.filter(p => p[1] != null).map(p => `${sx(p[0])},${sy(p[1]!)}`).join(' ');
   return <div className="bus-yield" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
     <b>Yield curve</b> <small>at {result.year[at].toFixed(1)}</small>
     <svg width={W} height={H} role="img" aria-label="Yield curve at the cursor">
       {[lo, (lo + hi) / 2, hi].map(y => <g key={y}><line x1={L} x2={W - 8} y1={sy(y)} y2={sy(y)} stroke="#e4e2ea"/><text x={L - 4} y={sy(y) + 3} textAnchor="end" className="mini-tick">{y.toFixed(1)}%</text></g>)}
-      {[0, 5, 10].map(T => <text key={T} x={sx(T)} y={H - 6} textAnchor="middle" className="mini-tick">{T === 0 ? 'short' : T + ' yr'}</text>)}
+      {[0, 5, 10, 20, 30].map(T => <text key={T} x={sx(T)} y={H - 6} textAnchor="middle" className="mini-tick">{T === 0 ? 'short' : T + ' yr'}</text>)}
       <polyline points={curve} fill="none" stroke="#7a7396" strokeWidth={2}/>
       {sh.length > 0 && <polyline points={sh.map(p => `${sx(p[0])},${sy(p[1])}`).join(' ')} fill="none" stroke={SOT_RED} strokeWidth={2} strokeDasharray="5 3"/>}
       {shock && <text x={W - 10} y={14} textAnchor="end" className="mini-tick" fill={SOT_RED}>{shock.name}</text>}
@@ -278,7 +278,7 @@ function YieldCurve({ r, result, at, shock }: { r: R; result: Result; at: number
       {rm != null && <g><rect x={sx(10) - 4} y={sy(rm) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(10) - 8} y={sy(rm) + 3} textAnchor="end" className="mini-tick" fill="#2e4a6b">mortgage {rm.toFixed(2)}%</text></g>}
       {rs != null && <g><rect x={sx(0) - 4} y={sy(rs) - 4} width={8} height={8} fill="#4f7cac"/><text x={sx(0) + 8} y={sy(rs) + 3} className="mini-tick" fill="#2e4a6b">savings {rs.toFixed(2)}%</text></g>}
     </svg>
-    <small>Market (grey-violet): r<sub>mkt</sub> + term premium (ECB euro-area AAA curve, 2004–2026 average: 5 yr +0.44 pp, 10 yr +1.02 pp). Bank (blue).</small>
+    <small>Market: r<sub>mkt</sub> + term premium, ECB euro-area AAA curve, 2004–2026 average (2 yr +0.08, 5 yr +0.44, 10 yr +1.02, 20 yr +1.46, 30 yr +1.51 pp). My Bank: blue.</small>
   </div>;
 }
 
@@ -554,7 +554,13 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
         const head: number[][] = o.desk ? (() => { const u = dt(i ? DESK_T.u2 : DESK_T.u1), rx = dk.x + dk.w + 30 + 22 * i; return [u, [rx, u[1]], [rx, top]]; })() : [[dk.x, uy], [mx, uy], [mx, top]];
         const straight = !circ && !sub && !o.desk && uy > bs.y + HEAD && uy < bs.y + bs.h;
         const yt = accF.y + accF.h + 30 + 25 * i, mx2 = acc.x + acc.w + 60 + 25 * i;
-        const pts = !opsOpen ? (o.desk ? [head[0], head[1], [head[1][0], yt], [ops.x + ops.w, yt]] : [[dk.x, uy], [mx2, uy], [mx2, yt], [ops.x + ops.w, yt]]) : straight ? [[dk.x, uy], [bs.x + bs.w, uy]] : circ ? [...head, [t[0], top], [t[0], t[1] - 22]] : [...head, [dx, top], [dx, t[1]], [t[0], t[1]]];
+        // both divisions open (Jesse, 26 Nov 2026): below Accounting and the desk, across to the gap between the divisions,
+        // then up into the rate source (no lines over the Treasury header or the Accounting label)
+        const yb = Math.max(accF.y + accF.h, dk.y + dk.h) + 30 + 22 * i, colX = ops.x + ops.w + 55 + 26 * i, tgt: P = circ ? t : [bs.x + bs.w, bs.y + bs.h - 110 + 50 * i];
+        const out = o.desk ? [head[0], head[1], [head[1][0], yb]] : [[dk.x, uy], [dk.x - 30 - 22 * i, uy], [dk.x - 30 - 22 * i, yb]];
+        const yc2 = circ ? circ.y - 4 - 12 * i : 0;  // just above the circuit, inside Operations
+        const both = circ ? [...out, [colX, yb], [colX, yc2], [tgt[0], yc2], [tgt[0], tgt[1] - 22]] : [...out, [colX, yb], [colX, tgt[1]], tgt];
+        const pts = !opsOpen ? (o.desk ? [head[0], head[1], [head[1][0], yt], [ops.x + ops.w, yt]] : [[dk.x, uy], [mx2, uy], [mx2, yt], [ops.x + ops.w, yt]]) : both;
         over.push(arrow(pts, PU, 'u' + i, name, 0.5));
       });
       const frame = (r: R, label: string) => <div key={label} className="bus-org-frame unit" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}><span>{label}</span></div>;
