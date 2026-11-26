@@ -19,13 +19,13 @@ const RATIO_OVER: Record<string, string> = { tier1: 'rwa', nsfr: 'rsf', leverage
 // The signals from the statements into the metrics (what ALM Reporting reads off the sheet)
 export const KEY_INPUTS: [string, string][] = [['equity', 'equity'], ['mortgages', 'mortgages'], ['firm_loans', 'loans to firms'], ['savings', 'savings'], ['interbank', 'other banks'], ['assets', 'total assets'], ['net_profit', 'net profit']];
 
-export function BankStatements({ part = 'all', only }: { part?: 'all' | 'statements' | 'ratios'; only?: string }) {
+export function BankStatements({ part = 'all', only, comp = false }: { part?: 'all' | 'statements' | 'ratios'; only?: string; comp?: boolean }) {  // comp: the competitor's statements
   const { result, at } = useContext(AtContext);
   const [all, setAll] = useState(false), [open, setOpen] = useState<Set<string>>(new Set()), [plots, setPlots] = useState<Set<string>>(new Set()), [drag, setDrag] = useState<Record<string, [number, number]>>({});
-  const L: Ledger | undefined = result?.ledger;
+  const L: Ledger | undefined = comp ? result?.ledger_comp : result?.ledger, PRE = comp ? 'LedgerC:' : 'Ledger:';
   if (!result || !L) return <div className="stmt-empty">Run the simulation to see the statements.</div>;
-  const val = (id: string) => { const t = readTrace(result, 'Ledger:' + id); return t ? t[at] : undefined; };
-  const series = (id: string) => readTrace(result, 'Ledger:' + id) ?? [];
+  const val = (id: string) => { const t = readTrace(result, PRE + id); return t ? t[at] : undefined; };
+  const series = (id: string) => readTrace(result, PRE + id) ?? [];
   const unit = (id: string) => L.accounts[id]?.unit ?? '';
   const show = (id: string, x?: number) => x === undefined || x === null ? '–'
     : unit(id).startsWith('%') ? `${x.toFixed(2)}%` : unit(id) === 'pp' ? `${x.toFixed(2)} pp` : (Math.abs(x) < 0.005 ? '0.00' : (x < 0 ? '−' : '') + Math.abs(x).toFixed(2));

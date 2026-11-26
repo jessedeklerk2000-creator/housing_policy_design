@@ -67,7 +67,7 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     # Income statement (per year)
     py = "model units / year"
     acc("ii_mortgages", "Interest on mortgages", "loan rate × mortgages", rm * M, ["mortgages"], py, MENKVELD + " Fig. 2-3 (loan interest)")
-    acc("ii_firms", "Interest on loans to firms", "loan rate × loans to firms", rm * Lf, ["firm_loans"], py, MENKVELD + " Fig. 2-3 (loan interest)")
+    acc("ii_firms", "Interest on loans to firms", "firm-loan rate × loans to firms", (T("I(Bk_rf)") if "I(Bk_rf)" in tr else rm) * Lf, ["firm_loans"], py, MENKVELD + " Fig. 2-3 (loan interest); firm-loan rate priced at the 10-year point")
     acc("ii_reserves", "Interest on reserves", "market rate × reserves", rmk * v["reserves"], ["reserves"], py)
     acc("interest_income", "Interest income", "sum of the above", v["ii_mortgages"] + v["ii_firms"] + v["ii_reserves"], ["ii_mortgages", "ii_firms", "ii_reserves"], py)
     acc("ie_savings", "Interest on savings", "savings rate × savings deposits", rs * Dep, ["savings"], py, MENKVELD + " Fig. 2-3 (deposit interest)")
@@ -172,3 +172,69 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
                 links=[["income", "balance", "Retained profit → equity"], ["balance", "ratios", "Balance-sheet items"], ["income", "ratios", "Net profit"],
                        ["balance", "cashflow", "Changes in stocks"], ["income", "cashflow", "Net profit"]],
                 basis="Statements built from the bank netlist's stocks and flows. Cash is the balancing item; current accounts are on the sheet but not yet connected to the model.")
+
+
+def ledger_comp(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.ndarray, valid: np.ndarray) -> dict:
+    """The competitor bank's statements (26 Nov 2026, Jesse: 'I still want the accounting in the competitor bank'): the same
+    layout as My Bank's (income statement, balance sheet, metrics), from the competitor's stocks and flows in the same run.
+    No firm loans or current accounts (its banking book is mortgages, savings and deposits of other banks)."""
+    T = lambda k: np.interp(grid_years, sim_years, np.nan_to_num(np.asarray(tr[k], dtype=float)))
+    Mc, Dep, W, E, cash = T("I(Bk_mc)"), T("I(Bk_depc)"), T("I(Bk_wc)"), T("I(Bk_ec)"), T("I(Bk_cashc)")
+    rmc, rs, prem, uw, rmk, rw_m = T("I(Bk_rmc)"), T("I(Bk_rs)"), T("I(Bk_prem)"), T("I(Bk_uw)"), T("I(Bk_rmk)"), T("I(Bk_rw_m)")
+    gap, py, pct = b["gap_penalty_pp"] / 100, "model units / year", "%"
+    v: dict[str, np.ndarray] = {}
+    defs: dict[str, dict] = {}
+
+    def acc(key, label, formula, value, inputs=(), unit="model units", source=NETLIST + ": competitor", note=""):
+        defs[key] = dict(id=key, label=label, formula=formula, inputs=list(inputs), unit=unit, source=source, note=note, sign=1)
+        if key in MIN:
+            defs[key]["minimum"] = MIN[key]
+        v[key] = np.asarray(value, dtype=float)
+
+    acc("reserves", "Cash and central-bank reserves", "max(cash, 0)", np.maximum(cash, 0))
+    acc("mortgages", "Mortgages", "the competitor's mortgage book", Mc)
+    acc("assets", "Total assets", "reserves + mortgages", v["reserves"] + Mc, ["reserves", "mortgages"])
+    acc("savings", "Savings deposits", "constant (its growth is funded by other banks)", Dep)
+    acc("interbank", "Deposits of other banks", "funds its growth; withdrawn in the crisis", W)
+    acc("cb_borrowing", "Central-bank borrowing", "max(−cash, 0)", np.maximum(-cash, 0))
+    acc("liabilities", "Total liabilities", "savings + other banks + central bank", Dep + W + v["cb_borrowing"], ["savings", "interbank", "cb_borrowing"])
+    acc("equity", "Equity", "opening equity + retained profit", E)
+    acc("liab_equity", "Total liabilities and equity", "total liabilities + equity", v["liabilities"] + E, ["liabilities", "equity"])
+    acc("balance_check", "Balance check", "total assets − total liabilities and equity", v["assets"] - v["liab_equity"], ["assets", "liab_equity"])
+    acc("ii_mortgages", "Interest on mortgages", "its mortgage rate × mortgages", rmc * Mc, ["mortgages"], py)
+    acc("ii_reserves", "Interest on reserves", "market rate × reserves", rmk * v["reserves"], ["reserves"], py)
+    acc("interest_income", "Interest income", "sum of the above", v["ii_mortgages"] + v["ii_reserves"], ["ii_mortgages", "ii_reserves"], py)
+    acc("ie_savings", "Interest on savings", "savings rate × savings deposits", rs * Dep, ["savings"], py)
+    acc("ie_interbank", "Interest to other banks", "(market rate + premium) × deposits of other banks", (rmk + prem) * W, ["interbank"], py)
+    acc("ie_cb", "Interest to the central bank", "(market rate + 1 pp) × central-bank borrowing", (rmk + gap) * v["cb_borrowing"], ["cb_borrowing"], py)
+    acc("interest_expense", "Interest expense", "sum of the above", v["ie_savings"] + v["ie_interbank"] + v["ie_cb"], ["ie_savings", "ie_interbank", "ie_cb"], py)
+    acc("nii", "Net interest income", "interest income − interest expense", v["interest_income"] - v["interest_expense"], ["interest_income", "interest_expense"], py)
+    acc("impairments", "Impairments on mortgages", "loss rate × underwater share × mortgages", b["loss_uw"] * uw * Mc, ["mortgages"], py)
+    acc("net_profit", "Net profit", "net interest income − impairments", v["nii"] - v["impairments"], ["nii", "impairments"], py)
+    acc("dividend", "Dividend", "the same payout per unit of equity as My Bank", e["pay0"] * E / b["E0"], ["equity"], py)
+    acc("retained", "Retained profit", "net profit − dividend", v["net_profit"] - v["dividend"], ["net_profit", "dividend"], py)
+    acc("rwa", "Risk-weighted assets", "risk weight × mortgages", rw_m * Mc, ["mortgages"], source=DNB_RW)
+    acc("tier1", "Tier 1 capital ratio", "equity ÷ risk-weighted assets", 100 * E / np.maximum(v["rwa"], 1e-9), ["equity", "rwa"], pct, MENKVELD + " eq. 3-7; target of its desk 8%")
+    acc("nsfr", "Net stable funding ratio", "(90% × savings + equity) ÷ (65% × mortgages)", 100 * (b["asf_dep"] * Dep + E + b["asf_w"] * W) / np.maximum(b["rsf_m"] * Mc, 1e-9), ["savings", "equity", "mortgages"], pct, BASEL_NSF)
+    acc("ltd", "Loan-to-deposit ratio", "mortgages ÷ savings", 100 * Mc / np.maximum(Dep, 1e-9), ["mortgages", "savings"], pct, MENKVELD + " eq. 3-1")
+    acc("leverage", "Leverage ratio", "equity ÷ total assets", 100 * E / np.maximum(v["assets"], 1e-9), ["equity", "assets"], pct, "Basel LEV20.7")
+    acc("share", "Market share of mortgages", "its book ÷ the market's", 100 * T("I(Bk_sharec)"), ["mortgages"], pct)
+    acc("rate", "Its mortgage rate", "its own ALM desk (Tier 1 target 8%), never below funding cost + 0.2 pp", 100 * rmc, unit=pct)
+    groups = [
+        dict(id="balance", label="Balance sheet", sections=[
+            dict(label="Assets", side="debit", accounts=["reserves", "mortgages", "assets"]),
+            dict(label="Liabilities", side="credit", accounts=["savings", "interbank", "cb_borrowing", "liabilities"]),
+            dict(label="Equity", side="credit", accounts=["equity", "liab_equity"]),
+            dict(label="Reconciliation", side="", accounts=["balance_check"])]),
+        dict(id="income", label="Income statement", sections=[
+            dict(label="Interest income", accounts=["ii_mortgages", "ii_reserves", "interest_income"]),
+            dict(label="Interest expense", accounts=["ie_savings", "ie_interbank", "ie_cb", "interest_expense"]),
+            dict(label="Result", accounts=["nii", "impairments", "net_profit", "dividend", "retained"])]),
+        dict(id="ratios", label="Metrics", sections=[
+            dict(label="Solvency", accounts=["rwa", "tier1", "leverage"]),
+            dict(label="Liquidity", accounts=["nsfr", "ltd"]),
+            dict(label="Market", accounts=["share", "rate"])]),
+    ]
+    values = {k: [round(float(x), 4) if keep else None for x, keep in zip(a, valid)] for k, a in v.items()}
+    return dict(version="bank-ledger-comp-1", groups=groups, accounts=defs, values=values, links=[], thresholds=THRESHOLDS,
+                basis="The competitor's statements, from its stocks and flows in the same run.")

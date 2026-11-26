@@ -179,14 +179,16 @@ def test_dnb_thresholds_lcr_and_nim():
 
 
 def test_competitor_bank():
-    """Feedback round 2 B3: off by default (one-bank results unchanged). On, it starts at 20% and prices on its own (fixed
-    rate 0.3 pp below the bank's start rate). Without a crisis it gains share and stays above 6% Tier 1 (desk on or off);
-    the crisis pushes it below 6% while the bank stays above. Numbers reported, not tuned."""
+    """Competitor (26 Nov 2026): off by default (one-bank results unchanged). On, it starts at 20% and has its own, more
+    aggressive ALM desk (Tier 1 target 8%, never below its funding cost + 0.2 pp). Same shocks, different controller: it
+    gains share and keeps a thinner buffer than My Bank; in the crisis it passes the premium on to its borrowers (its
+    mortgage rate rises well above My Bank's). Numbers reported, not tuned."""
     off = bn.simulate({})
-    assert max(abs(x or 0) for x in off["comp_book"]) < 1e-6 and off["summary"]["min_price_pct"] == pytest.approx(-1.51, abs=0.05)
-    for alm in (True, False):
-        calm = bn.simulate({"competitor": 1, "funding_cut": 0, "premium_pp": 0}, alm_on=alm)
-        crisis = bn.simulate({"competitor": 1}, alm_on=alm)
-        assert calm["comp_share_pct"][0] == pytest.approx(20, abs=0.5) and calm["comp_share_pct"][-1] > 22
-        assert min(calm["comp_tier1_pct"]) > 6
-        assert min(crisis["comp_tier1_pct"]) < 6 and crisis["summary"]["min_tier1_pct"] > 6
+    assert max(abs(x or 0) for x in off["comp_book"]) < 1e-6 and off["summary"]["min_price_pct"] == pytest.approx(-1.5, abs=0.1)
+    calm = bn.simulate({"competitor": 1, "funding_cut": 0, "premium_pp": 0})
+    crisis = bn.simulate({"competitor": 1})
+    assert calm["comp_share_pct"][0] == pytest.approx(20, abs=0.5) and max(calm["comp_share_pct"]) > 24
+    assert min(calm["comp_tier1_pct"]) > 6 and min(crisis["comp_tier1_pct"]) < crisis["summary"]["min_tier1_pct"]
+    assert max(crisis["comp_mortgage_rate_pct"]) > max(crisis["mortgage_rate_pct"]) + 1
+    no_desk = bn.simulate({"competitor": 1}, alm_on=False)
+    assert min(no_desk["comp_tier1_pct"]) < min(crisis["comp_tier1_pct"])

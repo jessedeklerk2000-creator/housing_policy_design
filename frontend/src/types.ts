@@ -12,7 +12,7 @@ export type Kpis = Record<'yoy_min' | 'yoy_max' | 'yoy_std' | 'yoy_mean_abs_gap'
 export interface LedgerAccount { id: string; label: string; formula: string; inputs: string[]; unit: string; source: string; note: string; minimum?: number }
 export interface Ledger { version: string; groups: { id: string; label: string; sections: { label: string; side?: string; accounts: string[] }[] }[]; accounts: Record<string, LedgerAccount>; links: [string, string, string][]; basis: string; thresholds?: Threshold[] }
 export interface Threshold { id: string; label: string; value: number | null; unit: string; text?: string; source: string }
-export interface Result { ledger?: Ledger; year: number[]; traces: Record<string, number[]>; series: Record<string, number[]>; kpis: Kpis; scenario: Scenario; engine: string; model_version: string; netlist_sha256: string; netlist: string }
+export interface Result { ledger?: Ledger; ledger_comp?: Ledger; year: number[]; traces: Record<string, number[]>; series: Record<string, number[]>; kpis: Kpis; scenario: Scenario; engine: string; model_version: string; netlist_sha256: string; netlist: string }
 export interface Preset { label: string; kp: number; ki: number; kd: number; filtered: boolean }
 export interface Catalogue { defaults: Scenario; presets: Record<string, Preset>; model_version: string; time: { year_at_raw_zero: number } }
 export interface SavedRow { id: string; name: string; created_at: string; feedback: boolean; has_result: boolean }

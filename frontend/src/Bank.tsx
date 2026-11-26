@@ -174,7 +174,7 @@ const RENAME: Record<string, { name: string; type?: string; role: string; trace?
   'I§Mortgages': { name: 'B§Mortgages', type: 'bi2', role: 'Netlist: B§Mortgages (replaces the outside input I§Mortgages), I = (θ·V·ℓ − θ·M − M/60)/6. New mortgages: movers repay and borrow again at today\'s house value, within LTV and LTI limits; the netlist\'s Mortgage_debt integrates it.' },
   'B2': { name: 'B2', role: 'Netlist: B2, I = 5 × savings rate / 1.5%. The savings interest follows u₂, the savings rate from the ALM Desk (FTP − spread/2).' },
   'B§Mortgage_interest': { name: 'B§Mortgage_interest', role: 'Netlist: B§Mortgage_interest, I = I(Mortgage_debt) × I(Mortgage_rate_ALM): mortgage debt × the rate from the ALM Desk.' },
-  'I8': { name: 'B§Firm_loans', type: 'bi2', role: 'Netlist: B§Firm_loans (on the nodes of the old I8), I = 30·(1 − 15%·(1 − firm credit/30))·(1 − 10% per pp the loan rate is above 3.7%). New loans to firms through the firm-loan port; firm credit is the netlist\'s own crisis path.', trace: 'I(Firm_loans)' },
+  'I8': { name: 'B§Firm_loans', type: 'bi2', role: 'Netlist: B§Firm_loans (on the nodes of the old I8), I = 30·(1 − 15%·(1 − firm credit/30))·(1 − 10% per pp the firm-loan rate u₃ is above its start, 3.21%). New loans to firms through the firm-loan port; firm credit is the netlist\'s own crisis path.', trace: 'I(Firm_loans)' },
   'B5': { name: 'B5', role: 'Netlist: B5, I = 10 × (firm loans / 40) × (loan rate / 3.7%). Firm-loan interest, floating: it follows the loan rate from the ALM Desk at once.' },
 };
 const added = (name: string, type: string, pins: number[][], role: string, trace: string, state = 'active') =>
@@ -234,6 +234,13 @@ export function BankMode() {
   const openLoop = useCallback(() => setView('loop'), []);
   const loopUrl = useMemo(() => new URLSearchParams(location.search).get('view') === 'loop', []);
   const set = (k: Key, v: number) => setP(x => ({ ...x, [k]: v }));
+  // The story for the demo (Jesse, 26 Nov 2026): 1 Covid and the financial crisis on My Bank; 2 the same shocks with a
+  // competitor (its own, more aggressive desk); 3 the Supervisory Outlier Test (no Covid, no crisis; a rate shock).
+  const [story, setStoryRaw] = useState(0);
+  const setStory = useCallback((k: number) => { setStoryRaw(k); setAlm(true);
+    if (k === 1) setP({ ...DEF });
+    if (k === 2) setP({ ...DEF, competitor: 1 });
+    if (k === 3) setP({ ...DEF, covid_scale: 0, funding_cut: 0, premium_pp: 0, shock_scen: 2 }); }, []);
   const { now, other, busy, error } = useRun(p, alm, fb, cmp);
   const dirty = JSON.stringify(p) !== JSON.stringify(DEF) || !alm || !fb;
   const panel = (part: Part) => <Panel part={part} p={p} set={set} alm={alm} setAlm={setAlm} fb={fb} setFb={setFb} run={now}/>;
@@ -300,7 +307,7 @@ export function BankMode() {
     {broken.length > 0 && <p className="notice bad">{broken.map(r => `${r === now ? 'This run' : 'The comparison'} runs away in ${((r.breakdown_year ?? 0) + YEAR0).toFixed(1)}`).join('; ')}: the desk raises rates, prices fall, Tier 1 falls further, the desk raises rates again. The model leaves its valid range there, so the lines stop.</p>}
 
     {view === 'bus' && (now?.result ? <BankBusView result={now.result} patch={patchMap} desk={<LiveDesk p={p} alm={alm}/>} toolsSlot={busSlot}
-      shock={p.shock_scen} setShock={k => set('shock_scen', k)} alm={alm} setAlm={setAlm}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
+      crisisOn={p.funding_cut > 0 || p.premium_pp > 0} shock={p.shock_scen} setShock={k => set('shock_scen', k)} alm={alm} setAlm={setAlm} story={story} setStory={setStory}/> : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>)}
     {view === 'loop' && <BankCtx.Provider value={variant}>
       {scenario && now?.result ? <ModelMap key="bank" scenario={scenario} result={now.result} pinned={null} busy={busy} run={() => {}} setFeedback={setAlm} update={() => {}} design={DESIGN} setDesign={() => {}} lag={0} left={left}/>
         : <section className="panel"><p className="muted">{busy || !error ? 'Running the bank netlist…' : 'No run.'}</p></section>}
