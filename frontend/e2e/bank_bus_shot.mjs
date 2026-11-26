@@ -21,7 +21,7 @@ picks.push(await clickHit('Mortgage bus')); await page.getByRole('button', { nam
 await shot('bus_pick'); await page.getByRole('button', { name: 'Close', exact: true }).first().dispatchEvent('click');
 await click('Expand Households'); await shot('bus_hh');
 await click('Collapse Households'); await page.waitForTimeout(600);
-await click('Expand Bank'); await shot('bus_1'); await click('Expand Treasury (treasurer)'); await shot('bus_1t');
+await click('Expand My Bank'); await shot('bus_1'); await click('Expand Treasury (treasurer)'); await shot('bus_1t');
 await click('Expand ALM Desk'); await shot('bus_2_desk');
 await click('Collapse ALM Desk'); await page.waitForTimeout(600);
 await click('Expand Banking Operations (COO)'); await shot('bus_1o'); await click('Expand Operations'); await shot('bus_2_bs');
@@ -36,6 +36,6 @@ const vp = () => page.locator('.bus-canvas .react-flow__viewport').getAttribute(
 const before = await vp(); const b = await page.locator('.bus-stmt-body').nth(3).boundingBox();
 await page.mouse.move(b.x + 20, b.y + b.height - 30); await page.mouse.down(); await page.mouse.move(b.x - 300, b.y + b.height - 130, { steps: 12 }); await page.mouse.up();
 await page.waitForTimeout(500); const panned = before !== await vp();
-await page.getByRole('tab', { name: 'Control-loop view' }).click(); await page.waitForTimeout(3000);
+await page.goto('http://127.0.0.1:8001/?mode=bank&view=loop'); await page.waitForTimeout(4000);
 const loop = await page.locator('.map-canvas .react-flow__node').count();
 console.log(JSON.stringify({ titles, picks, plotted, panned, loop, errors })); process.exit(0);

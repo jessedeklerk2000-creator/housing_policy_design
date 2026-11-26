@@ -18,7 +18,7 @@ if (found) { await knob.first().evaluate(el => { const s = Object.getOwnProperty
 await click('Expand Financial sector'); await page.waitForTimeout(800);
 await page.locator('.react-flow__controls-fitview').dispatchEvent('click'); await page.waitForTimeout(1000);
 const on = await page.locator('.bus-comp').innerText().catch(() => '');
-const yc = await page.locator('.bus-yield').count(), dnb = await page.locator('.bus-diagram').innerText().then(t => t.includes('DNB / central bank'));
+const yc = await page.locator('.bus-yield').count(), dnb = await page.locator('.bus-diagram').innerText().then(t => t.includes('Central bank'));
 await page.locator('.bus-canvas').screenshot({ path: `${out}/round2_top.png` });
 if (!yc || !dnb || !/Market share/.test(on)) fail.push({ yc, dnb, found, on });
 console.log(JSON.stringify({ fail, off, on, errors })); process.exit(0);

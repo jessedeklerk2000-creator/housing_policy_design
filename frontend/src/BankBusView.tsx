@@ -6,7 +6,7 @@
 // the bank's breadboard (process), its financial statements (sensor), or the desk's op-amp breadboard. Numbers only in the accounts (Jesse).
 // Bus structure after Q. Emanuels' DynaBI bus canvas: one bus per kind of exchange, two rails each (flow f, incentive
 // u); here the rails carry each flow's port and return terminal. Values come from the same ngspice run.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ReactFlow, ReactFlowProvider, Controls, useReactFlow, type Node, type NodeProps } from '@xyflow/react';
 import { Minus, Pause, Play, Plus } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -177,9 +177,14 @@ function FitBody({ k, onH, style, children }: { k: string; onH: (k: string, h: n
 // A3 (M. Mendel, as in DynaBI): dots run along every wire. Speed proportional to |flow| at the cursor (each flow scaled
 // by its largest value over the run), direction by its sign, none at zero. One requestAnimationFrame loop moves SVG
 // circles through refs: no React state, so the dots never change the layout (A1).
+// The time cursor reaches the diagram through this context, not through the node's data: a new node object on every
+// Play tick made React Flow hide the node until it was measured again, so the mouse cursor flickered between the
+// arrow and the canvas's hand (Jesse, 26 Nov 2026).
+const Tick = createContext<{ at: number; playing: boolean }>({ at: 0, playing: false });
 type DotPath = { key: string; pts: number[][]; v: number; color: string };
 const DOT_GAP = 34, DOT_SPEED = 70;  // px between dots, px per second at the largest flow of the run
-function DotLayer({ W, H, paths }: { W: number; H: number; paths: DotPath[] }) {
+function DotLayer({ W, H, paths, playing }: { W: number; H: number; paths: DotPath[]; playing: boolean }) {
+  const run = useRef(playing); run.current = playing;
   const ref = useRef<SVGGElement>(null), live = useRef<{ p: DotPath; cum: number[]; n: number }[]>([]), phase = useRef(new Map<string, number>());
   live.current = paths.map(p => { const cum = [0]; for (let i = 1; i < p.pts.length; i++) cum.push(cum[i - 1] + Math.hypot(p.pts[i][0] - p.pts[i - 1][0], p.pts[i][1] - p.pts[i - 1][1]));
     return { p, cum, n: Math.max(1, Math.floor(cum[cum.length - 1] / DOT_GAP)) }; });
@@ -190,7 +195,7 @@ function DotLayer({ W, H, paths }: { W: number; H: number; paths: DotPath[] }) {
       const cs = ref.current?.children; let ci = 0;
       if (cs) for (const { p, cum, n } of live.current) {
         const L = cum[cum.length - 1] || 1, ph = ((phase.current.get(p.key) ?? 0) + p.v * DOT_SPEED * dt) % DOT_GAP; phase.current.set(p.key, ph);
-        const off = Math.abs(p.v) < 0.01;
+        const off = !run.current || Math.abs(p.v) < 0.01;  // dots only while Play runs (Jesse)
         for (let j = 0; j < n; j++, ci++) {
           const c = cs[ci] as SVGCircleElement | undefined; if (!c) continue;
           if (off) { c.setAttribute('opacity', '0'); continue; }
@@ -232,9 +237,10 @@ function YieldCurve({ r, result, at }: { r: R; result: Result; at: number }) {
   </div>;
 }
 
-type DiagramData = { result: Result; at: number; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
+type DiagramData = { result: Result; o: Open; set: (k: string) => void; map: MapData; scenario: Scenario; desk: ReactNode; buses: boolean; sizes: Record<string, P>; resize: (k: string, s: P | null) => void };
 function Diagram({ data }: NodeProps<Node<DiagramData>>) {
-  const { result, at, o, set, map, scenario, desk, buses, sizes, resize } = data;
+  const { result, o, set, map, scenario, desk, buses, sizes, resize } = data;
+  const { at, playing } = useContext(Tick);
   const rf = useReactFlow();
   const fitH = useCallback((k: string, h: number) => { if (Math.abs((sizes['fit:' + k]?.[1] ?? 0) - h) > 2) resize('fit:' + k, [0, h]); }, [sizes, resize]);
   STRAIGHT.on = !buses;
@@ -356,7 +362,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   // open: shrunk to its content plus a fixed margin (A7); the central bank is DNB, also the supervisor (B1)
   const fs: R = o.fs ? { x: B.x + B.w + 320, y: B.y + 40, w: 340, h: HEAD + 30 + 90 + 60 + 100 + 64 + 290 } : { x: B.x + B.w + 320, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
   const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 30, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 60, w: 260, h: 100 };
-  { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'DNB / central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
+  { const rx = B.x + B.w + 150, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
     const ys = [ibY, ...ends.map(e => e[1])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
     const g2: ReactNode[] = [line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1'), line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2')];
     ends.forEach(([ex, ey, nm], k) => {
@@ -420,7 +426,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   { const th = result.ledger?.thresholds ?? [], txt = th.map(t => t.value == null ? `RW floor ${t.text ?? ''}`.replace(' up to 55% LTV, 45% above', '/45%') : `${t.label.replace(' minimum', '')} ≥ ${t.value}${t.unit}`).join(' · ');
     const src: P = o.fs ? [cbk.x + cbk.w, cbk.y + 30] : [fs.x + fs.w, fs.y + fs.h / 2], top = B.y - 100, xr = fs.x + fs.w + 40;
     const gi = g.inner, tgt: P = gi?.t ? [gi.t.alco.x + gi.t.alco.w - 30, gi.t.alco.y] : gi ? [gi.tre.x + gi.tre.w - 50, gi.tre.y] : [B.x + B.w - 50, B.y];
-    over.push(arrow([src, [xr, src[1]], [xr, top], [tgt[0], top], tgt], SIG, 'sig-dnb', 'DNB thresholds: ' + txt, 0.55)); }
+    over.push(arrow([src, [xr, src[1]], [xr, top], [tgt[0], top], tgt], SIG, 'sig-dnb', 'regulatory thresholds: ' + txt, 0.55)); }
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
@@ -566,9 +572,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     <Block r={R.hm} label="Housing Market" tone={o.hm ? 'system-group' : 'system-closed'} open={o.hm} toggle={() => set('hm')} z={0} info="4 agents · 6 buses"/>
     {o.hm && CPB4.map(agent)}
     <Block r={R.gov} label="Government" tone="reference" info="owner-occupier subsidy (d)"/>
-    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · DNB / central bank"/>
-    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="DNB / central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
-      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)<br/>A large Dutch bank is supervised by the ECB (SSM) with DNB in the joint team</div>
+    <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · Central bank"/>
+    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
+      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)</div>
       <YieldCurve r={{ x: fs.x + 20, y: cbk.y + cbk.h + 84, w: fs.w - 40, h: 250 }} result={result} at={at}/></>}
     {(() => { const v = (k: string) => readTrace(result, k)?.[at] ?? null, t1 = v('I(Bk_t1c)'), row = (name: string, x: number | null, bad = false) =>
         <div className={'bus-kv' + (bad ? ' bad' : '')}><span>{name}</span><b>{x == null ? '–' : x.toFixed(1) + '%'}</b></div>;
@@ -577,9 +583,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
           {compOn ? <div className="bus-comp-body">{row('Tier 1 (min 6%)', t1, t1 != null && t1 < 6)}{row('NSFR', v('I(Bk_nsfrc)'))}{row('Loan-to-deposit', v('I(Bk_ltdc)'))}{row('Market share', v('I(Bk_sharec)'))}</div>
             : null}
         </Block></div>; })()}
-    <Block r={B} label="Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0} info="Treasury · Operations"/>
+    <Block r={B} label="My Bank" tone={o.bank ? 'bank-group' : 'bank-closed'} open={o.bank} toggle={() => set('bank')} z={0} info="Treasury · Operations"/>
     {inside}
-    <DotLayer W={W} H={H} paths={dots}/>
+    <DotLayer W={W} H={H} paths={dots} playing={playing}/>
     <svg width={W} height={H} className="bus-wires bus-over">{over}</svg>
     {card}
   </div>;
@@ -621,7 +627,8 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
     return next;
   }), [rf, map, sizes]);
   const nodes = useMemo<Node[]>(() => map ? [{ id: 'd', type: 'diagram', position: { x: 0, y: 0 }, draggable: false, selectable: false, focusable: false, style: { pointerEvents: 'all' },
-    data: { result, at: Math.min(at, n - 1), o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, at, n, o, set, map, scenario, desk, buses, sizes, resize]);
+    data: { result, o, set, map, scenario, desk, buses, sizes, resize } }] : [], [result, o, set, map, scenario, desk, buses, sizes, resize]);
+  const tick = useMemo(() => ({ at: Math.min(at, n - 1), playing }), [at, n, playing]);
   const tools = <div className="bus-time">
       <button className="ghost" aria-label={playing ? 'Pause' : 'Play through time'} onClick={() => { if (at >= n - 1) setAt(0); setPlaying(p => !p); }}>{playing ? <Pause size={14}/> : <Play size={14}/>}</button>
       <span>{result.year[Math.min(at, n - 1)].toFixed(1)}</span>
@@ -631,7 +638,7 @@ function Inner({ result, desk, patch, toolsSlot }: { result: Result; desk: React
     </div>;
   return <>
     {toolsSlot ? createPortal(tools, toolsSlot) : tools}
-    <div className="bus-canvas">{map ? <ReactFlow nodes={nodes} edges={[]} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.04 }} minZoom={0.05} maxZoom={4} proOptions={{ hideAttribution: true }} nodesDraggable={false}><Controls showInteractive={false}/></ReactFlow> : <p className="muted">Loading the model…</p>}</div>
+    <div className="bus-canvas">{map ? <Tick.Provider value={tick}><ReactFlow nodes={nodes} edges={[]} nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.04 }} minZoom={0.05} maxZoom={4} proOptions={{ hideAttribution: true }} nodesDraggable={false}><Controls showInteractive={false}/></ReactFlow></Tick.Provider> : <p className="muted">Loading the model…</p>}</div>
   </>;
 }
 

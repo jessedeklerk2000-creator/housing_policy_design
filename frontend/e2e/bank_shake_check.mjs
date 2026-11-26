@@ -16,6 +16,12 @@ async function watch(name) {
 }
 await page.goto('http://127.0.0.1:8001/?mode=bank'); await page.waitForSelector('.bus-diagram', { timeout: 60000 }); await page.waitForTimeout(2500);
 await watch('bus');
+// the diagram node must never be hidden during Play (a hidden node lets the mouse fall through to the pane: cursor flicker)
+{ await page.getByRole('button', { name: /Play/ }).first().click();
+  const hidden = await page.evaluate(async () => { let n = 0; const el = document.querySelector('.bus-canvas .react-flow__node');
+    for (let i = 0; i < 150; i++) { if (getComputedStyle(el).visibility === 'hidden') n++; await new Promise(r => setTimeout(r, 20)); } return n; });
+  await page.getByRole('button', { name: /Pause/ }).first().click().catch(() => {});
+  if (hidden) fail.push({ hiddenSamples: hidden }); console.error('hidden samples', hidden); }
 await page.goto('http://127.0.0.1:8001/?mode=bank&view=loop'); await page.waitForSelector('.map-canvas .react-flow__node', { timeout: 60000 }); await page.waitForTimeout(3000);
 const loopPlay = await page.getByRole('button', { name: /Play/ }).count();
 await watch('loop');

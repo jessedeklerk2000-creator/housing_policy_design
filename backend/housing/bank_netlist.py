@@ -205,7 +205,9 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("lsf", f"max(1-{fb}*{g('credit_supply')}*(1-(I(bk_Dep)+I(bk_W))/{v['Dep0'] + v['W0']!r}),0.2)"),
         S("cash", "I(bk_Dep)+I(bk_E)+I(bk_W)-I(bk_M)-I(bk_Lf)"),
         # ---- competitor bank (B3; competitor=0: all of it zero)
-        S("rmc", f"I(bk_rm)-{v['comp_gap_pp'] / 100!r}*u(time-{T0!r})"),        # sharper from year 0 (not in the warm-up before it)
+        # its own rate, fixed: 0.3 pp below the bank's start rate (it has no ALM desk). Tied to the bank's rate, it followed the
+        # bank's desk into a price war and failed without any crisis (Jesse, 26 Nov 2026: it should not)
+        S("rmc", f"{e['rm0']!r}-{v['comp_gap_pp'] / 100!r}*u(time-{T0!r})"),     # sharper from year 0 (not in the warm-up before it)
         S("sc", f"{g('competitor')}/(1+exp(-({e['a0']!r}+{e['beta']!r}*100*(I(bk_rm)-I(bk_rmc)))))"),   # its share of new lending
         S("lsfc", f"max(1-{fb}*{g('credit_supply')}*{v['Wc0'] / (v['Depc0'] + v['Wc0'])!r}*{g('funding_cut')}*I(bk_shape),0.2)"),
         "B§Comp_flow 0 0 I=" + f"I(bk_sc)*I(bk_theta)*I(bk_V)*I(bk_lnew)*I(bk_lsfc)-I(bk_theta)*I(bk_Mc)-I(bk_Mc)/{b['T_amort']!r}",

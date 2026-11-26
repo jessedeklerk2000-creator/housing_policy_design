@@ -63,7 +63,7 @@ export function BankStatements({ part = 'all', only }: { part?: 'all' | 'stateme
       {isOpen && <div className="stmt-drill">
         <div className="stmt-formula">{a.label} = {a.formula}</div>
         {a.inputs.filter(i => L.accounts[i]).map(i => row(i, k, depth + 1, RATIO_OVER[id] === i ? '÷' : MINUS[id]?.includes(i) ? '−' : '+'))}
-        <div className="stmt-source">{a.unit} · {a.source}{a.minimum !== undefined ? ` · minimum ${a.minimum}% (DNB threshold)` : ''}{a.note ? ` · ${a.note}` : ''}</div>
+        <div className="stmt-source">{a.unit} · {a.source}{a.minimum !== undefined ? ` · minimum ${a.minimum}% (regulatory threshold)` : ''}{a.note ? ` · ${a.note}` : ''}</div>
       </div>}
     </div>;
   };

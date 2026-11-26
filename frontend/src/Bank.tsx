@@ -232,6 +232,7 @@ export function BankMode() {
     const ro = new ResizeObserver(fit); ro.observe(bar); return () => ro.disconnect(); }, []);
   const [view, setView] = useState<'bus' | 'loop'>(() => new URLSearchParams(location.search).get('view') === 'loop' ? 'loop' : 'bus');  // bus view (bank in the middle) or the control-loop view
   const openLoop = useCallback(() => setView('loop'), []);
+  const loopUrl = useMemo(() => new URLSearchParams(location.search).get('view') === 'loop', []);
   const set = (k: Key, v: number) => setP(x => ({ ...x, [k]: v }));
   const { now, other, busy, error } = useRun(p, alm, fb, cmp);
   const dirty = JSON.stringify(p) !== JSON.stringify(DEF) || !alm || !fb;
@@ -281,10 +282,11 @@ export function BankMode() {
   // Full-window layout (Jesse, 25 Nov 2026): the canvas always fills the window, no page scroll. Controls in the top bar
   // (portal into the app header), results and notes in a collapsible panel on the right.
   const top = slot && createPortal(<>
-    <div className="seg bank-view-switch" role="tablist" aria-label="View">
+    {/* the control-loop view is hidden (Jesse, 26 Nov 2026: the bus view is the one to use); ?view=loop still opens it */}
+    {loopUrl && <div className="seg bank-view-switch" role="tablist" aria-label="View">
       <button role="tab" aria-selected={view === 'bus'} className={view === 'bus' ? 'on' : ''} onClick={() => setView('bus')}>Bus view</button>
       <button role="tab" aria-selected={view === 'loop'} className={view === 'loop' ? 'on' : ''} onClick={() => setView('loop')}>Control-loop view</button>
-    </div>
+    </div>}
     {view === 'bus' && <div ref={setBusSlot} className="bus-tools-slot"/>}
     {busy && <LoaderCircle className="spin" size={16} aria-label="Running"/>}
   </>, slot);

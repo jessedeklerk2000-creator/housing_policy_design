@@ -792,3 +792,17 @@ body:has(.bank-full) { overflow:hidden; }
 .bus-diagram .map-node.bank-l2 .bus-tile-info, .bus-diagram .map-node.bank-l1 .bus-tile-info, .bus-diagram .map-node.bank-l3 .bus-tile-info { color:#2e4a6b; }
 .bus-diagram .map-node.bank-l3 .stmt-block { border-color:#a3bbd6; } .bus-diagram .map-node.bank-l3 .stmt-block h4 { color:#2e4a6b; }
 .bus-diagram .map-node.bank-l1.open { background:transparent; }
+/* Jesse, 26 Nov 2026: My Bank is the focus; the Housing Market and the Government in calmer tones (bus view only) */
+.bus-diagram .map-node.system-closed { background:#f3dcc2; border:1.6px solid #c99a66; color:#5a3a14; text-shadow:none; }
+.bus-diagram .map-node.system-closed > .block-head { background:#eccba4; border-color:#c99a66; }
+.bus-diagram .map-node.system-closed > .block-head strong { color:#5a3a14; text-shadow:none; -webkit-text-stroke:0; }
+.bus-diagram .map-node.system-group { background:rgba(250,238,224,.45); border-color:#d6ad7f; }
+.bus-diagram .map-node.system-group > .block-head { background:#f1dcc3; border-color:#d6ad7f; }
+.bus-diagram .map-node.system-group > .block-head strong { color:#5a3a14; }
+.bus-diagram .map-node.reference:not(.bank-l2) { background:#e2e6ec; border:1.6px solid #8d99ab; color:#2f3b4e; text-shadow:none; }
+.bus-diagram .map-node.reference > .block-head { background:#d2d8e1; border-color:#8d99ab; }
+.bus-diagram .map-node.reference > .block-head strong { color:#2f3b4e; text-shadow:none; -webkit-text-stroke:0; }
+.bus-diagram .map-node.bank-closed { border:2.4px solid #3d6a9a; }
+.bus-diagram .map-node.bank-closed > .block-head, .bus-diagram .map-node.bank-group > .block-head { background:#4f7cac; border-color:#3d6a9a; }
+.bus-diagram .map-node.bank-closed > .block-head strong, .bus-diagram .map-node.bank-group > .block-head strong { color:#fff; font-size:20px; }
+.bus-diagram .map-node.bank-group { border:2px dashed #3d6a9a; }

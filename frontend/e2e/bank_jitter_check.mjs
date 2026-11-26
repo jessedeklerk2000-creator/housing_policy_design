@@ -8,7 +8,7 @@ const page = await browser.newPage({ viewport: { width: 1700, height: 1050 } });
 await page.goto('http://127.0.0.1:8001/?mode=bank');
 await page.waitForSelector('.bus-diagram', { timeout: 60000 }); await page.waitForTimeout(2000);
 const click = async name => { await page.getByRole('button', { name }).first().dispatchEvent('click'); await page.waitForTimeout(500); };
-await click('Expand Bank'); await click('Expand Treasury (treasurer)'); await click('Expand Accounting');
+await click('Expand My Bank'); await click('Expand Treasury (treasurer)'); await click('Expand Accounting');
 for (const b of ['Income statement', 'Cash flow statement', 'Balance sheet', 'Metrics']) await click('Expand ' + b);
 await page.waitForTimeout(1200);
 const snap = () => page.evaluate(() => ({

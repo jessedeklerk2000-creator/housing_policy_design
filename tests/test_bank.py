@@ -179,12 +179,14 @@ def test_dnb_thresholds_lcr_and_nim():
 
 
 def test_competitor_bank():
-    """Feedback round 2 B3: off by default (one-bank results unchanged); on, it starts at rest with a 20% share. With the
-    bank's rates frozen it grows its share and only the crisis pushes its Tier 1 below 6%. Numbers reported, not tuned."""
+    """Feedback round 2 B3: off by default (one-bank results unchanged). On, it starts at 20% and prices on its own (fixed
+    rate 0.3 pp below the bank's start rate). Without a crisis it gains share and stays above 6% Tier 1 (desk on or off);
+    the crisis pushes it below 6% while the bank stays above. Numbers reported, not tuned."""
     off = bn.simulate({})
     assert max(abs(x or 0) for x in off["comp_book"]) < 1e-6 and off["summary"]["min_price_pct"] == pytest.approx(-1.51, abs=0.05)
-    calm = bn.simulate({"competitor": 1, "funding_cut": 0, "premium_pp": 0}, alm_on=False)
-    crisis = bn.simulate({"competitor": 1}, alm_on=False)
-    assert calm["comp_share_pct"][0] == pytest.approx(20, abs=0.5)
-    assert calm["comp_share_pct"][-1] > 40 and min(calm["comp_tier1_pct"]) > 6
-    assert min(crisis["comp_tier1_pct"]) < 6 and crisis["summary"]["min_tier1_pct"] > 6
+    for alm in (True, False):
+        calm = bn.simulate({"competitor": 1, "funding_cut": 0, "premium_pp": 0}, alm_on=alm)
+        crisis = bn.simulate({"competitor": 1}, alm_on=alm)
+        assert calm["comp_share_pct"][0] == pytest.approx(20, abs=0.5) and calm["comp_share_pct"][-1] > 22
+        assert min(calm["comp_tier1_pct"]) > 6
+        assert min(crisis["comp_tier1_pct"]) < 6 and crisis["summary"]["min_tier1_pct"] > 6
