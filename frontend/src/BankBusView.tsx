@@ -276,15 +276,13 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     const y = o.firms && e?.pins ? r.y + HEAD + inputPath('left', i, firmIns.length, map.layouts.firms.size as P, e.pins)[0][1] * S : r.y + HEAD + (r.h - HEAD) * (i + 1) / (firmIns.length + 1);
     wires.push(arrow([[r.x - 120, y], [r.x, y]], D, 'df' + d.id, 'd · ' + d.label)); wires.push(hit([[r.x - 120, y], [r.x, y]], 'df' + d.id, { kind: 'd', id: d.id, at: [r.x - 60, y] }, d.label + ': click to plot'));
   });
-  // the Government (M. Mendel): a top-level player; the fiscal bus (€) carries the subsidy into the Housing Market
-  // (closed: onto its tile; open: into the households, through the gap between the two columns)
+  // the Government (M. Mendel): a top-level player outside the Housing Market. Its subsidy is an input to the model (a
+  // current source inside the households, no port pair and no government agent in the netlist), so it is drawn as a
+  // disturbance arrow d, not as a bus (Jesse, 26 Nov 2026). A fiscal bus fits once taxes and subsidies form a port pair.
   const gov = R.gov, gx = gov.x + gov.w / 2, laneY = R.hm.y - 72, hh = R.households, gapX = hh.x - 60;
   const govPts: number[][] = o.hm ? [[gx, gov.y + gov.h], [gx, laneY], [gapX, laneY], [gapX, (R.investors.y + R.investors.h + hh.y) / 2], [hh.x + 26, (R.investors.y + R.investors.h + hh.y) / 2], [hh.x + 26, hh.y]]
     : [[gx, gov.y + gov.h], [gx, R.hm.y]];
-  wires.push(arrow(govPts, MONEY, 'dgov', 'd · subsidy', o.hm ? 0.3 : 0.5));
-  if (buses) { const x2 = o.hm ? gapX + 30 : gx + 40;
-    wires.push(<g key="fiscal">{[0, LANE].map(k => <line key={k} x1={gx - 40} x2={x2} y1={laneY + k} y2={laneY + k} stroke={MONEY} strokeWidth={6} strokeLinecap="round" strokeOpacity={k ? 0.5 : 1}/>)}
-      <text x={gx - 52} y={laneY + LANE} textAnchor="end" className="bus-name" fill={MONEY}>Fiscal bus (€)</text></g>); }
+  wires.push(arrow(govPts, D, 'dgov', 'd · subsidy', o.hm ? 0.3 : 0.5));
   wires.push(hit(govPts, 'dgov', { kind: 'd', id: 'd_gov', at: [gx, laneY] }, 'Government subsidy: click to plot'));
   // the other banks' shock (deposits withdrawn, firm credit cut) into the bank, from above
   // the financial crisis comes from the Financial sector (other banks withdraw deposits, cut credit)
