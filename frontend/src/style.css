@@ -769,3 +769,6 @@ body:has(.bank-full) { overflow:hidden; }
 .bus-diagram .map-node.bus-stmt { border-color:#6b6b75; }
 /* A8: one corner style, square (radius 2), as in a circuit drawing */
 .bus-diagram .map-node, .bus-diagram .map-node .block-head, .bus-diagram .bus-org-frame, .bus-diagram .bus-ceo, .bus-diagram .stmt-block, .bus-diagram .bus-stmt-body, .bus-pick, .bus-diagram .stmt-plot-card { border-radius:2px !important; }
+/* A3: live values beside the e/f/d meters; the moving dots sit above the wires, below the meters */
+.bus-meter-val { font-size:10px; font-weight:600; fill:#2b2b33; paint-order:stroke; stroke:#fafbf7; stroke-width:3px; font-variant-numeric:tabular-nums; pointer-events:none; }
+.bus-wires.bus-dots { z-index:3; pointer-events:none; }
