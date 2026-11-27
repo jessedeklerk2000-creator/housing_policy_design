@@ -197,7 +197,11 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("dsh", f"{rate_shock(b, 0.25)!r}*u(time-{ts!r})"),                # rate shock: short end (3 months)
         S("dlg", f"{rate_shock(b, 30.0)!r}*u(time-{ts!r})"),                # rate shock: 30-year point (mortgages)
         S("d10", f"{rate_shock(b, 10.0)!r}*u(time-{ts!r})"),                # rate shock: 10-year point (firm loans)
-        S("rmk", f"{g('r_mkt')}+I(bk_dsh)"),                                  # the market rate (short end)
+        # ---- Financial sector: it sets the risk-free curve (Jesse, 27 Nov 2026). The curve is the effort of the interbank
+        # bus; My Bank and the competitor see the rates only through their interbank port.
+        S("rmk", f"{g('r_mkt')}+I(bk_dsh)"),                                  # risk-free rate, short end (3 months)
+        S("rfr10", f"{v['r_mkt'] + v['tp10']!r}+I(bk_d10)"),                # risk-free rate, 10 years
+        S("rfr30", f"{v['r_mkt'] + v['tp30']!r}+I(bk_dlg)"),                # risk-free rate, 30 years
         S("shape", "min((30-I(Crisis_timing))/20,1)"),                          # crisis timing (0..1) at the other banks
         S("W", f"{g('W0')}*(1-{g('funding_cut')}*I(bk_shape))"),              # funding from other banks
         S("P", f"I(Construction_cost)/{P_START + P_PER_SUBSIDY * b['hist_subsidy']!r}"),  # price index, 1 at the start
@@ -227,13 +231,19 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("t1_err", f"{g('t1_ref')}-I(bk_t1)"),
         S("ftp", f"{g('ftp0')}+{on}*({g('Kp_ftp')}*I(bk_nsfr_err)+{g('Ki_ftp')}*idt(I(bk_nsfr_err))/{YR})"),
         S("s", f"{g('s0')}+{on}*({g('Kp_s')}*I(bk_t1_err)+{g('Ki_s')}*idt(I(bk_t1_err))/{YR})"),
-        S("rm", "I(bk_ftp)+I(bk_s)/2+I(bk_dlg)"),                           # u1 mortgage rate (Menkveld eq. 3-4, 3-8) + the 30-year shock
-        S("rf", f"I(bk_ftp)+I(bk_s)/2+{e['rf0'] - e['rm0']!r}+I(bk_d10)"),    # u3 firm-loan rate: the 10-year point + its shock
-        S("rs", f"I(bk_ftp)-I(bk_s)/2+{g('dep_beta')}*I(bk_dsh)"),         # savings rate + part of the short shock
+        # Treasury: the funding cost (FTP) per maturity = the desk's FTP + the move of the risk-free curve at that maturity,
+        # read at the interbank port. With the desk off the move passes one to one.
+        S("ftp30", f"I(bk_ftp)+I(bk_rfr30)-{v['r_mkt'] + v['tp30']!r}"),
+        S("ftp10", f"I(bk_ftp)+I(bk_rfr10)-{v['r_mkt'] + v['tp10']!r}"),
+        S("ftp_on", f"I(bk_ftp)+I(bk_rmk)-{g('r_mkt')}"),
+        S("rm", "I(bk_ftp30)+I(bk_s)/2"),                                     # u1 mortgage rate (Menkveld eq. 3-4, 3-8): the 30-year FTP
+        S("rf", f"I(bk_ftp10)+I(bk_s)/2+{e['rf0'] - e['rm0']!r}"),            # u3 firm-loan rate: the 10-year FTP
+        # u2 savings rate: overnight; savers get only dep_beta of a move of the short rate
+        S("rs", f"I(bk_ftp)-I(bk_s)/2+{g('dep_beta')}*(I(bk_rmk)-{g('r_mkt')})"),
         S("theta", f"{g('theta0')}*(1-{g('uw_mobility')}*I(bk_uw))"),
         S("lti", f"{g('lti0')}*{_annuity('I(bk_rm)')}/{_annuity(g('rm0'))}/I(bk_P)"),
         S("lnew", f"-{g('soft')}*ln(exp(-{g('ltv_cap')}/{g('soft')})+exp(-I(bk_lti)/{g('soft')}))"),
-        f"B§Deposit_flow 0 0 I=({g('Dep0')}*(1+{g('eta_dep')}*(I(bk_rs)-{g('rs0')}-I(bk_dsh))*100)-I(bk_Dep))/{g('tau_dep')}",  # vs the market rate  # drawn: Inflow
+        f"B§Deposit_flow 0 0 I=({g('Dep0')}*(1+{g('eta_dep')}*(I(bk_rs)-{g('rs0')}-(I(bk_rmk)-{g('r_mkt')}))*100)-I(bk_Dep))/{g('tau_dep')}",  # vs the market rate  # drawn: Inflow
         S("Dep", f"{g('Dep0')}+idt(I(Deposit_flow))/{YR}"),                 # drawn: Deposits (capacitor)
         # lending supply (26 Nov 2026): the bank lends credit_supply % less per 1% of funding lost (Khwaja & Mian 2008)
         S("lsf", f"max(1-{fb}*{g('credit_supply')}*(1-(I(bk_Dep)+I(bk_W))/{v['Dep0'] + v['W0']!r}),0.2)"),
@@ -244,7 +254,7 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         S("t1c_err", f"{g('competitor')}*({e['t1c_ref']!r}-I(bk_t1c))"),
         # its own desk, never below its marginal funding cost (deposits of other banks: market rate + premium) + 0.2 pp:
         # it grows to its thin buffer, it does not lend at a loss (Claude's choice)
-        S("rmc", f"max({e['rm0']!r}-{v['comp_gap_pp'] / 100!r}*u(time-{T0!r})+I(bk_dlg)"
+        S("rmc", f"max({e['rm0']!r}-{v['comp_gap_pp'] / 100!r}*u(time-{T0!r})+I(bk_rfr30)-{v['r_mkt'] + v['tp30']!r}"
                  f"+{g('comp_desk')}*u(time-{T0!r})*({g('Kp_c')}*I(bk_t1c_err)+{g('Ki_c')}*idt(I(bk_t1c_err)*u(time-{T0!r}))/{YR}),"
                  f"I(bk_rmk)+I(bk_prem)+0.002)"),     # sharper from year 0 (not in the warm-up before it)
         S("sc", f"{g('competitor')}/(1+exp(-({e['a0']!r}+{e['beta']!r}*100*(I(bk_rm)-I(bk_rmc)))))"),   # its share of new lending
@@ -266,8 +276,11 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
         # Wholesale funding and any funding gap (negative cash: emergency borrowing) cost the market rate plus the
         # premium, which rises in the crisis. Without the gap term, losing funding made the bank richer (20 Nov 2026).
         S("prem", f"{g('w_prem')}+{v['premium_pp'] / 100!r}*I(bk_shape)"),
-        S("nii", f"I(bk_rm)*I(bk_M)+I(bk_rf)*I(bk_Lf)+I(bk_rmk)*I(bk_cash)-{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cash),0)-I(bk_rs)*I(bk_Dep)"
-                 f"-(I(bk_rmk)+I(bk_prem))*I(bk_W)"),
+        # My Bank's interbank port (Jesse, 27 Nov 2026), a port pair like the other buses: loans = net borrowing from the
+        # financial sector (other banks' deposits + central-bank borrowing - reserves), interest = net interest paid on it
+        S("ib_pos", "I(bk_W)-I(bk_cash)"),
+        S("ib_int", f"(I(bk_rmk)+I(bk_prem))*I(bk_W)-I(bk_rmk)*I(bk_cash)+{v['gap_penalty_pp'] / 100!r}*max(-I(bk_cash),0)"),
+        S("nii", f"I(bk_rm)*I(bk_M)+I(bk_rf)*I(bk_Lf)-I(bk_rs)*I(bk_Dep)-I(bk_ib_int)"),
         f"B§Net_interest 0 0 I=I(bk_nii)-{g('loss_uw')}*I(bk_uw)*I(bk_M)-{g('pay0')}*I(bk_E)/{g('E0')}",  # drawn: NII
         S("E", f"{g('E0')}+idt(I(Net_interest))/{YR}"),                     # drawn: Equity (capacitor)
         S("rate", f"0.01033+{fb}*{g('k_rate')}*(I(bk_rmavg)-{e['rmavg0']!r})/{YR}"),   # what the housing market pays (avg over the banks)

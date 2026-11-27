@@ -144,6 +144,18 @@ def ledger(tr: dict, b: dict, e: dict, grid_years: np.ndarray, sim_years: np.nda
     acc("cf_net", "Net change in cash", "operating + investing + financing", v["cf_operating"] + v["cf_investing"] + v["cf_financing"], ["cf_operating", "cf_investing", "cf_financing"], py)
     acc("cf_check", "Cash check", "net change in cash − d(reserves)/dt", v["cf_net"] - D["res"], ["cf_net", "reserves"], py,
         note="Zero up to the accuracy of the time grid.")
+    # The interbank port (Jesse, 27 Nov 2026): a port pair like the other buses. Loans = net borrowing from the financial
+    # sector, interest = net interest paid on it; the efforts are the rates the financial sector sets (the risk-free curve).
+    acc("ib_position", "Net borrowing from the financial sector", "deposits of other banks + central-bank borrowing − reserves",
+        W + v["cb_borrowing"] - v["reserves"], ["interbank", "cb_borrowing", "reserves"])
+    acc("cf_ib_loans", "Interbank loans, net (port flow)", "d(net borrowing from the financial sector)/dt", D["W"] + D["cb"] - D["res"], ["ib_position"], py)
+    acc("ib_interest", "Interbank interest, net (port flow)", "interest to other banks + to the central bank − interest on reserves",
+        v["ie_interbank"] + v["ie_cb"] - v["ii_reserves"], ["ie_interbank", "ie_cb", "ii_reserves"], py)
+    acc("ib_loan_rate", "Rate of other banks (port effort)", "risk-free short rate + premium", 100 * (rmk + prem), unit=pct)
+    acc("rfr_short", "Risk-free rate, 3 months (port effort)", "set by the financial sector", 100 * rmk, unit=pct, source="ECB AAA curve (level, see the yield curve)")
+    for k, T_ in (("10", "I(Bk_rfr10)"), ("30", "I(Bk_rfr30)")):
+        if T_ in tr:
+            acc("rfr_" + k, f"Risk-free rate, {k} years", "set by the financial sector", 100 * T(T_), unit=pct, source="ECB AAA curve (level, see the yield curve)")
 
     groups = [
         dict(id="balance", label="Balance sheet", sections=[

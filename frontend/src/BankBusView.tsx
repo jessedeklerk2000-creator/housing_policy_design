@@ -50,7 +50,7 @@ const HM_PORTS: Record<'R' | 'B', string[]> = { R: ['mortgages', 'mortgage_inter
 // the ALM Desk breadboard (BankBoards.DeskBoard): its viewBox and terminals, so e₁, e₂ end on the PI inputs and u₁, u₂
 // leave from the rate outputs when the desk is open
 const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1: [20, 680] as P, u1: [1080, 470] as P, u2: [1080, 600] as P, u3: [1080, 730] as P };
-type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp' | 'shock'; id: string; at: P };
+type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp' | 'shock' | 'ibf' | 'ibe'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
 type Inner = { bs: R; ops: R; tre: R; opsOpen: boolean; treOpen: boolean; circ: R | null;
@@ -464,25 +464,39 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
   const RX = Math.max(B.x + B.w + 150, comp.x + comp.w + 60);  // the interbank rail: right of My Bank and of the competitor
   const fs: R = o.fs ? { x: RX + 170, y: B.y + 40, w: 340, h: HEAD + 30 + 90 + 60 + 100 + 64 + 290 } : { x: RX + 170, y: B.y + B.h / 2 - TILE[1] / 2, w: TILE[0], h: TILE[1] };
   const ob: R = { x: fs.x + 40, y: fs.y + HEAD + 30, w: 260, h: 90 }, cbk: R = { x: fs.x + 40, y: ob.y + ob.h + 60, w: 260, h: 100 };
-  { const rx = RX, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2, 'central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2, '']];
-    const cY = comp.y + comp.h - 60, ys = [ibY, cY, ...ends.map(e => e[1])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
-    const g2: ReactNode[] = [line([[B.x + B.w, ibY], [rx, ibY]], IB, 'ib1'), line([[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], IB, 'ib2')];
-    // the competitor's deposits of other banks, on the same interbank bus (dotted while it is switched off)
-    g2.push(line(buses ? [[comp.x + comp.w, cY], [rx, cY]] : [[comp.x + comp.w, cY], [rx, cY], [rx, ibY]], IB, 'ibc1', compOn ? undefined : '2 4'),
-      line(buses ? [[comp.x + comp.w, cY + LANE], [rx + LANE, cY + LANE]] : [[comp.x + comp.w, cY + LANE], [rx + LANE, cY + LANE], [rx + LANE, ibY + LANE]], IB, 'ibc2', compOn ? undefined : '2 4'));
+  // the interbank bus (Jesse, 27 Nov 2026): two port pairs like the other buses, interbank loans (net borrowing from the
+  // financial sector) and interbank interest; the efforts are the rates the financial sector sets, the risk-free curve
+  const IBP = 30, ibY2 = ibY + IBP;  // the interest pair runs 30 px below the loans pair
+  { const rx = RX, ends: [number, number, string][] = o.fs ? [[ob.x, ob.y + ob.h / 2 - LANE / 2 - IBP / 2, 'other banks'], [cbk.x, cbk.y + cbk.h / 2 - LANE / 2 - IBP / 2, 'central bank']] : [[fs.x, fs.y + fs.h / 2 - LANE / 2 - IBP / 2, '']];
+    const cY = comp.y + comp.h - 60, ys = [ibY, ibY2, cY, cY + IBP, ...ends.flatMap(e => [e[1], e[1] + IBP])], lo = Math.min(...ys) - 24, hi = Math.max(...ys) + LANE + 24;
+    const g2: ReactNode[] = [];
+    const pair = (x0: number, y: number, k: string, dash?: string, toY?: number, dx = 0) => {  // one port pair from x0 at y to the rails (bus view) or to toY (ports view)
+      if (buses) g2.push(line([[x0, y], [rx, y]], IB, k + 'p', dash), line([[x0, y + LANE], [rx + LANE, y + LANE]], IB, k + 'q', dash));
+      else g2.push(line([[x0, y], [rx + dx, y], [rx + dx, toY!]], IB, k + 'p', dash), line([[x0, y + LANE], [rx + dx + LANE, y + LANE], [rx + dx + LANE, toY! + LANE]], IB, k + 'q', dash)); };
+    pair(B.x + B.w, ibY, 'ibl', undefined, ibY); pair(B.x + B.w, ibY2, 'ibi', undefined, ibY2, IBP);
+    // the competitor's port pairs on the same bus (dotted while it is switched off)
+    pair(comp.x + comp.w, cY, 'ibcl', compOn ? undefined : '2 4', ibY); pair(comp.x + comp.w, cY + IBP, 'ibci', compOn ? undefined : '2 4', ibY2, IBP);
     ends.forEach(([ex, ey, nm], k) => {
-      if (buses) { g2.push(line([[rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k)); }
-      else { g2.push(line([[rx, ibY], [rx, ey], [ex, ey]], IB, 'ib3' + k)); g2.push(line([[rx + LANE, ibY + LANE], [rx + LANE, ey + LANE], [ex, ey + LANE]], IB, 'ib4' + k)); }
-      if (nm) g2.push(<text key={'ibn' + k} x={(rx + LANE + ex) / 2} y={ey - 8} textAnchor="middle" className="bus-label" fill={IB}>{nm}</text>);
+      [0, 1].forEach(j => { const y = ey + j * IBP, x1 = rx + j * IBP;
+        if (buses) { g2.push(line([[rx, y], [ex, y]], IB, `ib3${k}${j}`)); g2.push(line([[rx + LANE, y + LANE], [ex, y + LANE]], IB, `ib4${k}${j}`)); }
+        else { const y0 = j ? ibY2 : ibY; g2.push(line([[x1, y0], [x1, y], [ex, y]], IB, `ib3${k}${j}`)); g2.push(line([[x1 + LANE, y0 + LANE], [x1 + LANE, y + LANE], [ex, y + LANE]], IB, `ib4${k}${j}`)); } });
+      if (nm) g2.push(<text key={'ibn' + k} x={(rx + IBP + LANE + ex) / 2} y={ey - 8} textAnchor="middle" className="bus-label" fill={IB}>{nm}</text>);
     });
     if (buses) { g2.unshift(...[0, LANE].map(k => <line key={'ibr' + k} x1={rx + k} x2={rx + k} y1={lo} y2={hi} stroke={IB} strokeWidth={6} strokeLinecap="round"/>));
       g2.push(<text key="ibname" x={rx + LANE / 2} y={lo - 12} textAnchor="middle" className="bus-name" fill={IB}>Interbank bus (€)</text>); }
+    // flow names on My Bank's two pairs
+    g2.push(<text key="ibln" x={B.x + B.w + 95} y={ibY - 4} textAnchor="middle" className="bus-branch-name" fill={IB}>interbank loans</text>,
+      <text key="ibin" x={B.x + B.w + 95} y={ibY2 - 4} textAnchor="middle" className="bus-branch-name" fill={IB}>interbank interest</text>);
     wires.push(<g key="ib">{g2}</g>);
-    // A3: f = net inflow of other banks' deposits (cash flow statement), e = the interbank rate (interest ÷ deposits)
-    { const L = (id: string) => raw('Ledger:' + id), ie = L('ie_interbank'), w = L('interbank'), v = -norm('Ledger:cf_interbank');  // inflow runs right to left
-      dots.push({ key: 'ibf', pts: [[B.x + B.w, ibY], [rx, ibY]], v, color: IB }, { key: 'ibq', pts: [[B.x + B.w, ibY + LANE], [rx + LANE, ibY + LANE]], v: -v, color: IB });
-      over.push(meterAt([B.x + B.w + 30, ibY], 'f', L('cf_interbank'), IB, 'ibmf'));
-      over.push(meterAt([B.x + B.w + 52, ibY + LANE / 2], 'e', ie != null && w ? 100 * ie / w : null, IB, 'ibme')); } }
+    // f and e at My Bank's port: loans (f = net borrowing per year, e = the rate of other banks); interest (f = net
+    // interest paid, e = the risk-free rate; its card shows the curve at 3 months, 10 and 30 years)
+    const L = (id: string) => raw('Ledger:' + id);
+    ([['loans', ibY, 'cf_ib_loans', 'ib_loan_rate'], ['interest', ibY2, 'ib_interest', 'rfr_short']] as const).forEach(([id, y, fk, ek]) => {
+      const v = -norm('Ledger:' + fk);  // positive = into My Bank, right to left
+      dots.push({ key: 'ibf' + id, pts: [[B.x + B.w, y], [rx, y]], v, color: IB }, { key: 'ibq' + id, pts: [[B.x + B.w, y + LANE], [rx + LANE, y + LANE]], v: -v, color: IB });
+      const fm: P = [B.x + B.w + 30, y], em: P = [B.x + B.w + 52, y + LANE / 2];
+      over.push(meterAt(fm, 'f', L(fk), IB, 'ibmf' + id, () => setPick({ kind: 'ibf', id, at: fm }), 'a'));
+      over.push(meterAt(em, 'e', L(ek), IB, 'ibme' + id, () => setPick({ kind: 'ibe', id, at: em }), 'b')); }); }
   // ---- disturbances d: Covid (and the other active shocks) into the firms' breadboard, the subsidy into households
   const dMeter = (pts: number[][], id: string, key: string) => { const d = map.disturbances.find(x => x.id === id); const sig = id === 'd_others' ? 'I(Bk_shape)' /* crisis intensity 0..1: zero outside the crisis */ : d?.signal ?? '';
     const a = pts[pts.length - 2], b = pts[pts.length - 1], c: P = [a[0] + (b[0] - a[0]) * 0.6, a[1] + (b[1] - a[1]) * 0.6];
@@ -523,11 +537,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     wires.push(arrow(pts, D, 'dsot', 'd · rate shock: ' + sotName, 0));
     wires.push(hit(pts, 'dsot', { kind: 'shock', id: sot, at: [xr, fs.y - 40] }, 'Rate shock: click for its pattern over the maturities'));
   }
-  // ---- B1: DNB (the supervisor) sends the regulatory thresholds to the ALCO: a signal with its values (CRR, DNB)
-  { const th = result.ledger?.thresholds ?? [], txt = th.map(t => t.value == null ? `RW floor ${t.text ?? ''}`.replace(' up to 55% LTV, 45% above', '/45%') : `${t.label.replace(' minimum', '')} ≥ ${t.value}${t.unit}`).join(' · ');
-    const src: P = o.fs ? [cbk.x + cbk.w, cbk.y + 30] : [fs.x + fs.w, fs.y + fs.h / 2], top = B.y - 100, xr = fs.x + fs.w + 40;
-    const gi = g.inner, tgt: P = gi?.t ? [gi.t.alco.x + gi.t.alco.w - 30, gi.t.alco.y] : gi ? [gi.tre.x + gi.tre.w - 50, gi.tre.y] : [B.x + B.w - 50, B.y];
-    over.push(arrow([src, [xr, src[1]], [xr, top], [tgt[0], top], tgt], SIG, 'sig-dnb', 'regulatory thresholds: ' + txt, 0.55)); }
+  // no regulatory-thresholds line to the ALCO (Jesse, 27 Nov 2026: removed); the thresholds stay in the Metrics statement
   // ---- inside the bank
   let inside: ReactNode = null;
   if (g.inner) {
@@ -541,9 +551,16 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     }
     // the interbank bus enters on the bank's right edge and runs underneath the other blocks into Operations
     { const t = terminal(map, g, o, 'bank', 'loan_interest'), x = t.p[0] + 120, bot = circ ? circ.y + circ.h : bs.y + bs.h;
-      const v = -norm('Ledger:cf_interbank'), p1 = [[B.x + B.w, ibY], [x, ibY], [x, bot]], p2 = [[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]];
+      const v = -norm('Ledger:cf_ib_loans'), p1 = [[B.x + B.w, ibY], [x, ibY], [x, bot]], p2 = [[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]];
       wires.push(line(p1, IB, 'in-ib')); wires.push(line(p2, IB, 'iq-ib'));
-      dots.push({ key: 'in-ib', pts: p1, v, color: IB }, { key: 'iq-ib', pts: p2, v: -v, color: IB }); }
+      dots.push({ key: 'in-ib', pts: p1, v, color: IB }, { key: 'iq-ib', pts: p2, v: -v, color: IB });
+      // the interest pair into Treasury: Treasury reads the risk-free curve there and builds its funding cost (FTP) per
+      // maturity; with Treasury open the curve goes on to the ALM desk as a signal
+      const T2 = g.inner.t, xi = T2 ? T2.desk.x + T2.desk.w - 40 : tre.x + tre.w - 60, tb = tre.y + tre.h, vi = -norm('Ledger:ib_interest');
+      const q1 = [[B.x + B.w, ibY2], [xi, ibY2], [xi, tb]], q2 = [[B.x + B.w, ibY2 + LANE], [xi - LANE, ibY2 + LANE], [xi - LANE, tb]];
+      wires.push(line(q1, IB, 'in-ibi')); wires.push(line(q2, IB, 'iq-ibi'));
+      dots.push({ key: 'in-ibi', pts: q1, v: vi, color: IB }, { key: 'iq-ibi', pts: q2, v: -vi, color: IB });
+      if (T2) over.push(arrow([[xi - LANE / 2, tb], [xi - LANE / 2, T2.desk.y + T2.desk.h]], SIG, 'sig-rfr', 'risk-free curve → FTP per maturity', 0.5)); }
     const ceo: P = [B.x + B.w / 2, B.y + HEAD + 18], tv = (k: string) => readTrace(result, k)?.[at];
     const appetite = `risk appetite: Tier 1 ${tv('Bank_target_t1')?.toFixed(1) ?? '–'}% · NSFR ${tv('Bank_target_nsfr')?.toFixed(0) ?? '–'}%`;
     // CEO -> Banking Operations: a lending-volume target, not in the model yet, so 0 (named, to be connected later)
@@ -660,8 +677,13 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     } else if (pick.kind === 'bus') {
       const b = BUSES.find(x => x.id === pick.id)!; title = b.label; note = 'One quantity on this bus: every flow below is in the same unit.';
       b.flows.forEach(id => { const f = flowOf(id); if (f) rows.push({ label: f.label, unit: f.unit, y: series(f.signal) }); });
+    } else if (pick.kind === 'ibf' || pick.kind === 'ibe') {
+      const A = result.ledger?.accounts ?? {}, row = (id: string) => { if (A[id]) rows.push({ label: A[id].label, unit: A[id].unit, y: series('Ledger:' + id) }); };
+      if (pick.id === 'loans') { title = 'Interbank loans'; note = 'Net borrowing from the financial sector: deposits of other banks + central-bank borrowing − reserves.'; row(pick.kind === 'ibf' ? 'cf_ib_loans' : 'ib_loan_rate'); }
+      else { title = 'Interbank interest'; note = pick.kind === 'ibf' ? 'Net interest paid to the financial sector.' : 'The risk-free curve the financial sector sets: Treasury reads it here and prices each product at its maturity.';
+        if (pick.kind === 'ibf') row('ib_interest'); else ['rfr_short', 'rfr_10', 'rfr_30'].forEach(row); }
     } else if (pick.kind === 'shock' && sotRep) {
-      title = 'Rate shock: ' + sotName; note = `Change of the zero rate per maturity (EU RTS 2024/856 sizes), a step in ${(result.year[0] + 3).toFixed(0)}. The short end moves the market rate (interbank, reserves, central bank), the 10-year point the mortgage rate; savers compare their rate with the market.`;
+      title = 'Rate shock: ' + sotName; note = `Change of the zero rate per maturity (EU RTS 2024/856 sizes), a step in ${(result.year[0] + 3).toFixed(0)}. It moves the risk-free curve of the Financial sector; My Bank sees it only through the interbank port, where Treasury prices savings at the short end, firm loans at 10 years and mortgages at 30 years.`;
     } else if (pick.kind === 'comp') {
       title = 'Competitor bank'; note = 'Sharper mortgage rates, funded more by other banks, a thinner buffer (M. Mendel; values not calibrated).';
       ([['Tier 1 capital ratio', 'I(Bk_t1c)'], ['Market share of mortgages', 'I(Bk_sharec)'], ['NSFR', 'I(Bk_nsfrc)'], ['Mortgage rate', 'I(Bk_rmc)']] as const).forEach(([l, k]) => rows.push({ label: l, unit: '%', y: series(k), min: k === 'I(Bk_t1c)' ? 6 : undefined }));
@@ -691,8 +713,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     {o.hm && CPB4.map(agent)}
     <Block r={R.gov} label="Government" tone="reference" info="owner-occupier subsidy (d)"/>
     <Block r={fs} label="Financial sector" tone={o.fs ? 'fin-group' : 'fin-closed'} open={o.fs} toggle={() => set('fs')} z={0} info="Other banks · Central bank"/>
-    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info={<>supervisor: thresholds to the ALCO<br/>reserves · lending at rate + 1 pp</>}/>
-      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>market rate r<sub>mkt</sub>: set outside the model (ECB)</div>
+    {o.fs && <><Block r={ob} label="Other banks" tone="fin-closed" info="deposits with the bank · premium"/><Block r={cbk} label="Central bank" tone="fin-closed" info="reserves · lending at rate + 1 pp"/>
+      <div className="bus-fs-note" style={{ left: fs.x + 20, top: cbk.y + cbk.h + 18, width: fs.w - 40 }}>risk-free curve: set outside the model (ECB AAA); it reaches the banks on the interbank bus</div>
       <YieldCurve r={yc} result={result} at={at}
         shock={sotName && sotRep ? { m: sotRep.maturities, dz: sotRep.curves[sot].map((z, i) => z - sotRep.curves.base[i]), name: sotName, after: result.year[at] >= result.year[0] + 3 } : undefined}/></>}
     {sotName && sotRep && <SotCard r={sotR} rep={sotRep} sel={sot} pick={setSot}/>}
