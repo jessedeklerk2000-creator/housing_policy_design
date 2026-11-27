@@ -101,10 +101,10 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
         sub = { inc, cf, bal, key };
         acc = { ...acc, w: key.x + key.w + 30 - acc.x, h: Math.max(cf.y + cf.h, bal.y + bal.h, key.y + key.h) + 30 - acc.y };
       }
-      const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + IN, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
+      const c = acc.x + acc.w + 200, alco: R = { x: c, y: by + IN + 40, w: 230, h: 90 }, sum: P = [c + 115, alco.y + alco.h + 90];
       const desk: R = o.desk ? { x: c, y: sum[1] + 80, w: DESK_W, h: HEAD + 14 + (DESK_W - 16) * DESK_VB[1] / DESK_VB[0] } : { x: c, y: sum[1] + 80, w: 230, h: 110 };
       const accF: R = { x: acc.x - 20, y: acc.y - 36, w: acc.w + 40, h: acc.h + 56 };
-      const dr = Math.max(alco.x + alco.w, desk.x + desk.w), almF: R = { x: alco.x - 34, y: alco.y - 36, w: dr + 34 - (alco.x - 34), h: desk.y + desk.h + 24 - (alco.y - 36) };
+      const dr = Math.max(alco.x + alco.w, desk.x + desk.w), almF: R = { x: alco.x - 34, y: alco.y - HEAD - 24, w: dr + 34 - (alco.x - 34), h: desk.y + desk.h + 24 - (alco.y - HEAD - 24) };
       tre = { x: tx, y: L1, w: almF.x + almF.w + 24 - tx, h: Math.max(accF.y + accF.h, almF.y + almF.h) + 30 - L1 };
       t = { acc, sub, alco, sum, desk, accF, almF };
     } else tre = { x: tx, y: L1, w: 260, h: 240 };
@@ -554,13 +554,18 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       const v = -norm('Ledger:cf_ib_loans'), p1 = [[B.x + B.w, ibY], [x, ibY], [x, bot]], p2 = [[B.x + B.w, ibY + LANE], [x - LANE, ibY + LANE], [x - LANE, bot]];
       wires.push(line(p1, IB, 'in-ib')); wires.push(line(p2, IB, 'iq-ib'));
       dots.push({ key: 'in-ib', pts: p1, v, color: IB }, { key: 'iq-ib', pts: p2, v: -v, color: IB });
-      // the interest pair into Treasury: Treasury reads the risk-free curve there and builds its funding cost (FTP) per
-      // maturity; with Treasury open the curve goes on to the ALM desk as a signal
-      const T2 = g.inner.t, xi = T2 ? (o.desk ? T2.desk.x + 8 + 1250 * (T2.desk.w - 16) / DESK_VB[0] + LANE / 2 : T2.desk.x + T2.desk.w - 40) : tre.x + tre.w - 60, tb = tre.y + tre.h, vi = -norm('Ledger:ib_interest');
-      const q1 = [[B.x + B.w, ibY2], [xi, ibY2], [xi, tb]], q2 = [[B.x + B.w, ibY2 + LANE], [xi - LANE, ibY2 + LANE], [xi - LANE, tb]];
+      // the interest pair is a power port (e and f), so it ends in the bank's circuit like the loans pair (the interest is
+      // paid out of Operations). Treasury only READS its effort: an effort sensor (V) across the pair gives the signal
+      // "risk-free curve" to the ALM desk (Jesse, 27 Nov 2026: a port cannot turn into a signal)
+      const T2 = g.inner.t, xs = T2 ? (o.desk ? T2.desk.x + 8 + 1250 * (T2.desk.w - 16) / DESK_VB[0] : T2.desk.x + T2.desk.w - 40) : tre.x + tre.w - 60, x2 = x + 34, vi = -norm('Ledger:ib_interest');
+      const q1 = [[B.x + B.w, ibY2], [x2, ibY2], [x2, bot]], q2 = [[B.x + B.w, ibY2 + LANE], [x2 - LANE, ibY2 + LANE], [x2 - LANE, bot]];
       wires.push(line(q1, IB, 'in-ibi')); wires.push(line(q2, IB, 'iq-ibi'));
       dots.push({ key: 'in-ibi', pts: q1, v: vi, color: IB }, { key: 'iq-ibi', pts: q2, v: -vi, color: IB });
-      if (T2) over.push(arrow([[xi - LANE / 2, tb], [xi - LANE / 2, T2.desk.y + T2.desk.h]], SIG, 'sig-rfr', 'risk-free curve → FTP per maturity', 0.5)); }
+      const sy = ibY2 + LANE / 2;
+      over.push(<g key="ib-sensor"><title>Effort sensor: reads the risk-free rate at the interbank port (no flow through it)</title>
+        <circle cx={xs} cy={sy} r={9} fill="#fff" stroke={IB} strokeWidth={1.4}/><text x={xs} y={sy + 4} textAnchor="middle" className="bus-meter" fill={IB}>V</text></g>);
+      if (T2) over.push(arrow([[xs, sy - 9], [xs, T2.desk.y + T2.desk.h]], SIG, 'sig-rfr', 'risk-free curve → FTP per maturity', 0.5));
+      else over.push(arrow([[xs, sy - 9], [xs, tre.y + tre.h]], SIG, 'sig-rfr', 'risk-free curve', 0.5)); }
     const ceo: P = [B.x + B.w / 2, B.y + HEAD + 18], tv = (k: string) => readTrace(result, k)?.[at];
     const appetite = `risk appetite: Tier 1 ${tv('Bank_target_t1')?.toFixed(1) ?? '–'}% · NSFR ${tv('Bank_target_nsfr')?.toFixed(0) ?? '–'}%`;
     // CEO -> Banking Operations: a lending-volume target, not in the model yet, so 0 (named, to be connected later)
@@ -627,9 +632,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
         const pts = !opsOpen ? (o.desk ? [head[0], head[1], [head[1][0], yt], [ops.x + ops.w, yt]] : [[dk.x, uy], [mx2, uy], [mx2, yt], [ops.x + ops.w, yt]]) : both;
         over.push(arrow(pts, PU, 'u' + i, name, 0.5));
       });
-      const frame = (r: R, label: string) => <div key={label} className="bus-org-frame unit" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}><span>{label}</span></div>;
       parts = <>
-        {frame(accF, 'Accounting & Reporting')}{frame(almF, 'ALM')}
+        {/* no Accounting & Reporting frame; ALM is a box (Jesse, 27 Nov 2026) */}<Block r={almF} label="ALM" tone="bank-l2 bus-alm" z={0}/>
         <Block r={acc} label="Accounting" tone="bank-l2" open={o.acc} toggle={() => set('acc')} z={1} info="3 statements · metrics"/>
         {sub && STMT.map(([k, label, gid]) => <Block key={k} r={sub[k]} label={label} tone="bank-l3 bus-stmt" open={o[k]} toggle={() => set(k)} z={o[k] ? 5 : 3} info={tileValue(k)}>  {/* open: above the wires, so a dragged plot card stays on top */}
           {o[k] && <FitBody k={k} onH={fitH} style={{ position: 'absolute', left: 6, right: 6, top: HEAD + 4, bottom: 6 }}>
@@ -672,7 +676,8 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       const f = flowOf(pick.id); title = f?.label ?? pick.id; note = f?.description ?? '';
       // f (the flow line, or the f circle) shows the flow; e (the return line, or the e circle) the effort (Jesse)
       if (f && pick.kind === 'flow') rows.push({ label: 'f · flow', unit: f.unit, y: series(f.signal) });
-      if (f?.port && pick.kind === 'ret') rows.push({ label: 'e · incentive at the port', unit: 'model units', y: series(`V(${f.port.node.toLowerCase()},${f.port.ret.toLowerCase()})`) });
+      if (f?.port && pick.kind === 'ret') { const y = series(effSig(f.id)), y0 = y?.find(x => x != null);  // as a change since the start: the level is a reference of the netlist (e.g. −60 at savings)
+        rows.push({ label: 'e · change of the incentive since the start', unit: 'model units', y: y && y0 != null ? y.map(x => x == null ? x : x - y0) as number[] : undefined }); }
     } else if (pick.kind === 'bus') {
       const b = BUSES.find(x => x.id === pick.id)!; title = b.label; note = 'One quantity on this bus: every flow below is in the same unit.';
       b.flows.forEach(id => { const f = flowOf(id); if (f) rows.push({ label: f.label, unit: f.unit, y: series(f.signal) }); });

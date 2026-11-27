@@ -28,10 +28,10 @@ interface BankRun {
 }
 
 // Defaults = bank_netlist.BANK_DEFAULTS (demo choices). Ranges = bank_netlist.RANGES.
-const DEF = { funding_cut: 0.5, premium_pp: 1.9, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, credit_supply: 0.6, k_credit: 110, eta_firm: 0.10, competitor: 0, comp_gap_pp: 0.3, comp_share_per_pp: 1.0, shock_scen: 0, shock_year: 3 };
+const DEF = { funding_cut: 0.5, premium_pp: 1.9, k_rate: 300, Kp_ftp: 0.05, Ki_ftp: 0.05, Kp_s: 0.20, Ki_s: 0.20, uw_mobility: 0.22, theta0: 0.06, sigma_ltv: 0.45, gov_step: 0, gov_year: 5, covid_scale: 1, hist_subsidy: 1, credit_supply: 0.6, k_credit: 110, eta_firm: 0.10, competitor: 0, comp_gap_pp: 0.3, comp_share_per_pp: 1.0, shock_scen: 0, shock_year: 3, income_hist: 1 };
 type Params = typeof DEF;
 type Key = keyof Params;
-const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 4], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], credit_supply: [0, 1.5], k_credit: [0, 400], eta_firm: [0, 0.3], competitor: [0, 1], comp_gap_pp: [0, 1], comp_share_per_pp: [0, 3], shock_scen: [0, 6], shock_year: [1, 25] };
+const RANGE: Record<Key, [number, number]> = { funding_cut: [0, 1], premium_pp: [0, 4], k_rate: [1, 900], Kp_ftp: [0, 1], Ki_ftp: [0, 1], Kp_s: [0, 3], Ki_s: [0, 3], uw_mobility: [0, 0.5], theta0: [0.03, 0.10], sigma_ltv: [0.25, 0.6], gov_step: [-20, 20], gov_year: [1, 25], covid_scale: [0, 2], hist_subsidy: [0, 10], credit_supply: [0, 1.5], k_credit: [0, 400], eta_firm: [0, 0.3], competitor: [0, 1], comp_gap_pp: [0, 1], comp_share_per_pp: [0, 3], shock_scen: [0, 6], shock_year: [1, 25], income_hist: [0, 1] };
 const overrides = (p: Params) => Object.fromEntries((Object.keys(DEF) as Key[]).filter(k => Math.abs(p[k] - DEF[k]) > 1e-9).map(k => [k, p[k]]));
 const YEAR0 = 1996.46;  // calendar year of run year 0 (scenario.YEAR_AT_RAW_ZERO)
 
@@ -138,7 +138,8 @@ function Panel({ part, p, set, alm, setAlm, fb, setFb, run }: { part: Part; p: P
       <Knob label="Market share per pp rate gap" hint="Share of new mortgages that moves per pp of rate gap, at the start. 1.0 = 10% per 0.1 pp (README example)." value={p.comp_share_per_pp} k="comp_share_per_pp" step={0.1} format={x => `${f(x * 10, 0)}% per 0.1 pp`} set={set}/></>}</>;
     case 'covid': return <><p className="eyebrow">Disturbance d</p><h3>Covid shock</h3>
       <p className="muted small">The housing netlist's own Covid shock at the firms, as in the main model (2020.5, fading over about 8 years).</p>
-      <Knob label="Size of the Covid shock" hint="× 1 as in the main model; 0 switches it off." value={p.covid_scale} k="covid_scale" step={0.1} format={x => `× ${f(x, 1)}`} set={set}/></>;
+      <Knob label="Size of the Covid shock" hint="× 1 as in the main model; 0 switches it off." value={p.covid_scale} k="covid_scale" step={0.1} format={x => `× ${f(x, 1)}`} set={set}/>
+      <Knob label="Income path" hint="1: CBS historical income (house prices follow CBS better: correlation 0.66 against 0.29). 0: stable, no growth (the economy at rest; used by the SOT)." value={p.income_hist} k="income_hist" step={1} format={x => x >= 0.5 ? 'historical' : 'stable'} set={set}/></>;
     case 'gov': return <><p className="eyebrow">Disturbance d</p><h3>Government</h3>
       <p className="muted small">Here the government does not control: its owner-occupied subsidy is a change the desk has to live with. The historical path of the main model, plus an optional step.</p>
       <Knob label="Historical subsidy" hint="The owner-occupied subsidy path of the main model; 0 switches it off." value={p.hist_subsidy} k="hist_subsidy" step={0.5} format={x => `× ${f(x, 1)}`} set={set}/>
@@ -236,11 +237,11 @@ export function BankMode() {
   const loopUrl = useMemo(() => new URLSearchParams(location.search).get('view') === 'loop', []);
   // An SOT rate shock runs alone (Jesse, 27 Nov 2026): picking a shock switches Covid and the crisis off, "no shock"
   // brings them back, and switching a crisis on clears the shock.
-  const CRISIS = { covid_scale: 0, funding_cut: 0, premium_pp: 0 };
+  const CRISIS = { covid_scale: 0, funding_cut: 0, premium_pp: 0, income_hist: 0 };  // and a calm (stable) income path
   const set = (k: Key, v: number) => setP(x => {
     if (k === 'shock_scen') return v > 0 ? { ...x, ...CRISIS, shock_scen: v }
-      : { ...x, shock_scen: 0, covid_scale: DEF.covid_scale, funding_cut: DEF.funding_cut, premium_pp: DEF.premium_pp };
-    if ((k === 'covid_scale' || k === 'funding_cut' || k === 'premium_pp') && v > 0) return { ...x, [k]: v, shock_scen: 0 };
+      : { ...x, shock_scen: 0, covid_scale: DEF.covid_scale, funding_cut: DEF.funding_cut, premium_pp: DEF.premium_pp, income_hist: DEF.income_hist };
+    if ((k === 'covid_scale' || k === 'funding_cut' || k === 'premium_pp' || k === 'income_hist') && v > 0) return { ...x, [k]: v, shock_scen: 0 };
     return { ...x, [k]: v }; });
   // The story for the demo (Jesse, 26 Nov 2026): 1 Covid and the financial crisis on My Bank; 2 the same shocks with a
   // competitor (its own, more aggressive desk); 3 the Supervisory Outlier Test (no Covid, no crisis; a rate shock).
@@ -248,7 +249,7 @@ export function BankMode() {
   const setStory = useCallback((k: number) => { setStoryRaw(k); setAlm(true);
     if (k === 1) setP({ ...DEF });
     if (k === 2) setP({ ...DEF, competitor: 1 });
-    if (k === 3) setP({ ...DEF, covid_scale: 0, funding_cut: 0, premium_pp: 0, shock_scen: 2 }); }, []);
+    if (k === 3) setP({ ...DEF, covid_scale: 0, funding_cut: 0, premium_pp: 0, income_hist: 0, shock_scen: 2 }); }, []);
   const { now, other, busy, error } = useRun(p, alm, fb, cmp);
   const dirty = JSON.stringify(p) !== JSON.stringify(DEF) || !alm || !fb;
   const panel = (part: Part) => <Panel part={part} p={p} set={set} alm={alm} setAlm={setAlm} fb={fb} setFb={setFb} run={now}/>;

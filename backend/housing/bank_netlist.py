@@ -83,6 +83,8 @@ BANK_DEFAULTS = dict(
     # mortgages mostly 10-year fixed), and savers compare their rate with the shocked market rate; the savings rate passes
     # on dep_beta of the short shock (0.5, as in the SOT handoff). The ALM desk reacts on top of that.
     shock_scen=0.0, shock_year=3.0, dep_beta=0.5,
+    income_hist=0.0,       # 1: CBS historical income path (fits CBS house prices better: corr 0.66 vs 0.29); 0: stable, 0% growth (API default: at rest; the website sets 1)
+
     # Three rates by maturity (Jesse, 26 Nov 2026): savings overnight (u2), firm loans at the 10-year point (u3, new), mortgages
     # at the 30-year point (u1). The firm-loan rate = the mortgage rate - (30y - 10y term premium) at the start (3.70 - 0.49
     # = 3.21%), and each rate follows the rate shock at its own maturity. Claude's pricing choice: same spread, maturity priced.
@@ -290,7 +292,8 @@ def desk(b: dict, alm_on: bool, housing_feedback: bool) -> tuple[list[str], dict
 
 def _scen(b: dict) -> dict:
     """The housing scenario under the bank: Covid and the historical owner-occupied subsidy (x hist_subsidy) as in the main model."""
-    return {**BASE, "covid_scale": b["covid_scale"], "subsidy_scale": b["hist_subsidy"]}
+    inc = dict(income_path="historical") if b.get("income_hist", 1.0) >= 0.5 else dict(income_path="stable", income_growth_pct=0)
+    return {**BASE, **inc, "covid_scale": b["covid_scale"], "subsidy_scale": b["hist_subsidy"]}
 
 
 def lines(b: dict, alm_on: bool = True, housing_feedback: bool = True) -> tuple[list[str], dict]:
@@ -365,7 +368,7 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
     the same run in the format of the housing runs (scenario.evaluate), for the model canvas (ModelMap)."""
     b = {**BANK_DEFAULTS, **(overrides or {})}
     if b["shock_scen"] > 0:  # an SOT rate shock runs alone: no Covid, no financial crisis (Jesse, 27 Nov 2026)
-        b.update(covid_scale=0.0, funding_cut=0.0, premium_pp=0.0)
+        b.update(covid_scale=0.0, funding_cut=0.0, premium_pp=0.0, income_hist=0.0)  # and a calm income path
     L, e = lines(b, alm_on, housing_feedback)
     tr = _run(L)
     run_result = None
@@ -449,7 +452,7 @@ RANGES = {"funding_cut": (0.0, 1.0), "premium_pp": (0.0, 4.0), "k_rate": (1.0, 9
           "uw_mobility": (0.0, 0.5), "theta0": (0.03, 0.10), "sigma_ltv": (0.25, 0.6),
           "gov_step": (-20.0, 20.0), "gov_year": (1.0, 25.0), "covid_scale": (0.0, 2.0), "hist_subsidy": (0.0, 10.0),
           "credit_supply": (0.0, 1.5), "k_credit": (0.0, 400.0), "eta_firm": (0.0, 0.30),
-          "competitor": (0.0, 1.0), "shock_scen": (0.0, 6.0), "shock_year": (1.0, 25.0), "comp_desk": (0.0, 1.0), "Kp_c": (0.0, 3.0), "Ki_c": (0.0, 3.0), "comp_t1_target_pct": (6.0, 14.0), "comp_gap_pp": (0.0, 1.0), "comp_share_per_pp": (0.0, 3.0)}
+          "competitor": (0.0, 1.0), "shock_scen": (0.0, 6.0), "income_hist": (0.0, 1.0), "shock_year": (1.0, 25.0), "comp_desk": (0.0, 1.0), "Kp_c": (0.0, 3.0), "Ki_c": (0.0, 3.0), "comp_t1_target_pct": (6.0, 14.0), "comp_gap_pp": (0.0, 1.0), "comp_share_per_pp": (0.0, 3.0)}
 
 
 @lru_cache(maxsize=256)
