@@ -192,3 +192,9 @@ def test_competitor_bank():
     assert max(crisis["comp_mortgage_rate_pct"]) > max(crisis["mortgage_rate_pct"]) + 1
     no_desk = bn.simulate({"competitor": 1}, alm_on=False)
     assert min(no_desk["comp_tier1_pct"]) < min(crisis["comp_tier1_pct"])
+
+
+def test_sot_shock_runs_without_the_crises():
+    """An SOT rate shock runs alone: asking for it with Covid and the crisis on gives the same run as with them off."""
+    calm = {"funding_cut": 0, "premium_pp": 0, "covid_scale": 0}
+    assert bn.simulate({"shock_scen": 2}) == bn.simulate({"shock_scen": 2, **calm})

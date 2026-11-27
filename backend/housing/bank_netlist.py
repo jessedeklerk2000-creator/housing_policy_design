@@ -351,6 +351,8 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
     """JSON-ready result on n points over the 29 years of the run (None after a breakdown). full=True adds "result":
     the same run in the format of the housing runs (scenario.evaluate), for the model canvas (ModelMap)."""
     b = {**BANK_DEFAULTS, **(overrides or {})}
+    if b["shock_scen"] > 0:  # an SOT rate shock runs alone: no Covid, no financial crisis (Jesse, 27 Nov 2026)
+        b.update(covid_scale=0.0, funding_cut=0.0, premium_pp=0.0)
     L, e = lines(b, alm_on, housing_feedback)
     tr = _run(L)
     run_result = None

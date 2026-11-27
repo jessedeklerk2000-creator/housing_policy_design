@@ -233,7 +233,14 @@ export function BankMode() {
   const [view, setView] = useState<'bus' | 'loop'>(() => new URLSearchParams(location.search).get('view') === 'loop' ? 'loop' : 'bus');  // bus view (bank in the middle) or the control-loop view
   const openLoop = useCallback(() => setView('loop'), []);
   const loopUrl = useMemo(() => new URLSearchParams(location.search).get('view') === 'loop', []);
-  const set = (k: Key, v: number) => setP(x => ({ ...x, [k]: v }));
+  // An SOT rate shock runs alone (Jesse, 27 Nov 2026): picking a shock switches Covid and the crisis off, "no shock"
+  // brings them back, and switching a crisis on clears the shock.
+  const CRISIS = { covid_scale: 0, funding_cut: 0, premium_pp: 0 };
+  const set = (k: Key, v: number) => setP(x => {
+    if (k === 'shock_scen') return v > 0 ? { ...x, ...CRISIS, shock_scen: v }
+      : { ...x, shock_scen: 0, covid_scale: DEF.covid_scale, funding_cut: DEF.funding_cut, premium_pp: DEF.premium_pp };
+    if ((k === 'covid_scale' || k === 'funding_cut' || k === 'premium_pp') && v > 0) return { ...x, [k]: v, shock_scen: 0 };
+    return { ...x, [k]: v }; });
   // The story for the demo (Jesse, 26 Nov 2026): 1 Covid and the financial crisis on My Bank; 2 the same shocks with a
   // competitor (its own, more aggressive desk); 3 the Supervisory Outlier Test (no Covid, no crisis; a rate shock).
   const [story, setStoryRaw] = useState(0);
