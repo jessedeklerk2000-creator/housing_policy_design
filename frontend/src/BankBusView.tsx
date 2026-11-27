@@ -49,7 +49,7 @@ const CPB4 = ['constructors', 'investors', 'households', 'firms'];
 const HM_PORTS: Record<'R' | 'B', string[]> = { R: ['mortgages', 'mortgage_interest', 'savings', 'savings_interest'], B: ['loans', 'loan_interest'] };
 // the ALM Desk breadboard (BankBoards.DeskBoard): its viewBox and terminals, so e₁, e₂ end on the PI inputs and u₁, u₂
 // leave from the rate outputs when the desk is open
-const DESK_VB: P = [1100, 990], DESK_W = 880, DESK_T = { e2: [20, 260] as P, e1: [20, 680] as P, u1: [1080, 470] as P, u2: [1080, 600] as P, u3: [1080, 730] as P };
+const DESK_VB: P = [1300, 990], DESK_W = 1000, DESK_T = { e2: [20, 260] as P, e1: [20, 680] as P, u1: [1280, 470] as P, u2: [1280, 600] as P, u3: [1280, 730] as P };
 type Pick = { kind: 'flow' | 'ret' | 'bus' | 'd' | 'comp' | 'shock' | 'ibf' | 'ibe'; id: string; at: P };
 
 type Geo = ReturnType<typeof geometry>;
@@ -82,8 +82,8 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     const L1 = by + 90, opsOpen = !!o.bops, treOpen = !!o.tre;
     let bs: R, ops: R;
     if (opsOpen) {
-      bs = o.bs ? { x: bx + 60, y: by + IN, w: circ[0] + 20, h: HEAD + circ[1] + 20 } : { x: bx + 60, y: by + IN, w: 240, h: 240 };
-      ops = { x: bx + 20, y: L1, w: bs.w + 80, h: bs.y + bs.h + 60 - L1 };
+      // open, Banking Operations shows the bank's breadboard itself (Jesse, 27 Nov 2026: no second "Operations" box)
+      ops = { x: bx + 20, y: L1, w: circ[0] + 20, h: HEAD + 30 + circ[1] + 20 }; bs = ops;
     } else { ops = { x: bx + 20, y: L1, w: 260, h: 240 }; bs = ops; }
     const tx = ops.x + ops.w + 160;
     let tre: R, t: Inner['t'] = null;
@@ -110,7 +110,7 @@ function geometry(o: Open, map: MapData, sizes: Record<string, P> = {}) {
     } else tre = { x: tx, y: L1, w: 260, h: 240 };
     // a closed Banking Operations reaches below Accounting, so Operations' lines into Treasury and the rates u back run straight
     if (!opsOpen && t) ops.h = Math.max(240, t.accF.y + t.accF.h + 100 - L1);
-    inner = { bs, ops, tre, opsOpen, treOpen, t, circ: opsOpen && o.bs ? { x: bs.x + 10, y: bs.y + HEAD + 10, w: circ[0], h: circ[1] } : null };
+    inner = { bs, ops, tre, opsOpen, treOpen, t, circ: opsOpen ? { x: bs.x + 10, y: bs.y + HEAD + 30, w: circ[0], h: circ[1] } : null };
     R.bank = { x: bx, y: by, w: tre.x + tre.w + 40 - bx, h: Math.max(ops.y + ops.h, tre.y + tre.h) + (treOpen ? 110 : 40) - by };
   } else R.bank = { x: bx, y: by, w: 240, h: o.hm ? Math.max(260, R.households.y + R.households.h + 30 - by) : R.hm.h };  // as tall as the closed Housing Market: straight lines
   // the competitor bank (Jesse, 26 Nov 2026): My Bank's twin, under it and above the firm-credit bus
@@ -556,7 +556,7 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
       dots.push({ key: 'in-ib', pts: p1, v, color: IB }, { key: 'iq-ib', pts: p2, v: -v, color: IB });
       // the interest pair into Treasury: Treasury reads the risk-free curve there and builds its funding cost (FTP) per
       // maturity; with Treasury open the curve goes on to the ALM desk as a signal
-      const T2 = g.inner.t, xi = T2 ? T2.desk.x + T2.desk.w - 40 : tre.x + tre.w - 60, tb = tre.y + tre.h, vi = -norm('Ledger:ib_interest');
+      const T2 = g.inner.t, xi = T2 ? (o.desk ? T2.desk.x + 8 + 1250 * (T2.desk.w - 16) / DESK_VB[0] + LANE / 2 : T2.desk.x + T2.desk.w - 40) : tre.x + tre.w - 60, tb = tre.y + tre.h, vi = -norm('Ledger:ib_interest');
       const q1 = [[B.x + B.w, ibY2], [xi, ibY2], [xi, tb]], q2 = [[B.x + B.w, ibY2 + LANE], [xi - LANE, ibY2 + LANE], [xi - LANE, tb]];
       wires.push(line(q1, IB, 'in-ibi')); wires.push(line(q2, IB, 'iq-ibi'));
       dots.push({ key: 'in-ibi', pts: q1, v: vi, color: IB }, { key: 'iq-ibi', pts: q2, v: -vi, color: IB });
@@ -653,10 +653,9 @@ function Diagram({ data }: NodeProps<Node<DiagramData>>) {
     if (opsOpen) over.push(<text key="tg" x={ops.x + 16} y={ops.y + HEAD + 22} className="bus-unit-tag">loan operations · deposit operations · payments & settlement</text>);
     inside = <>
       <div className="bus-ceo" style={{ left: ceo[0] - 40, top: ceo[1] - 12, width: 80 }}>CEO</div>
-      <Block r={ops} label="Banking Operations" tone="bank-l1" open={opsOpen} toggle={() => set('bops')} z={opsOpen ? 0 : 1} info="loan · deposit · payment operations"/>
-      {opsOpen && <Block r={bs} label="Operations" tone="bank-l2" open={o.bs} toggle={() => set('bs')} z={1} info="mortgages · firm loans · savings">
-        {o.bs && circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - bs.x, top: circ.y - bs.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
-      </Block>}
+      <Block r={ops} label="Banking Operations" tone="bank-l1" open={opsOpen} toggle={() => set('bops')} z={1} info="loan · deposit · payment operations">
+        {circ && <div className="bus-circuit" style={{ position: 'absolute', left: circ.x - ops.x, top: circ.y - ops.y, width: circ.w, height: circ.h }}><AgentCircuit map={map} agent="bank" scenario={scenario} selection={NONE} pick={() => {}} outside/></div>}
+      </Block>
       <Block r={tre} label="Treasury" tone="bank-l1" open={treOpen} toggle={() => set('tre')} z={treOpen ? 0 : 1} info="Accounting & Reporting · ALCO · ALM Desk"/>
       {parts}
     </>;

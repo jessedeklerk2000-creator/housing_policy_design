@@ -31,17 +31,25 @@ export function DeskBoard({ K, v, alm }: { K: { Kp_ftp: number; Ki_ftp: number; 
     {W([[430, y - 90], [520, y - 90], [520, y - 24]], `${k}po`)}{W([[430, y + 110], [520, y + 110], [520, y + 24]], `${k}io`)}{sum(520, y, ['+', '+'], `${k}s`)}
     {W([[544, y], [640, y]], `${k}o`)}{port(560, y - 16, `${out} ${outV}`, `${k}ol`)}
   </g>;
-  return frame(1100, 990, 'ALM Desk breadboard', <>
+  return frame(1300, 990, 'ALM Desk breadboard', <>
     {pi(260, 'Liquidity risk: PI → FTP', K.Kp_ftp, K.Ki_ftp, 'e₂ = NSFR target − NSFR', 'FTP', `${n(v.ftp)}%`, 'f')}
     {pi(680, 'Solvency risk: PI → spread', K.Kp_s, K.Ki_s, 'e₁ = Tier 1 target − Tier 1', 'spread', `${n(v.s)}%`, 's')}
-    {/* the client rates: mortgage rate (Menkveld's loan rate) = FTP + spread/2, savings rate = FTP − spread/2 */}
+    {/* the client rates by maturity (Jesse, 27 Nov 2026): FTP ± spread/2, then the move of the risk-free curve at the
+        product's maturity, read at the interbank port (Treasury's FTP per maturity) */}
     {W([[640, 260], [760, 260], [760, 446]], 'a1')}{W([[640, 680], [760, 680], [760, 494]], 'a2')}{sum(760, 470, ['+', '+½'], 'rm')}
     {W([[700, 260], [700, 200], [870, 200], [870, 576]], 'b1')}{W([[700, 680], [700, 760], [870, 760], [870, 624]], 'b2')}{dot(700, 260, 'd1')}{dot(700, 680, 'd2')}
     {sum(870, 600, ['+', '−½'], 'rs')}
-    {W([[784, 470], [1080, 470]], 'u1')}{port(1076, 456, `u₁ mortgage rate ${n(v.rm)}%`, 'u1l', 'end')}
-    {W([[894, 600], [1080, 600]], 'u2')}{port(1076, 586, `u₂ savings rate ${n(v.rs)}%`, 'u2l', 'end')}
-  </>, 'spread = spread₀ + Kp·e₁ + Ki·∫e₁  ·  FTP = FTP₀ + Kp·e₂ + Ki·∫e₂  ·  mortgage rate = FTP + spread/2  ·  savings rate = FTP − spread/2',
-    alm ? 'Normalised values. Each inverting stage is followed by a gain −1 stage (not drawn); FTP₀ and spread₀ are added as offsets.' : 'Desk switched off: the rates stay at their start values.');
+    {/* the risk-free curve from the interbank port enters at the bottom right (Treasury's FTP per maturity): its move at
+        30 yr into u₁, β × its move at the short end into u₂, its move at 10 yr into u₃ */}
+    {W([[1250, 990], [1250, 880], [1100, 880]], 'cv')}{port(1086, 870, 'Δ risk-free curve (interbank port)', 'cvl', 'end')}
+    {W([[784, 470], [1076, 470]], 'u1a')}{sum(1100, 470, ['', ''], 'rm2')}{W([[1100, 880], [1100, 494]], 'c30')}{dot(1100, 880, 'j30')}{port(1108, 530, `Δr₃₀ ${n(v.d30)}`, 'c30l')}
+    {W([[1124, 470], [1280, 470]], 'u1')}{port(1276, 440, `u₁ ${n(v.rm)}%`, 'u1l', 'end')}
+    {W([[894, 600], [1126, 600]], 'u2a')}{sum(1150, 600, ['', ''], 'rs2')}{W([[1150, 880], [1150, 624]], 'csh')}{dot(1150, 880, 'jsh')}{port(1158, 655, `β·Δr₀ ${n(v.dsh == null ? null : 0.5 * v.dsh)}`, 'cshl')}
+    {W([[1174, 600], [1280, 600]], 'u2')}{port(1276, 570, `u₂ ${n(v.rs)}%`, 'u2l', 'end')}
+    {dot(810, 470, 'd3')}{W([[810, 470], [810, 730], [1176, 730]], 'u3a')}{sum(1200, 730, ['', ''], 'rf2')}{W([[1200, 880], [1200, 754]], 'c10')}{dot(1200, 880, 'j10')}{port(1208, 805, `Δr₁₀ + c`, 'c10l')}
+    {W([[1224, 730], [1280, 730]], 'u3')}{port(1276, 700, `u₃ ${n(v.rf)}%`, 'u3l', 'end')}
+  </>, 'u₁ = FTP + s/2 + Δr₃₀  ·  u₂ = FTP − s/2 + β·Δr₀  ·  u₃ = FTP + s/2 + Δr₁₀ + c',
+    alm ? 's = spread. β = 0.5, c = −0.49 pp (10-yr minus 30-yr point of the start curve). Normalised values; each inverting stage is followed by a gain −1 stage (not drawn).' : 'Desk switched off: FTP and spread stay at their start values; moves of the risk-free curve still pass through.');
 }
 
 /** Balance sheet of your bank: deposits and equity as capacitors, Tier 1 and loans/funding as read-outs. */

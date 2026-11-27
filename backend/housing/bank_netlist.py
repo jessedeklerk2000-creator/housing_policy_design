@@ -377,7 +377,7 @@ def simulate(overrides: dict | None = None, alm_on: bool = True, housing_feedbac
         except ValueError:  # a run that breaks down has non-finite values; the canvas then shows no values
             run_result = None
         if run_result:  # ratios and rates in percent on the canvas (Tier 1 16.3, not 0.163); r = the Tier 1 target
-            for k in ("I(Bk_t1)", "I(Bk_ltf)", "I(Bk_rm)", "I(Bk_rs)", "I(Bk_ftp)", "I(Bk_s)", "I(Bk_uw)", "I(Bk_ltv)", "I(Bk_ltf_err)", "I(Bk_t1_err)", "I(Bk_rate)", "I(Bk_nsfr)", "I(Bk_nsfr_err)", "I(Bk_t1c)", "I(Bk_nsfrc)", "I(Bk_ltdc)", "I(Bk_sharec)", "I(Bk_rmc)", "I(Bk_rmk)", "I(Bk_rf)"):
+            for k in ("I(Bk_t1)", "I(Bk_ltf)", "I(Bk_rm)", "I(Bk_rs)", "I(Bk_ftp)", "I(Bk_s)", "I(Bk_uw)", "I(Bk_ltv)", "I(Bk_ltf_err)", "I(Bk_t1_err)", "I(Bk_rate)", "I(Bk_nsfr)", "I(Bk_nsfr_err)", "I(Bk_t1c)", "I(Bk_nsfrc)", "I(Bk_ltdc)", "I(Bk_sharec)", "I(Bk_rmc)", "I(Bk_rmk)", "I(Bk_rf)", "I(Bk_ftp30)", "I(Bk_ftp10)", "I(Bk_ftp_on)", "I(Bk_rfr10)", "I(Bk_rfr30)"):
                 if k in run_result["traces"]:
                     run_result["traces"][k] = [round(x * 100, 4) for x in run_result["traces"][k]]
             run_result["traces"]["Bank_target_t1"] = [round(100 * e["t1_ref"], 4)] * len(run_result["year"])

@@ -160,7 +160,8 @@ function Panel({ part, p, set, alm, setAlm, fb, setFb, run }: { part: Part; p: P
 function useLive(): Record<string, number | null> {
   const { result, at } = useContext(AtContext);
   const v = (signal: string, sc = 1) => { const t = result && readTrace(result, signal); return t && t[at] != null ? t[at] * sc : null; };
-  return { ftp: v('I(Bk_ftp)'), s: v('I(Bk_s)'), rm: v('I(Bk_rm)'), rs: v('I(Bk_rs)'), t1: v('I(Bk_t1)'), ltf: v('I(Bk_ltf)'), nsfr: v('I(Bk_nsfr)'), dep: v('I(Bk_dep)'), eq: v('I(Bk_e)') };
+  const dd = (sig: string) => { const a = v(sig), f = v('I(Bk_ftp)'); return a == null || f == null ? null : a - f; };  // the curve's move at that maturity
+  return { ftp: v('I(Bk_ftp)'), s: v('I(Bk_s)'), rm: v('I(Bk_rm)'), rs: v('I(Bk_rs)'), t1: v('I(Bk_t1)'), ltf: v('I(Bk_ltf)'), nsfr: v('I(Bk_nsfr)'), dep: v('I(Bk_dep)'), eq: v('I(Bk_e)'), rf: v('I(Bk_rf)'), d30: dd('I(Bk_ftp30)'), d10: dd('I(Bk_ftp10)'), dsh: dd('I(Bk_ftp_on)') };
 }
 function LiveDesk({ p, alm }: { p: Params; alm: boolean }) { return <DeskBoard K={p} v={useLive()} alm={alm}/>; }
 
